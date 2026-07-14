@@ -1,0 +1,33 @@
+{
+  "name": "@wasm-apps/cli",
+  "version": "1.0.0",
+  "description": "Orquestador para compilar y linkear proyectos WebAssembly en ejecutables nativos",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "wapp": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node ./dist/cli.js",
+    "dev": "tsc --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "commander": "^15.0.0",
+    "glob": "^13.0.6",
+    "picocolors": "^1.1.1",
+    "@wasm-apps/types": "workspace:*",
+    "@wasm-apps/compiler": "workspace:*",
+    "@wasm-apps/linker": "workspace:*"
+  }
+}
