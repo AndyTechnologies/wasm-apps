@@ -56,8 +56,10 @@ program
   .option('--module-matching <strategy>', 'Estrategia de resolucion', 'name-only')
   .option('--wasmtime-path <path>', 'Ruta personalizada a la API C de Wasmtime')
   .action(async (input: string, options) => {
-    process.on('SIGINT', () => { logger.info('\nDeteniendo...'); process.exit(0); });
-    process.on('SIGTERM', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+    if (process.platform !== 'win32') {
+      process.on('SIGINT', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+      process.on('SIGTERM', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+    }
 
     const inputPaths = input.split(' ').map(p => path.resolve(p));
 

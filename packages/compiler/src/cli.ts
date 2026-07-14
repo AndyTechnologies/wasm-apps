@@ -158,8 +158,10 @@ async function watchCommand(files: string[], options: {
   shrinkLevel: string;
   sourcemap: boolean;
 }): Promise<void> {
-  process.on('SIGINT', () => { logger.info('\nDeteniendo...'); process.exit(0); });
-  process.on('SIGTERM', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+  if (process.platform !== 'win32') {
+    process.on('SIGINT', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+    process.on('SIGTERM', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+  }
 
   const outDir = path.resolve(options.outDir);
   const isDev = !options.release;
