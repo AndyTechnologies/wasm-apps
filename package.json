@@ -11,7 +11,7 @@
     "cli": "node ./packages/cli/dist/cli.js",
 
     "test:build": "pnpm cli build",
-    "test:exec": "wasm-out/wasm-out-app",
+    "test:exec": "node scripts/run-built-bin.mjs",
     "test": "pnpm test:build && pnpm test:exec"
   },
   "keywords": [],
