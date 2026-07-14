@@ -154,7 +154,8 @@ function resolveToolchain(target?: string): ToolchainEntry {
       description: 'x86_64-windows (MinGW)',
       installHint: 'Instala MinGW-w64:\n'
         + '  Linux: apt install gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64\n'
-        + '  macOS: brew install mingw-w64',
+        + '  macOS: brew install mingw-w64\n'
+        + '  Windows: instala MSYS2 (https://www.msys2.org/) y luego: pacman -S mingw-w64-x86_64-gcc',
     };
   }
 
@@ -164,7 +165,8 @@ function resolveToolchain(target?: string): ToolchainEntry {
         toolchain: { c: 'cl', cxx: 'cl', cFlags: '', cxxFlags: '', linkFlags: '' },
         targetOS: 'windows',
         description: 'x86_64-windows (MSVC)',
-        installHint: 'Necesitas Visual Studio Build Tools con la toolchain de MSVC.',
+        installHint: 'Necesitas Visual Studio Build Tools con la toolchain de MSVC.\n'
+          + 'Ejecuta desde una "Developer Command Prompt" o usa "vcvarsall.bat x64" antes de ejecutar wapp.',
       };
     }
     return {
@@ -181,8 +183,17 @@ function resolveToolchain(target?: string): ToolchainEntry {
 }
 
 function validateToolchain(entry: ToolchainEntry): void {
-  const { toolchain, installHint } = entry;
+  const { toolchain, installHint, targetOS } = entry;
   const toCheck = [toolchain.c, toolchain.cxx].filter(Boolean);
+
+  const isMsvc = targetOS === 'windows'
+    && (toolchain.c === 'cl' || toolchain.c === 'clang');
+  if (isMsvc && process.platform === 'win32') {
+    if (!process.env.VSCMD_VER) {
+      return;
+    }
+  }
+
   const missing = toCheck.filter(cmd => !commandExists.sync(cmd));
 
   if (missing.length > 0) {
