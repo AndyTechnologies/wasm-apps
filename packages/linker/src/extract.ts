@@ -23,6 +23,10 @@ export async function extract(archive: string, cwd: string, strip: number): Prom
 }
 
 async function extractWithTar(archive: string, cwd: string, strip: number): Promise<void> {
+  if (os.platform() === 'win32' && archive.endsWith('.tar.xz')) {
+    throw new Error('Archivos .tar.xz no son soportados en Windows. Usa el formato .zip.');
+  }
+
   const proc = spawn('tar', ['-xJf', archive, '--strip-components', strip.toString(), '-C', cwd], { stdio: 'inherit' });
 
   return new Promise<void>((resolve, reject) => {
@@ -44,7 +48,7 @@ async function extractZipInner(archive: string, cwd: string): Promise<void> {
     } catch {
       const ps = spawn('powershell', [
         '-NoProfile', '-Command',
-        `Expand-Archive -Path '${archive}' -DestinationPath '${cwd}' -Force`,
+        `Expand-Archive -LiteralPath "${archive.replace(/"/g, '`"')}" -DestinationPath "${cwd.replace(/"/g, '`"')}" -Force`,
       ], { stdio: 'inherit' });
       return new Promise<void>((resolve, reject) => {
         ps.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive fallo: ${code}`)));
