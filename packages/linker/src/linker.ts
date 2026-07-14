@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {
   WasmModuleInfo,
   WasmExport,
@@ -20,7 +21,7 @@ export function resolveDependencies(
   const availableExports = new Map<string, { module: WasmModuleInfo; export: WasmExport }>();
 
   for (const mod of modules) {
-    const fileBase = mod.fileName.replace(/\.[^/.]+$/, '').split('/').pop()!;
+    const fileBase = path.parse(mod.fileName).name;
     for (const exp of mod.exports) {
       const key = strategy === 'name-only' ? exp.name : `${fileBase}:${exp.name}`;
       if (availableExports.has(key)) {
@@ -90,7 +91,7 @@ export function resolveDependencies(
   const exportMap = new Map<string, { instance: string; name: string }>();
   for (const resMod of resolvedOrder) {
     for (const exp of resMod.module.exports) {
-      const fileBase = resMod.module.fileName.replace(/\.[^/.]+$/, '').split('/').pop()!;
+      const fileBase = path.parse(resMod.module.fileName).name;
       const key = strategy === 'name-only' ? exp.name : `${fileBase}:${exp.name}`;
       if (!exportMap.has(key)) {
         exportMap.set(key, { instance: resMod.instanceName, name: exp.name });
