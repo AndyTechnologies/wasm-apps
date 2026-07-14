@@ -37,24 +37,14 @@ async function extractWithTar(archive: string, cwd: string, strip: number): Prom
 
 async function extractZipInner(archive: string, cwd: string): Promise<void> {
   if (os.platform() === 'win32') {
-    // Try tar first (faster on Windows Server 2025+), fallback to PowerShell
-    const tarProc = spawn('tar', ['-xf', archive, '-C', cwd], { stdio: 'inherit' });
-    try {
-      await new Promise<void>((resolve, reject) => {
-        tarProc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`tar -xf fallo: ${code}`)));
-        tarProc.on('error', reject);
-      });
-      return;
-    } catch {
-      const ps = spawn('powershell', [
-        '-NoProfile', '-Command',
-        `Expand-Archive -LiteralPath "${archive.replace(/"/g, '`"')}" -DestinationPath "${cwd.replace(/"/g, '`"')}" -Force`,
-      ], { stdio: 'inherit' });
-      return new Promise<void>((resolve, reject) => {
-        ps.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive fallo: ${code}`)));
-        ps.on('error', reject);
-      });
-    }
+    const ps = spawn('powershell', [
+      '-NoProfile', '-Command',
+      `& {Expand-Archive -LiteralPath '${archive.replace(/'/g, "''")}' -DestinationPath '${cwd.replace(/'/g, "''")}' -Force}`,
+    ], { stdio: 'inherit' });
+    return new Promise<void>((resolve, reject) => {
+      ps.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive fallo: ${code}`)));
+      ps.on('error', reject);
+    });
   }
 
   const proc = spawn('unzip', ['-o', archive, '-d', cwd], { stdio: 'inherit' });

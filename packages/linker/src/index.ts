@@ -91,6 +91,17 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     wasi: options.wasi,
   });
 
+  if (process.platform === 'win32') {
+    const wasmtimeCacheDir = path.dirname(path.dirname(wasmtimeLib.libPath));
+    const dllSource = path.join(wasmtimeCacheDir, 'bin', 'wasmtime.dll');
+    if (fs.existsSync(dllSource)) {
+      const outputDir = path.dirname(path.resolve(options.output));
+      const dllDest = path.join(outputDir, 'wasmtime.dll');
+      fs.copyFileSync(dllSource, dllDest);
+      logger.detail(`wasmtime.dll copiado a ${dllDest}`);
+    }
+  }
+
   saveBuildManifest(wasmFiles, options.output, {
     entry: options.entry,
     target: options.target,
