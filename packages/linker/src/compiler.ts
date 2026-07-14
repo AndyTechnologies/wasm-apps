@@ -372,7 +372,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
       }
     }
 
-    const finalPath = path.resolve(opts.output);
+    const finalPath = binaryPathInDir(path.dirname(path.resolve(opts.output)), outputBaseName);
     if (expectedBinary !== finalPath) {
       fs.renameSync(expectedBinary, finalPath);
     }
