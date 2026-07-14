@@ -5,7 +5,7 @@ import { downloadFileWithResume } from './downloader.js';
 import type { DownloadOptions } from './downloader.js';
 import { extract } from './extract.js';
 
-const WASMTIME_VERSION = process.env.WASMTIME_VERSION || '46.0.1';
+export const WASMTIME_VERSION = process.env.WASMTIME_VERSION || '46.0.1';
 const WASMTIME_BASE_URL = `https://github.com/bytecodealliance/wasmtime/releases/download/v${WASMTIME_VERSION}`;
 
 function getPlatformSuffix(): string {

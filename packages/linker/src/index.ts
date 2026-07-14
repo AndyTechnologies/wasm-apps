@@ -5,11 +5,13 @@ import fs from 'fs';
 import { readWasmModules, parseImportFuncTypes } from './wasm-io.js';
 import { resolveDependencies } from './linker.js';
 import { generateCCode, validateEntryExport } from './codegen.js';
-import { ensureWasmtimeAvailable } from './wasmtime-dl.js';
+import { ensureWasmtimeAvailable, WASMTIME_VERSION } from './wasmtime-dl.js';
 import { compileWithCMake } from './compiler.js';
+import { isBuildUpToDate, saveBuildManifest } from './build-cache.js';
 
 export { runSetup, checkSetupStatus } from './setup.js';
 export { getCacheInfo, clearCache, cacheRootDir } from './cache.js';
+export { getBuildCacheInfo, clearBuildCache } from './build-cache.js';
 export type { SetupOptions, SetupStatus } from './setup.js';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
@@ -35,6 +37,21 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
   }
 
   logger.info(`Modulos encontrados: ${wasmFiles.map(f => path.basename(f)).join(', ')}`);
+
+  const wasmtimeVersion = WASMTIME_VERSION;
+  const upToDate = await isBuildUpToDate(wasmFiles, options.output, {
+    entry: options.entry,
+    target: options.target,
+    wasi: options.wasi,
+    moduleMatching: options.moduleMatching,
+    wasmtimePath: options.wasmtimePath,
+    wasmtimeVersion,
+  });
+
+  if (upToDate) {
+    logger.success(`Binario actualizado: ${path.resolve(options.output)} (saltando linker)`);
+    return;
+  }
 
   const wasmtimePromise = options.wasmtimePath
     ? Promise.resolve({ includeDir: path.join(options.wasmtimePath, 'include'), libPath: path.join(options.wasmtimePath, 'lib', getLibName()) })
@@ -72,6 +89,15 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     output: options.output,
     target: options.target,
     wasi: options.wasi,
+  });
+
+  saveBuildManifest(wasmFiles, options.output, {
+    entry: options.entry,
+    target: options.target,
+    wasi: options.wasi,
+    moduleMatching: options.moduleMatching,
+    wasmtimePath: options.wasmtimePath,
+    wasmtimeVersion,
   });
 }
 
