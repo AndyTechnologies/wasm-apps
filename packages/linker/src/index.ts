@@ -15,6 +15,9 @@ export { getBuildCacheInfo, clearBuildCache } from './build-cache.js';
 export type { SetupOptions, SetupStatus } from './setup.js';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
+  if (process.platform === 'win32' && !options.output.endsWith('.exe')) {
+    options.output += '.exe';
+  }
   let wasmFiles: string[] = [];
   for (const p of options.inputPaths) {
     if (fs.existsSync(p)) {

@@ -7,3 +7,4 @@ Fix Windows CI: definir LIBWASM_STATIC para evitar __declspec(dllimport) al link
 Fix Windows CI: añadir userenv.lib y ntdll.lib para resolver simbolos del Rust std embebido en wasmtime.lib
 Fix Windows CI: evitar subdirectorio $(Configuration) en output con Visual Studio generator
 Fix Windows CI: mantener extension .exe en finalPath para que run-built-bin.mjs lo encuentre
+Fix Windows CI: añadir .exe al output en buildProject, createNativeApp y build-cache (fileHash, isBuildUpToDate)

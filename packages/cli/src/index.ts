@@ -141,12 +141,13 @@ export async function buildProject(options: {
 
   logger.success(`Compilacion completada: ${wasmFiles.length} archivos .wasm generados en ${outDir}`);
 
-  const outputName = config.output || path.basename(rootDir);
-  const output = path.isAbsolute(outputName)
+  const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+  const outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
+  const output = (path.isAbsolute(outputName)
     ? outputName
     : outputName.includes(path.sep)
       ? path.resolve(rootDir, outputName)
-      : path.join(outDir, outputName);
+      : path.join(outDir, outputName)) + exeSuffix;
   const entry = options.entry || config.entry || '_start';
   const moduleMatching = options.moduleMatching || config.moduleMatching || 'file-name';
 
