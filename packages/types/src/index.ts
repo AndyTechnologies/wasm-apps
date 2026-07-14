@@ -100,6 +100,7 @@ export interface AsConfig {
 export interface WappConfig {
   sourceDir?: string;
   outDir?: string;
+  output?: string;
   entry?: string;
   wasi?: boolean;
   moduleMatching?: ModuleMatchingStrategy;
