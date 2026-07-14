@@ -2,8 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import { glob } from 'glob';
 import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy } from '@wasm-apps/types';
-import { compileWasm } from '@wasm-apps/compiler';
-import { createNativeApp, runSetup as linkerSetup, getCacheInfo, clearCache as linkerClearCache, checkSetupStatus } from '@wasm-apps/linker';
+import { compileWasm, getCompileCacheInfo, clearCompileCache } from '@wasm-apps/compiler';
+import { createNativeApp, runSetup as linkerSetup, getCacheInfo, clearCache as linkerClearCache, checkSetupStatus, getBuildCacheInfo, clearBuildCache } from '@wasm-apps/linker';
 
 const CONFIG_FILE = 'wapp.json';
 
@@ -170,26 +170,54 @@ export async function runSetup(): Promise<void> {
 }
 
 export async function cacheInfo(): Promise<void> {
-  const info = await getCacheInfo();
-  if (!info.exists) {
-    logger.info('No hay cache de descargas.');
-    return;
-  }
-  logger.info(`Ruta: ${info.path}`);
-  logger.info(`Tamano: ${info.humanSize} (${info.size} bytes)`);
-  if (info.entries.length > 0) {
-    logger.info('Contenido:');
-    for (const entry of info.entries) {
-      logger.info(`  ${entry}`);
+  logger.step('Cache de descargas (Wasmtime):');
+  const dlInfo = await getCacheInfo();
+  if (dlInfo.exists) {
+    logger.info(`  Ruta: ${dlInfo.path}`);
+    logger.info(`  Tamano: ${dlInfo.humanSize} (${dlInfo.size} bytes)`);
+    if (dlInfo.entries.length > 0) {
+      logger.info('  Contenido:');
+      for (const entry of dlInfo.entries) {
+        logger.info(`    ${entry}`);
+      }
     }
+    const status = await checkSetupStatus();
+    if (status.wasmtime.status === 'ok') {
+      logger.info(`  Wasmtime: ${status.wasmtime.path} — OK`);
+    }
+  } else {
+    logger.info('  No hay cache de descargas.');
   }
 
-  const status = await checkSetupStatus();
-  if (status.wasmtime.status === 'ok') {
-    logger.info(`Wasmtime: ${status.wasmtime.path} — OK`);
+  logger.step('Cache de compilacion (AssemblyScript):');
+  const compInfo = getCompileCacheInfo();
+  if (compInfo.exists) {
+    logger.info(`  Ruta: ${compInfo.path}`);
+    logger.info(`  Tamano: ${compInfo.humanSize} (${compInfo.size} bytes)`);
+    logger.info(`  Entradas cacheadas: ${compInfo.entries}`);
+  } else {
+    logger.info('  No hay cache de compilacion.');
+  }
+
+  logger.step('Cache de build (linker):');
+  const buildInfo = getBuildCacheInfo();
+  if (buildInfo.exists) {
+    logger.info(`  Ruta: ${buildInfo.path}`);
+    logger.info(`  Tamano: ${buildInfo.humanSize} (${buildInfo.size} bytes)`);
+  } else {
+    logger.info('  No hay cache de build.');
   }
 }
 
 export async function clearCache(): Promise<void> {
+  logger.info('Limpiando cache de descargas...');
   await linkerClearCache();
+
+  logger.info('Limpiando cache de compilacion...');
+  clearCompileCache();
+
+  logger.info('Limpiando cache de build...');
+  clearBuildCache();
+
+  logger.success('Cache eliminada completamente.');
 }
