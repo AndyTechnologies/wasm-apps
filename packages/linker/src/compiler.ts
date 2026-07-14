@@ -258,6 +258,10 @@ function generateCMakeLists(entry: ToolchainEntry): string {
 
   if (targetOS === 'windows') {
     lines.push('target_compile_definitions("${OUTPUT_NAME}" PRIVATE LIBWASM_STATIC)');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${WASM_OUTPUT_DIR}")');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${WASM_OUTPUT_DIR}")');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${WASM_OUTPUT_DIR}")');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${WASM_OUTPUT_DIR}")');
   }
 
   if (libs) {
@@ -279,7 +283,7 @@ function binaryPathInDir(dir: string, targetName: string): string {
   return path.join(dir, `${targetName}${ext}`);
 }
 
-function locateBuiltBinary(workDir: string, targetName: string): string | null {
+function locateBuiltBinary(workDir: string, targetName: string, outputDir?: string): string | null {
   const candidates = [
     binaryPathInDir(workDir, targetName),
     binaryPathInDir(path.join(workDir, 'Release'), targetName),
@@ -287,6 +291,13 @@ function locateBuiltBinary(workDir: string, targetName: string): string | null {
     binaryPathInDir(path.join(workDir, 'RelWithDebInfo'), targetName),
     binaryPathInDir(path.join(workDir, 'MinSizeRel'), targetName),
   ];
+  if (outputDir) {
+    candidates.push(
+      binaryPathInDir(outputDir, targetName),
+      binaryPathInDir(path.join(outputDir, 'Release'), targetName),
+      binaryPathInDir(path.join(outputDir, 'Debug'), targetName),
+    );
+  }
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -350,7 +361,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
     const expectedBinary = binaryPathInDir(outputDir, outputBaseName);
     if (!fs.existsSync(expectedBinary)) {
       const workDir = path.join(tmpDir, 'build');
-      const found = locateBuiltBinary(workDir, outputBaseName);
+      const found = locateBuiltBinary(workDir, outputBaseName, outputDir);
       if (found) {
         fs.copyFileSync(found, expectedBinary);
       } else {
