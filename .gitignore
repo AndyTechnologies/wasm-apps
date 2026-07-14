@@ -1,15 +1,50 @@
-node_modules
-**/dist
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+.actrc
+
+# Build output
+dist/
+*.js.map
+*.tsbuildinfo
 **/examples/outdir
 .wapp_build
 wasm-out
 *-app
+out
+wapp.json
 
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.orig
+
+# Project build artifacts
+.wapp_build/
+.wapp-cli/
+
+# Temp and logs
+tmp/
+temp/
+*.log
+*.pid
+
+# Env
+.env
+.env.local
+
+# Coverage
+coverage/
+
+# Scratch / notes
 *.todo
+todo.*
 *.todo.md
-
-
-.turbo
-.nx/cache
-.nx/workspace-data
-.nx/migrate-runs
