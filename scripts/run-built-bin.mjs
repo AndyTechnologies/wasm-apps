@@ -1,6 +1,6 @@
-import { execFileSync } from 'child_process';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
 const ext = process.platform === 'win32' ? '.exe' : '';
 const bin = join('wasm-out', `wasm-out-app${ext}`);

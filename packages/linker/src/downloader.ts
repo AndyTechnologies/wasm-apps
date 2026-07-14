@@ -1,7 +1,7 @@
-import fs from 'fs';
-import https from 'https';
-import http from 'http';
-import { pipeline } from 'stream/promises';
+import fs from 'node:fs';
+import https from 'node:https';
+import http from 'node:http';
+import { pipeline } from 'node:stream/promises';
 import { logger, formatBytes, DownloadError } from '@wasm-apps/types';
 import ora, { type Ora } from 'ora';
 

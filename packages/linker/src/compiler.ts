@@ -1,6 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import commandExists from 'command-exists';
 import cmake_js from 'cmake-js';
 import { CMakeError, logger } from '@wasm-apps/types';
@@ -189,9 +189,7 @@ function validateToolchain(entry: ToolchainEntry): void {
   const isMsvc = targetOS === 'windows'
     && (toolchain.c === 'cl' || toolchain.c === 'clang');
   if (isMsvc && process.platform === 'win32') {
-    if (!process.env.VSCMD_VER) {
-      return;
-    }
+    return;
   }
 
   const missing = toCheck.filter(cmd => !commandExists.sync(cmd));
@@ -212,6 +210,9 @@ function getPlatformLibs(targetOS: 'linux' | 'macos' | 'windows'): string {
   }
   if (targetOS === 'linux') {
     return 'pthread dl m';
+  }
+  if (targetOS === 'windows') {
+    return 'ws2_32.lib bcrypt.lib ole32.lib userenv.lib ntdll.lib';
   }
   return '';
 }
@@ -251,6 +252,18 @@ function generateCMakeLists(entry: ToolchainEntry): string {
     lines.push(`set(CMAKE_EXE_LINKER_FLAGS "\${CMAKE_EXE_LINKER_FLAGS} ${toolchain.linkFlags}")`);
   }
 
+  if (targetOS === 'linux') {
+    lines.push('set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")');
+  }
+
+  if (targetOS === 'windows') {
+    lines.push('target_compile_definitions("${OUTPUT_NAME}" PRIVATE LIBWASM_STATIC)');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${WASM_OUTPUT_DIR}")');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${WASM_OUTPUT_DIR}")');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${WASM_OUTPUT_DIR}")');
+    lines.push('set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${WASM_OUTPUT_DIR}")');
+  }
+
   if (libs) {
     lines.push(`target_link_libraries("\${OUTPUT_NAME}" PRIVATE ${libs})`);
   }
@@ -270,7 +283,7 @@ function binaryPathInDir(dir: string, targetName: string): string {
   return path.join(dir, `${targetName}${ext}`);
 }
 
-function locateBuiltBinary(workDir: string, targetName: string): string | null {
+function locateBuiltBinary(workDir: string, targetName: string, outputDir?: string): string | null {
   const candidates = [
     binaryPathInDir(workDir, targetName),
     binaryPathInDir(path.join(workDir, 'Release'), targetName),
@@ -278,6 +291,13 @@ function locateBuiltBinary(workDir: string, targetName: string): string | null {
     binaryPathInDir(path.join(workDir, 'RelWithDebInfo'), targetName),
     binaryPathInDir(path.join(workDir, 'MinSizeRel'), targetName),
   ];
+  if (outputDir) {
+    candidates.push(
+      binaryPathInDir(outputDir, targetName),
+      binaryPathInDir(path.join(outputDir, 'Release'), targetName),
+      binaryPathInDir(path.join(outputDir, 'Debug'), targetName),
+    );
+  }
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -297,7 +317,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wasm-linker-'));
   const cmakeListsPath = path.join(tmpDir, 'CMakeLists.txt');
-  const outputBaseName = path.basename(opts.output).replace(/\.[^/.]+$/, '');
+  const outputBaseName = path.parse(opts.output).name;
   const outputDir = path.dirname(path.resolve(opts.output));
 
   try {
@@ -341,7 +361,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
     const expectedBinary = binaryPathInDir(outputDir, outputBaseName);
     if (!fs.existsSync(expectedBinary)) {
       const workDir = path.join(tmpDir, 'build');
-      const found = locateBuiltBinary(workDir, outputBaseName);
+      const found = locateBuiltBinary(workDir, outputBaseName, outputDir);
       if (found) {
         fs.copyFileSync(found, expectedBinary);
       } else {
@@ -352,7 +372,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
       }
     }
 
-    const finalPath = path.resolve(opts.output);
+    const finalPath = binaryPathInDir(path.dirname(path.resolve(opts.output)), outputBaseName);
     if (expectedBinary !== finalPath) {
       fs.renameSync(expectedBinary, finalPath);
     }

@@ -4,8 +4,8 @@ import { logger } from '@wasm-apps/types';
 import { createNativeApp } from './index.js';
 import { runSetup, checkSetupStatus } from './setup.js';
 import { clearCache, getCacheInfo } from './cache.js';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const program = new Command();
 
@@ -17,17 +17,18 @@ program
 program
   .command('build')
   .description('Compila uno o varios archivos .wasm en un ejecutable nativo')
-  .argument('<input>', 'Carpeta o archivos .wasm (multiples separados por espacio)')
+  .argument('<files...>', 'Carpeta o archivos .wasm')
   .requiredOption('-o, --output <file>', 'Nombre del ejecutable de salida')
   .option('-t, --target <triple>', 'Tripleta de compilacion (ej. x86_64-linux-gnu, aarch64-macos)')
   .option('-e, --entry <name>', 'Punto de entrada (funcion exportada, por defecto _start)', '_start')
   .option('--wasi', 'Habilitar interfaz WASI', false)
   .option('--module-matching <strategy>', 'Estrategia de resolucion: name-only (defecto) o file-name', 'name-only')
   .option('--wasmtime-path <path>', 'Ruta personalizada a la API C de Wasmtime (include/lib)')
-  .action(async (input: string, options) => {
+  .action(async (files: string[], options) => {
+    const resolvedFiles = files.map(p => path.resolve(p));
     try {
       await createNativeApp({
-        inputPaths: input.split(' '),
+        inputPaths: resolvedFiles,
         output: options.output,
         target: options.target,
         entry: options.entry,
@@ -48,20 +49,20 @@ program
 program
   .command('watch')
   .description('Vigila archivos .wasm y recompila automaticamente el ejecutable nativo')
-  .argument('<input>', 'Carpeta o archivos .wasm')
+  .argument('<files...>', 'Carpeta o archivos .wasm')
   .requiredOption('-o, --output <file>', 'Nombre del ejecutable de salida')
   .option('-t, --target <triple>', 'Tripleta de compilacion')
   .option('-e, --entry <name>', 'Punto de entrada', '_start')
   .option('--wasi', 'Habilitar interfaz WASI', false)
   .option('--module-matching <strategy>', 'Estrategia de resolucion', 'name-only')
   .option('--wasmtime-path <path>', 'Ruta personalizada a la API C de Wasmtime')
-  .action(async (input: string, options) => {
+  .action(async (files: string[], options) => {
     if (process.platform !== 'win32') {
       process.on('SIGINT', () => { logger.info('\nDeteniendo...'); process.exit(0); });
       process.on('SIGTERM', () => { logger.info('\nDeteniendo...'); process.exit(0); });
     }
 
-    const inputPaths = input.split(' ').map(p => path.resolve(p));
+    const inputPaths = files.map(p => path.resolve(p));
 
     const doBuild = async () => {
       try {

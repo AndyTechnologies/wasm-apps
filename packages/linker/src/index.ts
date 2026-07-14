@@ -1,7 +1,7 @@
 import { logger, NativeAppOptions, LinkerError } from '@wasm-apps/types';
 import { glob } from 'glob';
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import { readWasmModules, parseImportFuncTypes } from './wasm-io.js';
 import { resolveDependencies } from './linker.js';
 import { generateCCode, validateEntryExport } from './codegen.js';
@@ -15,6 +15,8 @@ export { getBuildCacheInfo, clearBuildCache } from './build-cache.js';
 export type { SetupOptions, SetupStatus } from './setup.js';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
+  const exeSuffix = process.platform === 'win32' && !options.output.endsWith('.exe') ? '.exe' : '';
+  const output = options.output + exeSuffix;
   let wasmFiles: string[] = [];
   for (const p of options.inputPaths) {
     if (fs.existsSync(p)) {
@@ -39,7 +41,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
   logger.info(`Modulos encontrados: ${wasmFiles.map(f => path.basename(f)).join(', ')}`);
 
   const wasmtimeVersion = WASMTIME_VERSION;
-  const upToDate = await isBuildUpToDate(wasmFiles, options.output, {
+  const upToDate = await isBuildUpToDate(wasmFiles, output, {
     entry: options.entry,
     target: options.target,
     wasi: options.wasi,
@@ -49,7 +51,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
   });
 
   if (upToDate) {
-    logger.success(`Binario actualizado: ${path.resolve(options.output)} (saltando linker)`);
+    logger.success(`Binario actualizado: ${path.resolve(output)} (saltando linker)`);
     return;
   }
 
@@ -86,12 +88,23 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     source: cFilePath,
     includeDir: wasmtimeLib.includeDir,
     libPath: wasmtimeLib.libPath,
-    output: options.output,
+    output,
     target: options.target,
     wasi: options.wasi,
   });
 
-  saveBuildManifest(wasmFiles, options.output, {
+  if (process.platform === 'win32') {
+    const wasmtimeCacheDir = path.dirname(path.dirname(wasmtimeLib.libPath));
+    const dllSource = path.join(wasmtimeCacheDir, 'bin', 'wasmtime.dll');
+    if (fs.existsSync(dllSource)) {
+      const outputDir = path.dirname(path.resolve(output));
+      const dllDest = path.join(outputDir, 'wasmtime.dll');
+      fs.copyFileSync(dllSource, dllDest);
+      logger.detail(`wasmtime.dll copiado a ${dllDest}`);
+    }
+  }
+
+  saveBuildManifest(wasmFiles, output, {
     entry: options.entry,
     target: options.target,
     wasi: options.wasi,

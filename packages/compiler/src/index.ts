@@ -98,7 +98,9 @@ export async function compileWasm(
     baseArgs,
     {
       readFile: (name: string) => {
-        if (name === opts.fileName) return opts.sourceCode;
+        const normalizedReadName = path.resolve(name);
+        const normalizedFileName = path.resolve(opts.fileName);
+        if (normalizedReadName === normalizedFileName) return opts.sourceCode;
         if (name === 'asconfig.json') return null;
         const resolved = resolveImportPath(name, opts.fileName, opts.aliases || []);
         return readFileFromDisk(resolved);
