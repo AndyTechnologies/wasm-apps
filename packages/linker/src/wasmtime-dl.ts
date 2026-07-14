@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { downloadFileWithResume } from './downloader.js';
 import type { DownloadOptions } from './downloader.js';
+import { logger } from '@wasm-apps/types';
 import { extract } from './extract.js';
 
 export const WASMTIME_VERSION = process.env.WASMTIME_VERSION || '46.0.1';
@@ -79,7 +80,7 @@ export async function ensureWasmtimeAvailable(dlOpts?: DownloadOptions): Promise
   const archivePath = path.join(cacheDir, info.fileName);
   await downloadFileWithResume(info.url, archivePath, dlOpts);
 
-  console.log('Extrayendo...');
+  logger.step('Extrayendo...');
   await extract(archivePath, cacheDir, 1);
   fs.unlinkSync(archivePath);
 

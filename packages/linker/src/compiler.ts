@@ -317,7 +317,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wasm-linker-'));
   const cmakeListsPath = path.join(tmpDir, 'CMakeLists.txt');
-  const outputBaseName = path.basename(opts.output).replace(/\.[^/.]+$/, '');
+  const outputBaseName = path.parse(opts.output).name;
   const outputDir = path.dirname(path.resolve(opts.output));
 
   try {

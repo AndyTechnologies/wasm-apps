@@ -25,9 +25,10 @@ program
   .option('--module-matching <strategy>', 'Estrategia de resolucion: name-only (defecto) o file-name', 'name-only')
   .option('--wasmtime-path <path>', 'Ruta personalizada a la API C de Wasmtime (include/lib)')
   .action(async (files: string[], options) => {
+    const resolvedFiles = files.map(p => path.resolve(p));
     try {
       await createNativeApp({
-        inputPaths: files,
+        inputPaths: resolvedFiles,
         output: options.output,
         target: options.target,
         entry: options.entry,
