@@ -2,6 +2,8 @@
 
 Compila código **AssemblyScript** (`.wasm.ts`) a WebAssembly y lo enlaza en **ejecutables nativos autocontenidos** usando la C-API de Wasmtime.
 
+📖 Documentación completa en [docs/](docs/index.md) (Diátaxis).
+
 ## Pipeline
 
 ```

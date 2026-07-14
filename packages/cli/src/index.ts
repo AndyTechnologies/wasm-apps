@@ -209,15 +209,27 @@ export async function cacheInfo(): Promise<void> {
   }
 }
 
-export async function clearCache(): Promise<void> {
-  logger.info('Limpiando cache de descargas...');
-  await linkerClearCache();
+export async function clearCache(options?: { build?: boolean; linker?: boolean; all?: boolean }): Promise<void> {
+  const clearBuild = options?.all || options?.build || (!options?.linker && !options?.all);
+  const clearLinker = options?.all || options?.linker;
 
-  logger.info('Limpiando cache de compilacion...');
-  clearCompileCache();
+  if (clearBuild) {
+    logger.info('Limpiando cache de compilacion...');
+    clearCompileCache();
 
-  logger.info('Limpiando cache de build...');
-  clearBuildCache();
+    logger.info('Limpiando cache de build...');
+    clearBuildCache();
 
-  logger.success('Cache eliminada completamente.');
+    logger.success('Cache de proyecto eliminada.');
+  }
+
+  if (clearLinker) {
+    logger.info('Limpiando cache de descargas (Wasmtime)...');
+    await linkerClearCache();
+    logger.success('Cache de descargas eliminada.');
+  }
+
+  if (!clearBuild && !clearLinker) {
+    logger.info('No se especifico que cache eliminar.');
+  }
 }
