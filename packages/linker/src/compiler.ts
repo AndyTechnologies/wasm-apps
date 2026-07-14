@@ -212,7 +212,7 @@ function getPlatformLibs(targetOS: 'linux' | 'macos' | 'windows'): string {
     return 'pthread dl m';
   }
   if (targetOS === 'windows') {
-    return 'ws2_32.lib bcrypt.lib ole32.lib';
+    return 'ws2_32.lib bcrypt.lib ole32.lib userenv.lib ntdll.lib';
   }
   return '';
 }
@@ -254,6 +254,10 @@ function generateCMakeLists(entry: ToolchainEntry): string {
 
   if (targetOS === 'linux') {
     lines.push('set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")');
+  }
+
+  if (targetOS === 'windows') {
+    lines.push('target_compile_definitions("${OUTPUT_NAME}" PRIVATE LIBWASM_STATIC)');
   }
 
   if (libs) {
