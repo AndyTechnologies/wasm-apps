@@ -1,7 +1,7 @@
 {
-  "name": "@wasm-apps/cli",
+  "name": "wapp-cli",
   "version": "1.0.0",
-  "description": "Orquestador para compilar y linkear proyectos WebAssembly en ejecutables nativos",
+  "description": "Orquestador para compilar y linkear proyectos AssemblyScript en ejecutables nativos",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -18,7 +18,10 @@
     "start": "node ./dist/cli.js",
     "dev": "tsc --watch"
   },
-  "keywords": [],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": ["wasm", "webassembly", "assemblyscript", "cli", "native"],
   "author": "",
   "license": "MIT",
   "type": "module",
