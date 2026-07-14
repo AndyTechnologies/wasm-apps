@@ -1,7 +1,16 @@
 ---
+'@wasm-apps/compiler': patch
 '@wasm-apps/linker': patch
 ---
 
-Binarios Linux standalone: enlazar libstdc++ y libgcc estaticamente
-Fix Windows CI: LIBWASM_STATIC, userenv/ntdll, output path con .exe, Release subdir
-Cross-platform: unificar imports con node: prefix, os.EOL en JSON, util.ts sin path.posix, extract sin hard rejection tar.xz, cli variadic args
+Cross-platform audit (2 rounds):
+- compiler: asc.main() readFile path comparison con path.resolve() para Windows
+- linker: logger en cache.ts y wasmtime-dl.ts (console.log -> logger)
+- linker: path.parse() en vez de replace() para extension stripping
+- linker: path.resolve() en CLI build command (consistente con watch)
+- linker: remover import process innecesario en build-cache.ts
+- linker: binarios Linux standalone con libstdc++/libgcc estatico
+- linker: LIBWASM_STATIC, userenv/ntdll, .exe output path para Windows
+- linker: node: prefix en imports, os.EOL en JSON, variadic CLI args
+- linker: extract.ts sin hard rejection de tar.xz en Windows
+- linker: utils.ts sin path.posix para rutas Windows
