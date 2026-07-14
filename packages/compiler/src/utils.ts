@@ -18,7 +18,8 @@ export function resolveImportPath(
   for (const alias of aliases) {
     if (typeof alias.find === 'string' && importPath.startsWith(alias.find)) {
       const rest = importPath.slice(alias.find.length);
-      return path.posix.resolve(alias.replacement, rest);
+      const normalizedReplacement = alias.replacement.replace(/\\/g, '/');
+      return path.posix.resolve(normalizedReplacement, rest);
     }
     if (alias.find instanceof RegExp && alias.find.test(importPath)) {
       return importPath.replace(alias.find, alias.replacement);
@@ -26,7 +27,7 @@ export function resolveImportPath(
   }
 
   if (importPath.startsWith('.')) {
-    return path.posix.resolve(path.posix.dirname(importer.replace(/\\/g, '/')), importPath);
+    return path.posix.resolve(path.posix.dirname(importer.replace(/\\/g, '/')), importPath.replace(/\\/g, '/'));
   }
 
   return importPath;
