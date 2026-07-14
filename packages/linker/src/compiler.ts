@@ -252,6 +252,10 @@ function generateCMakeLists(entry: ToolchainEntry): string {
     lines.push(`set(CMAKE_EXE_LINKER_FLAGS "\${CMAKE_EXE_LINKER_FLAGS} ${toolchain.linkFlags}")`);
   }
 
+  if (targetOS === 'linux') {
+    lines.push('set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")');
+  }
+
   if (libs) {
     lines.push(`target_link_libraries("\${OUTPUT_NAME}" PRIVATE ${libs})`);
   }
