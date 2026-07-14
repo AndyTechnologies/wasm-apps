@@ -19,6 +19,19 @@
     "dev": "tsc --watch",
     "start": "node ./dist/cli.js"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AndyTechnologies/wasm-apps.git",
+    "directory": "packages/compiler"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "keywords": [],
   "author": "",
   "license": "MIT",

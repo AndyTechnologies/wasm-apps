@@ -1,0 +1,52 @@
+name: CI
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        shell: bash
+      - run: pnpm -r build
+        shell: bash
+      - run: pnpm run test
+        shell: bash
+
+  auto-merge:
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create or update PR dev → main
+        env:
+          GH_TOKEN: ${{ secrets.PAT || github.token }}
+        run: |
+          gh pr create \
+            --base main --head dev \
+            --title "chore: auto-merge dev → main" \
+            --body "Merge automático desencadenado por CI/CD" \
+            2>/dev/null || echo "PR already exists"
+          PR_NUMBER=$(gh pr list \
+            --base main --head dev --state open \
+            --json number --jq '.[0].number')
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+            gh pr merge "$PR_NUMBER" --auto --squash
+          fi
