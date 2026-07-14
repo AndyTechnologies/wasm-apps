@@ -1,0 +1,15 @@
+node_modules
+**/dist
+**/examples/outdir
+.wapp_build
+wasm-out
+*-app
+
+*.todo
+*.todo.md
+
+
+.turbo
+.nx/cache
+.nx/workspace-data
+.nx/migrate-runs

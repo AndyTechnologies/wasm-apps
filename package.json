@@ -2,19 +2,24 @@
   "name": "wasm-apps",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "pnpm -r build",
+    "release": "pnpm build && pnpm test && pnpm -r publish",
+    
+    "compiler": "node ./packages/compiler/dist/cli.js",
+    "linker": "node ./packages/linker/dist/cli.js",
+
+    "test:compiler": "pnpm compiler build ./examples/math.wasm.ts && pnpm compiler build ./examples/stdlib_test.wasm.ts",
+    "test:linker": "pnpm linker build -o out/math-app ./wasm-out/math.wasm && pnpm linker build -o out/stdlib_test-app ./wasm-out/stdlib_test.wasm",
+    "test:exec": "out/math-app && out/stdlib_test-app",
+    "test": "pnpm test:compiler && pnpm test:linker && pnpm test:exec"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.10.0",
-      "onFail": "download"
-    }
-  },
-  "type": "module"
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "@types/node": "^26.1.1"
+  }
 }
