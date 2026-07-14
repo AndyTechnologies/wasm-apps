@@ -209,10 +209,14 @@ async function watchCommand(files: string[], options: {
     logger.detail('\nEsperando cambios... (Ctrl+C para salir)\n');
   }, 300);
 
+  if (process.platform === 'linux') {
+    logger.detail('Nota: en Linux, fs.watch recursive no vigila subdirectorios. Para watch completo, instala chokidar.');
+  }
   for (const dir of watchedDirs) {
     fs.watch(dir, { recursive: true }, (_eventType, filename) => {
-      if (filename && (filename.endsWith('.wasm.ts') || filename.endsWith('.asm.ts') || filename.endsWith('.ts') || filename.endsWith('.asm'))) {
-        const fullPath = path.join(dir, filename);
+      const normalizedName = filename ? path.normalize(filename) : null;
+      if (normalizedName && (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.asm.ts') || normalizedName.endsWith('.ts') || normalizedName.endsWith('.asm'))) {
+        const fullPath = path.join(dir, normalizedName);
         let targetFile = inputFiles.includes(fullPath) ? fullPath : undefined;
         if (!targetFile) {
           targetFile = inputFiles.find(f => path.basename(f) === filename);

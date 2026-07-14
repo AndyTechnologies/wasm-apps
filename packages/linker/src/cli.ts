@@ -98,7 +98,8 @@ program
     let debounceTimer: ReturnType<typeof setTimeout>;
     for (const dir of watchedDirs) {
       fs.watch(dir, { recursive: true }, (_eventType, filename) => {
-        if (filename && filename.endsWith('.wasm')) {
+        const normalizedName = filename ? path.normalize(filename) : null;
+        if (normalizedName && normalizedName.endsWith('.wasm')) {
           clearTimeout(debounceTimer);
           debounceTimer = setTimeout(doBuild, 500);
         }
