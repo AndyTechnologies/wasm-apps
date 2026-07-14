@@ -2,8 +2,8 @@
 import { Command } from 'commander';
 import { logger } from '@wasm-apps/types';
 import { glob } from 'glob';
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import { compileWasm } from './index.js';
 
 function isWasmTsFile(file: string): boolean {

@@ -1,9 +1,9 @@
 import commandExists from 'command-exists';
 import spawn from 'cross-spawn';
 
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 export async function extract(archive: string, cwd: string, strip: number): Promise<void> {
   const commands = ['tar', 'unzip'];
@@ -23,10 +23,6 @@ export async function extract(archive: string, cwd: string, strip: number): Prom
 }
 
 async function extractWithTar(archive: string, cwd: string, strip: number): Promise<void> {
-  if (os.platform() === 'win32' && archive.endsWith('.tar.xz')) {
-    throw new Error('Archivos .tar.xz no son soportados en Windows. Usa el formato .zip.');
-  }
-
   const proc = spawn('tar', ['-xJf', archive, '--strip-components', strip.toString(), '-C', cwd], { stdio: 'inherit' });
 
   return new Promise<void>((resolve, reject) => {

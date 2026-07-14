@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { logger, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { initProject, buildProject, runSetup, cacheInfo, clearCache } from './index.js';
-import path from 'path';
+import path from 'node:path';
 
 const program = new Command();
 

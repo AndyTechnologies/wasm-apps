@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import process from 'node:process';
 
 function normalizeOutput(output: string): string {
@@ -64,7 +65,7 @@ function saveManifest(manifest: BuildManifest, rootDir?: string): void {
   if (!fs.existsSync(buildDir)) {
     fs.mkdirSync(buildDir, { recursive: true });
   }
-  fs.writeFileSync(getManifestPath(rootDir), JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(getManifestPath(rootDir), JSON.stringify(manifest, null, 2) + os.EOL, 'utf-8');
 }
 
 export async function isBuildUpToDate(

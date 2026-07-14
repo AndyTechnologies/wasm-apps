@@ -1,6 +1,6 @@
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
 import { downloadFileWithResume } from './downloader.js';
 import type { DownloadOptions } from './downloader.js';
 import { extract } from './extract.js';

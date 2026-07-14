@@ -1,5 +1,6 @@
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import { glob } from 'glob';
 import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { compileWasm, getCompileCacheInfo, clearCompileCache } from '@wasm-apps/compiler';
@@ -62,7 +63,7 @@ export function initProject(rootDir: string, overrides?: Partial<WappConfig>): W
   }
 
   const config = { ...DEFAULT_CONFIG, ...overrides };
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + os.EOL);
   logger.success(`${CONFIG_FILE} creado en ${rootDir}`);
   return config;
 }

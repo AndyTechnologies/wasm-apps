@@ -2,9 +2,6 @@
 '@wasm-apps/linker': patch
 ---
 
-Binarios Linux standalone: enlazar libstdc++ y libgcc estaticamente para eliminar dependencias de librerias dinamicas
-Fix Windows CI: definir LIBWASM_STATIC para evitar __declspec(dllimport) al linkear wasmtime.lib
-Fix Windows CI: añadir userenv.lib y ntdll.lib para resolver simbolos del Rust std embebido en wasmtime.lib
-Fix Windows CI: evitar subdirectorio $(Configuration) en output con Visual Studio generator
-Fix Windows CI: mantener extension .exe en finalPath para que run-built-bin.mjs lo encuentre
-Fix Windows CI: añadir .exe al output en buildProject, createNativeApp y build-cache (fileHash, isBuildUpToDate)
+Binarios Linux standalone: enlazar libstdc++ y libgcc estaticamente
+Fix Windows CI: LIBWASM_STATIC, userenv/ntdll, output path con .exe, Release subdir
+Cross-platform: unificar imports con node: prefix, os.EOL en JSON, util.ts sin path.posix, extract sin hard rejection tar.xz, cli variadic args

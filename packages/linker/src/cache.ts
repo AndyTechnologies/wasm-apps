@@ -1,6 +1,6 @@
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
 
 export function cacheRootDir(): string {
   const newDir = path.join(os.homedir(), '.wasm-linker');

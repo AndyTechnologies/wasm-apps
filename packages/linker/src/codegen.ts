@@ -485,7 +485,7 @@ export function generateCCode(
     '  return std::string(reinterpret_cast<const char*>(data + ptr), mlen);',
     '}',
     '',
-  ].join(os.EOL);
+  ].join('\n');
 
   for (const mb of moduleBuffers) {
     const byteStr = Array.from(mb.bytes).join(',');
