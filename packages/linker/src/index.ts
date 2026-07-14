@@ -8,6 +8,10 @@ import { generateCCode, validateEntryExport } from './codegen.js';
 import { ensureWasmtimeAvailable } from './wasmtime-dl.js';
 import { compileWithCMake } from './compiler.js';
 
+export { runSetup, checkSetupStatus } from './setup.js';
+export { getCacheInfo, clearCache, cacheRootDir } from './cache.js';
+export type { SetupOptions, SetupStatus } from './setup.js';
+
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
   let wasmFiles: string[] = [];
   for (const p of options.inputPaths) {
