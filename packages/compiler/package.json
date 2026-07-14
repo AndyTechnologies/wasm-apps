@@ -1,0 +1,33 @@
+{
+  "name": "@wasm-apps/compiler",
+  "version": "1.0.0",
+  "description": "Compila archivos AssemblyScript (.wasm.ts, .ts, .asm) a WebAssembly",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "compiler": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc --watch",
+    "start": "node ./dist/cli.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "assemblyscript": "^0.28.19",
+    "commander": "^15.0.0",
+    "glob": "^13.0.6",
+    "picocolors": "^1.1.1",
+    "@wasm-apps/types": "workspace:*"
+  }
+}
