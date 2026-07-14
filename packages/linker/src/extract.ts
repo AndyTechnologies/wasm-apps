@@ -13,10 +13,10 @@ export async function extract(archive: string, cwd: string, strip: number): Prom
     throw new Error('No se encontró ninguna de las siguientes comandos: tar, unzip');
   }
 
-  if (command === 'tar' && !archive.endsWith('.zip')) {
-    await extractWithTar(archive, cwd, strip);
-  } else if (command === 'unzip' && archive.endsWith('.zip')) {
+  if (archive.endsWith('.zip')) {
     await extractWithZip(archive, cwd, strip);
+  } else if (command === 'tar') {
+    await extractWithTar(archive, cwd, strip);
   } else {
     throw new Error(`No se pudo extraer el archivo ${archive}: \n\t- No se encontró un comando compatible. (${command} no soporta ${path.extname(archive)})\n`);
   }
