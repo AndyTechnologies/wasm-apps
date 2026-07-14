@@ -29,6 +29,7 @@ Thumbs.db
 
 # Project build artifacts
 .wapp_build/
+.wapp_cache/
 .wapp-cli/
 
 # Temp and logs
