@@ -8,11 +8,11 @@
     
     "compiler": "node ./packages/compiler/dist/cli.js",
     "linker": "node ./packages/linker/dist/cli.js",
+    "cli": "node ./packages/cli/dist/cli.js",
 
-    "test:compiler": "pnpm compiler build ./examples/math.wasm.ts && pnpm compiler build ./examples/stdlib_test.wasm.ts",
-    "test:linker": "pnpm linker build -o out/math-app ./wasm-out/math.wasm && pnpm linker build -o out/stdlib_test-app ./wasm-out/stdlib_test.wasm",
-    "test:exec": "out/math-app && out/stdlib_test-app",
-    "test": "pnpm test:compiler && pnpm test:linker && pnpm test:exec"
+    "test:build": "pnpm cli build",
+    "test:exec": "wasm-out/wasm-out-app",
+    "test": "pnpm test:build && pnpm test:exec"
   },
   "keywords": [],
   "author": "",

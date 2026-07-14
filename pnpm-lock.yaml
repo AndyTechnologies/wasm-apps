@@ -17,6 +17,27 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/cli:
+    dependencies:
+      '@wasm-apps/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@wasm-apps/linker':
+        specifier: workspace:*
+        version: link:../linker
+      '@wasm-apps/types':
+        specifier: workspace:*
+        version: link:../types
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
+      glob:
+        specifier: ^13.0.6
+        version: 13.0.6
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
+
   packages/compiler:
     dependencies:
       '@wasm-apps/types':
