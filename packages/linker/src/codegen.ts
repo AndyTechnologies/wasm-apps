@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { ResolvedLink, HostFuncDef, WasmImportFuncType } from '@wasm-apps/types';
 
 const ABORT_BODY = `
@@ -52,7 +53,7 @@ function funcTypeCpp(params: string[], results: string[]): string {
 
 function defaultResultCode(results: string[]): string {
   if (results.length === 0) return '    return std::monostate{};';
-  return results.map((t, i) => `    results[${i}] = ${VALTYPE_TO_SET[t] || 'Val(int32_t('}0));`).join('\n') + '\n    return std::monostate{};';
+  return results.map((t, i) => `    results[${i}] = ${VALTYPE_TO_SET[t] || 'Val(int32_t('}0));`).join(os.EOL) + os.EOL + '    return std::monostate{};';
 }
 
 interface EnvImpl {
@@ -463,7 +464,7 @@ export function generateCCode(
     '  return std::string(reinterpret_cast<const char*>(data + ptr), mlen);',
     '}',
     '',
-  ].join('\n');
+  ].join(os.EOL);
 
   for (const mb of moduleBuffers) {
     const byteStr = Array.from(mb.bytes).join(',');

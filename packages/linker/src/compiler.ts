@@ -251,7 +251,7 @@ function generateCMakeLists(entry: ToolchainEntry): string {
     'endif()',
   );
 
-  return lines.join('\n');
+  return lines.join(os.EOL);
 }
 
 function binaryPathInDir(dir: string, targetName: string): string {
