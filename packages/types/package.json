@@ -1,0 +1,22 @@
+{
+  "name": "@wasm-apps/types",
+  "version": "1.0.0",
+  "description": "Tipos compartidos para los paquetes de wasm-apps",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "picocolors": "^1.1.1"
+  }
+}
