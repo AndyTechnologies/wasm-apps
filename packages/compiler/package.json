@@ -15,7 +15,7 @@
     "compiler": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc",
     "dev": "tsc --watch",
     "start": "node ./dist/cli.js"
   },
