@@ -23,10 +23,16 @@ jobs:
       - run: pnpm run test
       - name: Publish to npm
         run: |
-          npm publish ./packages/types --access public
-          npm publish ./packages/compiler --access public
-          npm publish ./packages/linker --access public
-          npm publish ./packages/cli --access public
+          for pkg in types compiler linker cli; do
+            pkg_json="packages/$pkg/package.json"
+            name=$(node -p "require('./$pkg_json').name")
+            version=$(node -p "require('./$pkg_json').version")
+            if npm info "$name@$version" version 2>/dev/null; then
+              echo "✓ $name@$version ya publicado, saltando"
+            else
+              npm publish "./packages/$pkg" --access public
+            fi
+          done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: GitHub Release
