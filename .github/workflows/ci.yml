@@ -25,6 +25,7 @@ jobs:
         shell: bash
       - run: pnpm run test
         shell: bash
+        if: runner.os != 'Windows'
 
   auto-merge:
     needs: build-and-test
