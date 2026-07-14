@@ -1,7 +1,11 @@
 {
-  "name": "wapp-cli",
+  "name": "@wasm-apps/cli",
   "version": "1.0.0",
   "description": "Orquestador para compilar y linkear proyectos AssemblyScript en ejecutables nativos",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
