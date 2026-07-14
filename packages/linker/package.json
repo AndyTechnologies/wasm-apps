@@ -1,0 +1,40 @@
+{
+  "name": "@wasm-apps/linker",
+  "version": "1.0.0",
+  "description": "Convierte archivos .wasm en ejecutables nativos usando C++ + Wasmtime",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "linker": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "tsc --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "cmake-js": "^7.4.0",
+    "command-exists": "^1.2.9",
+    "commander": "^15.0.0",
+    "cross-spawn": "^7.0.6",
+    "glob": "^13.0.6",
+    "ora": "^9.4.1",
+    "picocolors": "^1.1.1",
+    "tar": "^7.5.20",
+    "@wasm-apps/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/command-exists": "^1.2.3",
+    "@types/cross-spawn": "^6.0.6"
+  }
+}
