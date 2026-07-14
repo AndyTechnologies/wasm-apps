@@ -35,7 +35,7 @@ pnpm run linker setup
 ### Instalación global como CLI
 
 ```bash
-pnpm install --global wapp-cli
+pnpm install --global @wasm-apps/cli
 wapp init mi-proyecto
 cd mi-proyecto
 wapp build
@@ -151,7 +151,7 @@ Factorial de 5 = 120.0
 
 CLI unificada que orquesta el pipeline completo. Usa `wapp.json` para configuración y admite overrides por línea de comandos.
 
-Una vez instalado globalmente (`pnpm install --global wapp-cli`), se usa directamente como `wapp`. También se puede ejecutar localmente con `pnpm run cli`.
+Una vez instalado globalmente (`pnpm install --global @wasm-apps/cli`), se usa directamente como `wapp`. También se puede ejecutar localmente con `pnpm run cli`.
 
 ```
 wapp init [dir]
