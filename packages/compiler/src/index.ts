@@ -1,9 +1,13 @@
 import asc from 'assemblyscript/asc';
 import fs from 'node:fs';
+import path from 'node:path';
 import { LRUCache, MAX_MEMORY_CACHE_SIZE } from './cache.js';
 import { compareHash, hashString, mergeAsConfig, resolveImportPath } from './utils.js';
+import { getCached, saveToCache, computeKey } from './disk-cache.js';
 import type { CompileOptions, CompileResult } from '@wasm-apps/types';
 import { CompilerError } from '@wasm-apps/types';
+
+export { getCompileCacheInfo, clearCompileCache } from './disk-cache.js';
 
 const MEMORY_CACHE = new LRUCache<string, CompileResult>();
 
@@ -29,6 +33,13 @@ export async function compileWasm(
     const cached = MEMORY_CACHE.get(opts.fileName)!;
     if (checkCache(cached)) return cached;
     MEMORY_CACHE.delete(opts.fileName);
+  }
+
+  const cacheKey = computeKey(opts.sourceCode, opts);
+  const diskCached = getCached(cacheKey);
+  if (diskCached && compareHash(diskCached.hash, hash)) {
+    MEMORY_CACHE.set(opts.fileName, diskCached);
+    return diskCached;
   }
 
   const readFileFromDisk = (filePath: string): string | null => {
@@ -144,5 +155,6 @@ export async function compileWasm(
   };
 
   MEMORY_CACHE.set(opts.fileName, result);
+  saveToCache(cacheKey, result);
   return result;
 }
