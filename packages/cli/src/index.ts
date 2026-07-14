@@ -1,5 +1,6 @@
-import path from 'path';
-import fs from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import { glob } from 'glob';
 import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { compileWasm, getCompileCacheInfo, clearCompileCache } from '@wasm-apps/compiler';
@@ -62,7 +63,7 @@ export function initProject(rootDir: string, overrides?: Partial<WappConfig>): W
   }
 
   const config = { ...DEFAULT_CONFIG, ...overrides };
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + os.EOL);
   logger.success(`${CONFIG_FILE} creado en ${rootDir}`);
   return config;
 }
@@ -141,12 +142,13 @@ export async function buildProject(options: {
 
   logger.success(`Compilacion completada: ${wasmFiles.length} archivos .wasm generados en ${outDir}`);
 
-  const outputName = config.output || path.basename(rootDir);
-  const output = path.isAbsolute(outputName)
+  const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+  const outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
+  const output = (path.isAbsolute(outputName)
     ? outputName
     : outputName.includes(path.sep)
       ? path.resolve(rootDir, outputName)
-      : path.join(outDir, outputName);
+      : path.join(outDir, outputName)) + exeSuffix;
   const entry = options.entry || config.entry || '_start';
   const moduleMatching = options.moduleMatching || config.moduleMatching || 'file-name';
 
@@ -209,15 +211,27 @@ export async function cacheInfo(): Promise<void> {
   }
 }
 
-export async function clearCache(): Promise<void> {
-  logger.info('Limpiando cache de descargas...');
-  await linkerClearCache();
+export async function clearCache(options?: { build?: boolean; linker?: boolean; all?: boolean }): Promise<void> {
+  const clearBuild = options?.all || options?.build || (!options?.linker && !options?.all);
+  const clearLinker = options?.all || options?.linker;
 
-  logger.info('Limpiando cache de compilacion...');
-  clearCompileCache();
+  if (clearBuild) {
+    logger.info('Limpiando cache de compilacion...');
+    clearCompileCache();
 
-  logger.info('Limpiando cache de build...');
-  clearBuildCache();
+    logger.info('Limpiando cache de build...');
+    clearBuildCache();
 
-  logger.success('Cache eliminada completamente.');
+    logger.success('Cache de proyecto eliminada.');
+  }
+
+  if (clearLinker) {
+    logger.info('Limpiando cache de descargas (Wasmtime)...');
+    await linkerClearCache();
+    logger.success('Cache de descargas eliminada.');
+  }
+
+  if (!clearBuild && !clearLinker) {
+    logger.info('No se especifico que cache eliminar.');
+  }
 }

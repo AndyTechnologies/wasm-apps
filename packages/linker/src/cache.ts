@@ -1,6 +1,7 @@
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+import { logger } from '@wasm-apps/types';
 
 export function cacheRootDir(): string {
   const newDir = path.join(os.homedir(), '.wasm-linker');
@@ -69,8 +70,8 @@ export async function clearCache(): Promise<void> {
   const root = cacheRootDir();
   if (fs.existsSync(root)) {
     fs.rmSync(root, { recursive: true, force: true });
-    console.log(`Cache eliminado: ${root}`);
+    logger.success(`Cache eliminado: ${root}`);
   } else {
-    console.log('No hay cache que eliminar.');
+    logger.info('No hay cache que eliminar.');
   }
 }

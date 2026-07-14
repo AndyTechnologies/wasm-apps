@@ -129,6 +129,26 @@ pnpm run test    # Build + ejecuta binario compilado
 
 No hay framework de testing formal — el test actual build el proyecto y ejecuta el binario resultante.
 
+### Release (Changesets)
+
+```bash
+pnpm changeset                   # Crear changeset (seleccionar tipo de bump)
+pnpm changeset version           # Aplicar versiones (manual, normalmente lo hace CI)
+pnpm changeset publish           # Publicar a npm (lo hace CI)
+```
+
+Flujo: developer crea changeset → push a dev → CI auto-merge a main → release.yml crea PR "chore: version packages" → al mergearlo se publica a npm + GitHub Release.
+
+Los 4 paquetes se versionan juntos (fixed group). Acceso público, OIDC/Trusted Publishers en npm.
+
+## Documentación
+
+Diátaxis en `docs/`:
+- `docs/tutorial/getting-started.md` — Primeros pasos
+- `docs/how-to/` — Guías (configurar, cross-compile, caché)
+- `docs/reference/` — CLI, config, host API
+- `docs/explanation/` — Arquitectura, caché, estructura
+
 ## Reglas multiplataforma
 
 Este proyecto debe funcionar en **Linux**, **macOS** y **Windows**.

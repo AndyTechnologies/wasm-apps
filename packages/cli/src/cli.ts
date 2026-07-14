@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { logger, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { initProject, buildProject, runSetup, cacheInfo, clearCache } from './index.js';
-import path from 'path';
+import path from 'node:path';
 
 const program = new Command();
 
@@ -98,10 +98,17 @@ cacheCmd
 
 cacheCmd
   .command('clear')
-  .description('Elimina toda la cache')
-  .action(async () => {
+  .description('Elimina la cache de compilacion y build del proyecto (por defecto), o la de descargas (Wasmtime)')
+  .option('--build', 'Elimina solo la cache de compilacion y build del proyecto', false)
+  .option('--linker', 'Elimina solo la cache de descargas (Wasmtime)', false)
+  .option('--all', 'Elimina toda la cache (build + descargas)', false)
+  .action(async (options) => {
     try {
-      await clearCache();
+      await clearCache({
+        build: options.build || undefined,
+        linker: options.linker || undefined,
+        all: options.all || undefined,
+      });
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);
       process.exit(1);

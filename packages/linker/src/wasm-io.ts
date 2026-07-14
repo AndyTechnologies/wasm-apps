@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'node:fs';
 import { WasmModuleInfo, WasmExport, WasmImport, WasmImportFuncType } from '@wasm-apps/types';
 
 export async function readWasmModules(filePaths: string[]): Promise<WasmModuleInfo[]> {

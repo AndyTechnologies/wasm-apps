@@ -1,6 +1,13 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
+function normalizeOutput(output: string): string {
+  if (process.platform === 'win32' && !output.endsWith('.exe')) {
+    return output + '.exe';
+  }
+  return output;
+}
 
 const BUILD_DIR_NAME = '.wapp_build';
 const MANIFEST_FILE = 'build-manifest.json';
@@ -56,7 +63,7 @@ function saveManifest(manifest: BuildManifest, rootDir?: string): void {
   if (!fs.existsSync(buildDir)) {
     fs.mkdirSync(buildDir, { recursive: true });
   }
-  fs.writeFileSync(getManifestPath(rootDir), JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(getManifestPath(rootDir), JSON.stringify(manifest, null, 2) + os.EOL, 'utf-8');
 }
 
 export async function isBuildUpToDate(
@@ -71,6 +78,7 @@ export async function isBuildUpToDate(
     wasmtimeVersion: string;
   },
 ): Promise<boolean> {
+  output = normalizeOutput(output);
   if (!fs.existsSync(output)) return false;
 
   const manifest = loadManifest();
@@ -108,6 +116,7 @@ export function saveBuildManifest(
     wasmtimeVersion: string;
   },
 ): void {
+  output = normalizeOutput(output);
   const wasmEntries = wasmFiles.map(f => ({
     path: f,
     contentHash: fileHash(f),
