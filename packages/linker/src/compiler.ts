@@ -189,9 +189,7 @@ function validateToolchain(entry: ToolchainEntry): void {
   const isMsvc = targetOS === 'windows'
     && (toolchain.c === 'cl' || toolchain.c === 'clang');
   if (isMsvc && process.platform === 'win32') {
-    if (!process.env.VSCMD_VER) {
-      return;
-    }
+    return;
   }
 
   const missing = toCheck.filter(cmd => !commandExists.sync(cmd));
@@ -212,6 +210,9 @@ function getPlatformLibs(targetOS: 'linux' | 'macos' | 'windows'): string {
   }
   if (targetOS === 'linux') {
     return 'pthread dl m';
+  }
+  if (targetOS === 'windows') {
+    return 'ws2_32.lib bcrypt.lib ole32.lib';
   }
   return '';
 }
