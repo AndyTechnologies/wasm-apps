@@ -25,12 +25,12 @@ jobs:
       - run: pnpm -r build
       - uses: changesets/action@v1
         with:
-          version: pnpm changeset version
+          version: pnpm changeset version --no-frozen-lockfile
           publish: pnpm changeset publish
           commit: "chore: version packages"
           title: "chore: version packages"
           createGithubReleases: aggregate
-          install: pnpm install --no-frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PNPM_FROZEN_LOCKFILE: false
