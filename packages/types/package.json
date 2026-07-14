@@ -15,6 +15,19 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AndyTechnologies/wasm-apps.git",
+    "directory": "packages/types"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "license": "MIT",
   "dependencies": {
     "picocolors": "^1.1.1"

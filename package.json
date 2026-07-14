@@ -16,6 +16,7 @@
   },
   "keywords": [],
   "author": "",
+  "packageManager": "pnpm@11.10.0",
   "license": "MIT",
   "type": "module",
   "devDependencies": {

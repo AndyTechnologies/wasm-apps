@@ -18,9 +18,22 @@
     "start": "node dist/cli.js",
     "dev": "tsc --watch"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AndyTechnologies/wasm-apps.git",
+    "directory": "packages/linker"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "cmake-js": "^8.0.0",
