@@ -7,6 +7,12 @@ export function mathTest(): void {
   console.log(`PI=${Math.PI} abs(-5)=${Math.abs(-5)} floor(3.9)=${Math.floor(3.9)}`);
 }
 
+export function testSpeed(): void{
+  let start = performance.now();
+  for(let i = 0; i < 1024*1024*64; i++) {
+  }
+}
+
 export function _start(): void {
   console.log("Hola desde AssemblyScript!");
   console.warn("Esto es un warning");

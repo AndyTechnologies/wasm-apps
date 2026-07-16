@@ -122,6 +122,47 @@ logger.step(msg)      // bold blue
 logger.detail(msg)    // dim
 ```
 
+## Flujo de trabajo (Git / CI / Release)
+
+### Ramas
+
+- `main` — rama estable. Solo se mergean PRs aprobados desde `dev`.
+- `dev` — rama de trabajo principal. Todos los cambios se pushean aquí.
+- `feature/*` o `fix/*` — ramas temporales para trabajo experimental (opcional).
+
+### CI
+
+El workflow `ci.yml` se ejecuta en **push a `dev`** y en **PR hacia `main`**:
+- Matriz: `ubuntu-latest`, `windows-latest`, `macos-latest`
+- Node 24 con pnpm
+- Pasos: `lint` → `build` → `test`
+
+### Release
+
+El workflow `release.yml` se ejecuta en **push a `main`** (cuando se mergea un PR):
+
+1. **Con changesets pendientes**: versiona los paquetes, crea un commit y lo pushea a `changeset-release/main`, luego crea un PR "chore: version packages" hacia `main`.
+2. **Sin changesets pendientes**: publica directamente a npm via `pnpm changeset publish`.
+
+El developer debe mergear manualmente el PR de versiones para que los cambios se publiquen.
+
+### Flujo completo
+
+```
+push a dev ──> CI (3 SO)
+    │
+    ▼
+PR manual dev → main ──> CI (3 SO)
+    │
+    ▼ (merge)
+main ──> Release workflow
+    │
+    ├── ¿hay changesets? → versiona + crea PR "chore: version packages"
+    │                      → developer mergea PR → publish a npm
+    │
+    └── ¿sin changesets? → publish directo a npm
+```
+
 ### Testing
 ```bash
 pnpm run test    # Build + ejecuta binario compilado
@@ -129,15 +170,13 @@ pnpm run test    # Build + ejecuta binario compilado
 
 No hay framework de testing formal — el test actual build el proyecto y ejecuta el binario resultante.
 
-### Release (Changesets)
+### Changesets (creación manual)
 
 ```bash
 pnpm changeset                   # Crear changeset (seleccionar tipo de bump)
-pnpm changeset version           # Aplicar versiones (manual, normalmente lo hace CI)
+pnpm changeset version           # Aplicar versiones (normalmente lo hace CI)
 pnpm changeset publish           # Publicar a npm (lo hace CI)
 ```
-
-Flujo: developer crea changeset → push a dev → CI auto-merge a main → release.yml crea PR "chore: version packages" → al mergearlo se publica a npm + GitHub Release.
 
 Los 4 paquetes se versionan juntos (fixed group). Acceso público, OIDC/Trusted Publishers en npm.
 
