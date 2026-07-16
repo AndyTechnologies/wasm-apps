@@ -42,7 +42,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           pnpm install --no-frozen-lockfile
-          pnpm changeset version --no-frozen-lockfile
+          pnpm changeset version
           pnpm install --no-frozen-lockfile
           git add -A
           git commit -m "chore: version packages" || true
