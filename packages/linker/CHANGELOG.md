@@ -1,5 +1,21 @@
 # @wasm-apps/linker
 
+## 1.2.1
+
+### Patch Changes
+
+- fix: compatibilidad con Windows (plugin import + extraccion)
+
+  - plugin-loader: usar pathToFileURL para import() en Windows (ESM no acepta
+    rutas absolutas tipo D:\...)
+  - extract: moveWithStrip corrige path.relative para no incluir directorios
+    ya consumidos por strip
+  - extract: renameWithFallback copia+elimina si rename falla con EPERM en
+    Windows
+
+- Updated dependencies []:
+  - @wasm-apps/types@1.2.1
+
 ## 1.2.0
 
 ### Minor Changes
