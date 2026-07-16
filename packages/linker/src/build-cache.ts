@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 function normalizeOutput(output: string): string {
-  if (process.platform === 'win32' && !output.endsWith('.exe')) {
+  if (process.platform === 'win32' && !output.toLowerCase().endsWith('.exe')) {
     return output + '.exe';
   }
   return output;

@@ -1,38 +1,38 @@
-# How the toolchain works
+# Cómo funciona la toolchain
 
-The pipeline transforms AssemblyScript (`.wasm.ts`) into a native executable in three stages:
+El pipeline transforma AssemblyScript (`.wasm.ts`) en un ejecutable nativo en tres etapas:
 
 ```
-.wasm.ts ──[compiler]──> .wasm ──[linker]──> binary
+.wasm.ts ──[compilador]──> .wasm ──[linker]──> binario
 ```
 
-## 1. Compiler — AssemblyScript to WASM
+## 1. Compilador — AssemblyScript a WASM
 
-The compiler uses `assemblyscript/asc` programmatically (not as a CLI) to compile `.wasm.ts` files to WebAssembly binaries. It supports all four AssemblyScript runtime modes (incremental, minimal, stub, full), configurable optimisation and shrink levels, and optional sourcemaps.
+El compilador usa `assemblyscript/asc` programáticamente (no como CLI) para compilar archivos `.wasm.ts` a binarios WebAssembly. Soporta los cuatro modos de runtime de AssemblyScript (incremental, minimal, stub, full), niveles configurables de optimización y reducción, y sourcemaps opcionales.
 
-The compiler can process multiple files in parallel and caches results keyed by SHA-256 of the source code plus compiler flags.
+El compilador puede procesar múltiples archivos en paralelo y almacena resultados en caché usando SHA-256 del código fuente más los flags del compilador.
 
-## 2. Linker — WASM to native executable
+## 2. Linker — WASM a ejecutable nativo
 
-The linker is the core innovation. It:
+El linker es la innovación principal. Hace lo siguiente:
 
-1. **Parses** each `.wasm` module with `WebAssembly.Module` to extract imports and exports
-2. **Resolves dependencies** between modules using topological sort
-3. **Generates C++ code** that:
-   - Embeds each WASM binary as a `const unsigned char[]` array
-   - Implements every imported `env.*` function as a native C++ handler
-   - Instantiates modules in dependency order using the Wasmtime C-API
-   - Calls the entry function (`_start`)
-4. **Compiles** the generated C++ code with CMake (via `cmake-js`) into a standalone executable, statically linking Wasmtime
+1. **Parsea** cada módulo `.wasm` con `WebAssembly.Module` para extraer imports y exports
+2. **Resuelve dependencias** entre módulos usando orden topológico
+3. **Genera código C++** que:
+   - Incrusta cada binario WASM como un array `const unsigned char[]`
+   - Implementa cada función importada `env.*` como un handler nativo en C++
+   - Instancia los módulos en orden de dependencia usando Wasmtime C-API
+   - Llama a la función de entrada (`_start`)
+4. **Compila** el código C++ generado con CMake (via `cmake-js`) en un ejecutable autocontenido, enlazando estáticamente Wasmtime
 
-## 3. Orchestrator — wapp CLI
+## 3. Orquestador — CLI wapp
 
-The `wapp` CLI coordinates the full pipeline: it discovers source files, runs the compiler for each, passes the resulting `.wasm` files to the linker, and produces the final binary. Configuration is read from `wapp.json` with CLI overrides.
+El CLI `wapp` coordina el pipeline completo: descubre archivos fuente, ejecuta el compilador para cada uno, pasa los archivos `.wasm` resultantes al linker y produce el binario final. La configuración se lee de `wapp.json` con sobrescrituras desde CLI.
 
-## Why this approach?
+## ¿Por qué este enfoque?
 
-A native WebAssembly runtime (Wasmtime) embedded in a C++ host gives you:
-- **Full system access** — files, networking, process control (not sandboxed)
-- **Small binary** — statically linked, no dependency on a WASM runtime at deployment
-- **Cross-platform** — compile once per target using existing C++ toolchains
-- **Familiar tooling** — no WASM-specific build systems; just CMake and a C++ compiler
+Un runtime WebAssembly nativo (Wasmtime) incrustado en un host C++ te proporciona:
+- **Acceso completo al sistema** — archivos, red, control de procesos (sin sandbox)
+- **Binario pequeño** — enlazado estáticamente, sin dependencias de runtime WASM en despliegue
+- **Multiplataforma** — compila una vez por destino usando toolchains C++ existentes
+- **Herramientas familiares** — sin sistemas de build específicos de WASM; solo CMake y un compilador C++

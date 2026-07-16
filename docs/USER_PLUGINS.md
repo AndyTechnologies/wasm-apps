@@ -95,6 +95,14 @@ Puedes crear un plugin que sobrescriba funciones host existentes. Por ejemplo, p
 
 El plugin registraría su propia implementación de `Math.random` en el `HostFunctionRegistry`, que tiene prioridad sobre la built-in.
 
+## Ejemplos
+
+Mira los proyectos de ejemplo en `examples/`:
+
+- [`plugin-basico`](../examples/plugin-basico/README.md) — Plugin simple de validación
+- [`plugin-avanzado`](../examples/plugin-avanzado/README.md) — Plugin con función host personalizada
+- [`proyecto-completo`](../examples/proyecto-completo/README.md) — Proyecto completo con plugin de métricas
+
 ## Ver plugins cargados
 
 Ejecuta `wapp build` con `--verbose` (cuando esté implementado) para ver qué plugins se cargaron. Por ahora, los mensajes de carga aparecen en la salida estándar.

@@ -26,7 +26,7 @@ export type { PluginContext, WasmPlugin, PipelineContext, PipelineHook } from '@
 export { PipelinePhase } from '@wasm-apps/types';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
-  const exeSuffix = process.platform === 'win32' && !options.output.endsWith('.exe') ? '.exe' : '';
+  const exeSuffix = process.platform === 'win32' && !options.output.toLowerCase().endsWith('.exe') ? '.exe' : '';
   const output = options.output + exeSuffix;
   let wasmFiles: string[] = [];
   for (const p of options.inputPaths) {
@@ -123,6 +123,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     output,
     target: options.target,
     wasi: options.wasi,
+    verbose: false,
   });
 
   ctx = await pipeline.runPhase(PipelinePhase.AfterLink, ctx);

@@ -50,25 +50,55 @@ async function extractZipInner(archive: string, cwd: string): Promise<void> {
   });
 }
 
+function moveWithStrip(srcDir: string, dstDir: string, strip: number): void {
+  const walkAndMove = (currentDir: string, remaining: number) => {
+    const entries = fs.readdirSync(currentDir);
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry);
+      if (fs.statSync(fullPath).isDirectory()) {
+        if (remaining > 0) {
+          walkAndMove(fullPath, remaining - 1);
+        } else {
+          const target = path.join(dstDir, path.relative(srcDir, fullPath));
+          fs.mkdirSync(target, { recursive: true });
+          const inner = fs.readdirSync(fullPath);
+          for (const innerEntry of inner) {
+            fs.renameSync(path.join(fullPath, innerEntry), path.join(target, innerEntry));
+          }
+        }
+      } else if (remaining === 0) {
+        const relPath = path.relative(srcDir, currentDir);
+        const targetDir = path.join(dstDir, relPath);
+        if (relPath) fs.mkdirSync(targetDir, { recursive: true });
+        fs.renameSync(fullPath, path.join(targetDir || dstDir, entry));
+      }
+    }
+  };
+
+  walkAndMove(srcDir, strip);
+
+  const removeEmptyDirs = (dir: string): void => {
+    const entries = fs.readdirSync(dir);
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      if (fs.statSync(fullPath).isDirectory()) {
+        removeEmptyDirs(fullPath);
+      }
+    }
+    if (fs.readdirSync(dir).length === 0 && dir !== srcDir) {
+      fs.rmdirSync(dir);
+    }
+  };
+  removeEmptyDirs(srcDir);
+}
+
 async function extractWithZip(archive: string, cwd: string, strip: number = 0): Promise<void> {
   if (strip > 0) {
     const tmpDir = path.join(cwd, `.tmp_extract_${Date.now()}`);
     fs.mkdirSync(tmpDir, { recursive: true });
     try {
       await extractZipInner(archive, tmpDir);
-      const entries = fs.readdirSync(tmpDir).filter(e => e !== '.' && e !== '..');
-
-      if (strip === 1 && entries.length === 1 && fs.statSync(path.join(tmpDir, entries[0])).isDirectory()) {
-        const topDir = path.join(tmpDir, entries[0]);
-        const innerEntries = fs.readdirSync(topDir);
-        for (const entry of innerEntries) {
-          fs.renameSync(path.join(topDir, entry), path.join(cwd, entry));
-        }
-      } else {
-        for (const entry of entries) {
-          fs.renameSync(path.join(tmpDir, entry), path.join(cwd, entry));
-        }
-      }
+      moveWithStrip(tmpDir, cwd, strip);
     } finally {
       if (fs.existsSync(tmpDir)) {
         fs.rmSync(tmpDir, { recursive: true, force: true });

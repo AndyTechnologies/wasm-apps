@@ -1,6 +1,6 @@
-# CLI reference
+# Referencia de CLI
 
-## `wapp` (orchestrator)
+## `wapp` (orquestador)
 
 ```
 wapp init [dir]
@@ -16,7 +16,7 @@ wapp cache clear
 wapp init [dir]
 ```
 
-Creates `wapp.json` in the given directory (or current). Errors if the file already exists.
+Crea `wapp.json` en el directorio indicado (o el actual). Error si el archivo ya existe.
 
 ### build
 
@@ -24,20 +24,20 @@ Creates `wapp.json` in the given directory (or current). Errors if the file alre
 wapp build [options]
 ```
 
-Compiles all `.wasm.ts` in `sourceDir` and links a single native executable.
+Compila todos los `.wasm.ts` en `sourceDir` y enlaza un ejecutable nativo.
 
-| Option | Default | Description |
+| Opción | Por defecto | Descripción |
 |---|---|---|
-| `-o, --output <file>` | directory basename | Output executable path |
-| `-t, --target <triple>` | native | Cross-compilation target |
-| `-e, --entry <name>` | `_start` | Entry function name |
-| `-m, --module-matching <strategy>` | `file-name` | Import resolution strategy |
-| `--source-dir <dir>` | `src` | Source directory |
-| `--out-dir <dir>` | `wasm-out` | Intermediate WASM output |
-| `--release` | `false` | Release mode (optimised, no sourcemaps) |
-| `--optimize-level <n>` | `3` | Optimisation level 0-3 |
-| `--shrink-level <n>` | `0` | Shrink level 0-2 |
-| `--wasi` | `false` | Enable WASI |
+| `-o, --output <file>` | nombre del directorio | Ruta del ejecutable de salida |
+| `-t, --target <triple>` | nativa | Destino de compilación cruzada |
+| `-e, --entry <name>` | `_start` | Nombre de la función de entrada |
+| `-m, --module-matching <strategy>` | `file-name` | Estrategia de resolución de imports |
+| `--source-dir <dir>` | `src` | Directorio fuente |
+| `--out-dir <dir>` | `wasm-out` | Directorio de salida WASM intermedio |
+| `--release` | `false` | Modo release (optimizado, sin sourcemaps) |
+| `--optimize-level <n>` | `3` | Nivel de optimización 0-3 |
+| `--shrink-level <n>` | `0` | Nivel de reducción 0-2 |
+| `--wasi` | `false` | Habilitar WASI |
 
 ### setup
 
@@ -45,13 +45,13 @@ Compiles all `.wasm.ts` in `sourceDir` and links a single native executable.
 wapp setup
 ```
 
-Downloads and caches the Wasmtime C-API in `~/.wasm-linker/wasmtime/`. Safe to re-run — uses HTTP range requests for resumable downloads.
+Descarga y almacena en caché la Wasmtime C-API en `~/.wasm-linker/wasmtime/`. Es seguro re-ejecutarlo — usa peticiones HTTP range para descargas reanudables.
 
 ### cache
 
 ```
-wapp cache info       Status of all cache layers
-wapp cache clear      Wipe all caches
+wapp cache info       Estado de todas las capas de caché
+wapp cache clear      Limpiar todas las cachés
 ```
 
 ---
@@ -63,15 +63,15 @@ pnpm run compiler build <files...> [options]
 pnpm run compiler watch <files...> [options]
 ```
 
-| Option | Default | Description |
+| Opción | Por defecto | Descripción |
 |---|---|---|
-| `-o, --outDir <dir>` | `wasm-out` | Output directory |
-| `--release` | `false` | Release mode |
+| `-o, --outDir <dir>` | `wasm-out` | Directorio de salida |
+| `--release` | `false` | Modo release |
 | `--runtime <name>` | `incremental` | Runtime: `incremental`, `minimal`, `stub`, `full` |
-| `--optimizeLevel <n>` | `3` | Optimisation 0-3 |
-| `--shrinkLevel <n>` | `0` | Shrink 0-2 |
-| `--no-sourcemap` | — | Disable sourcemaps |
-| `--no-parallel` | — | Sequential compilation |
+| `--optimizeLevel <n>` | `3` | Optimización 0-3 |
+| `--shrinkLevel <n>` | `0` | Reducción 0-2 |
+| `--no-sourcemap` | — | Deshabilitar sourcemaps |
+| `--no-parallel` | — | Compilación secuencial |
 
 ---
 
@@ -86,11 +86,11 @@ pnpm run linker cache info
 pnpm run linker cache clear
 ```
 
-| Option | Default | Description |
+| Opción | Por defecto | Descripción |
 |---|---|---|
-| `-o, --output <file>` | *(required)* | Output executable path |
-| `-t, --target <triple>` | native | Cross-compilation target |
-| `-e, --entry <name>` | `_start` | Entry function |
-| `--wasi` | `false` | Enable WASI |
-| `--module-matching` | `name-only` | `name-only` or `file-name` |
-| `--wasmtime-path <path>` | — | Custom Wasmtime C-API path |
+| `-o, --output <file>` | *(obligatorio)* | Ruta del ejecutable de salida |
+| `-t, --target <triple>` | nativa | Destino de compilación cruzada |
+| `-e, --entry <name>` | `_start` | Función de entrada |
+| `--wasi` | `false` | Habilitar WASI |
+| `--module-matching` | `name-only` | `name-only` o `file-name` |
+| `--wasmtime-path <path>` | — | Ruta personalizada a Wasmtime C-API |

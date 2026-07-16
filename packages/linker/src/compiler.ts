@@ -14,6 +14,7 @@ export interface CompileOptions {
   output: string;
   target?: string;
   wasi: boolean;
+  verbose?: boolean;
 }
 
 interface CrossToolchain {
@@ -328,6 +329,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
 
     const cmake = new CMake({
       directory: tmpDir,
+      silent: !opts.verbose,
       cMakeOptions: {
         SOURCE_FILE: opts.source,
         WASMTIME_INCLUDE_DIR: opts.includeDir,

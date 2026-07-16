@@ -8,9 +8,7 @@
     "compiler": "node ./packages/compiler/dist/cli.js",
     "linker": "node ./packages/linker/dist/cli.js",
     "cli": "node ./packages/cli/dist/cli.js",
-    "test:build": "pnpm cli build --source-dir examples -o wasm-out-app --out-dir wasm-out",
-    "test:exec": "node scripts/run-built-bin.mjs",
-    "test": "pnpm test:build && pnpm test:exec"
+    "test": "pnpm -r build && node scripts/test-examples.mjs"
   },
   "keywords": [],
   "author": "",

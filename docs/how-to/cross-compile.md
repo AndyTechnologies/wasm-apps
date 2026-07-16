@@ -1,12 +1,12 @@
-# How to cross-compile
+# Cómo hacer compilación cruzada
 
-The linker supports cross-compilation for different architectures and operating systems.
+El linker soporta compilación cruzada para diferentes arquitecturas y sistemas operativos.
 
-## Prerequisites
+## Prerrequisitos
 
-Install the required cross-toolchain for your target:
+Instala el toolchain cruzado necesario para tu destino:
 
-| Target | Triple | Toolchain |
+| Destino | Tripleta | Toolchain |
 |---|---|---|
 | Linux x86_64 | `x86_64-linux-gnu` | `gcc-x86-64-linux-gnu` |
 | Linux ARM64 | `aarch64-linux-gnu` | `gcc-aarch64-linux-gnu` |
@@ -15,21 +15,21 @@ Install the required cross-toolchain for your target:
 | Windows (MinGW) | `x86_64-windows` | `gcc-mingw-w64-x86-64` |
 | Windows (MSVC) | `x86_64-windows-msvc` | Clang + LLD |
 
-## Cross-compile from x86_64 to ARM64
+## Compilación cruzada de x86_64 a ARM64
 
-Using the orchestrator:
+Usando el orquestador:
 
 ```bash
 wapp build --target aarch64-linux-gnu
 ```
 
-Using the linker directly:
+Usando el linker directamente:
 
 ```bash
 pnpm run linker build wasm-out/app.wasm -o out/app-arm64 -t aarch64-linux-gnu
 ```
 
-## Verify the target
+## Verificar el destino
 
 ```bash
 file out/app-arm64

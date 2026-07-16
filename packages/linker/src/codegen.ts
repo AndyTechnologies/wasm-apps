@@ -96,18 +96,29 @@ export function generateCCode(
     }
   }
 
-  const envFuncs: Array<{ name: string; module: string; params: string[]; results: string[] }> = [];
+  const hostFuncs: Array<{ name: string; module: string; params: string[]; results: string[] }> = [];
   const seen = new Set<string>();
   for (const mod of modules) {
     for (const imp of mod.module.imports) {
-      if (imp.module !== 'env') continue;
       if (imp.kind !== 'function') continue;
       const key = `${imp.module}.${imp.name}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const ft = importTypeMap.get(key);
-      if (!ft) continue;
-      envFuncs.push({ name: imp.name, module: imp.module, params: ft.params, results: ft.results });
+      if (imp.module === 'env' || hostFunctionRegistry.has(imp.module, imp.name) || hostFunctionRegistry.has('env', imp.name)) {
+        const ft = importTypeMap.get(key);
+        if (!ft) {
+          const byName = hostFunctionRegistry.getByName(imp.name);
+          if (byName) {
+            const altKey = `${byName.module}.${imp.name}`;
+            const altFt = importTypeMap.get(altKey);
+            if (altFt) {
+              hostFuncs.push({ name: imp.name, module: imp.module, params: altFt.params, results: altFt.results });
+            }
+          }
+          continue;
+        }
+        hostFuncs.push({ name: imp.name, module: imp.module, params: ft.params, results: ft.results });
+      }
     }
   }
 
@@ -118,6 +129,7 @@ export function generateCCode(
     '#include <cstring>',
     '#include <chrono>',
     '#include <unordered_map>',
+    '#include <unordered_set>',
     '#include <random>',
     '#include <string>',
     '#include <cmath>',
@@ -207,13 +219,15 @@ export function generateCCode(
   }
 
   cpp += 'static void define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {\n';
+  cpp += '  static std::unordered_set<std::string> _defined;\n';
   for (const mod of modules) {
     const exports = mod.module.exports;
     if (exports.length === 0) continue;
     cpp += `  if (std::strcmp(instance_label, "instance${mod.index}") == 0) {\n`;
     for (const exp of exports) {
       const safeName = sanitizeIdentifier(exp.name);
-      cpp += `    {\n`;
+      cpp += `    if (_defined.find("${exp.name}") == _defined.end()) {\n`;
+      cpp += `      _defined.insert("${exp.name}");\n`;
       cpp += `      auto exp = instance.get(ctx, "${exp.name}");\n`;
       cpp += `      if (!exp) { std::cerr << "Error obteniendo export ${safeName}" << std::endl; std::exit(1); }\n`;
       cpp += `      auto result = linker.define(ctx, "env", "${exp.name}", *exp);\n`;
@@ -247,8 +261,12 @@ export function generateCCode(
 `;
   }
 
-  for (const func of envFuncs) {
-    const generator = hostFunctionRegistry.get(func.module, func.name);
+  for (const func of hostFuncs) {
+    let generator = hostFunctionRegistry.get(func.module, func.name);
+    if (!generator) {
+      const byName = hostFunctionRegistry.getByName(func.name);
+      if (byName) generator = byName.generator;
+    }
     const body = generator
       ? generator(func.params, func.results)
       : defaultResultCode(func.results);

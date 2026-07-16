@@ -143,6 +143,14 @@ Compila el plugin a JS y referencielo en `wapp.json`:
 }
 ```
 
+## Ejemplos prácticos
+
+Mira los ejemplos en `examples/` para ver plugins en acción:
+
+- [`examples/plugin-basico/`](../examples/plugin-basico/README.md) — Plugin que valida código fuente en `BeforeModuleCompile`
+- [`examples/plugin-avanzado/`](../examples/plugin-avanzado/README.md) — Plugin con función host personalizada + hooks múltiples
+- [`examples/proyecto-completo/`](../examples/proyecto-completo/README.md) — Proyecto real con plugin de métricas
+
 ## Buenas prácticas
 
 1. **Manejo de errores**: Los hooks son asíncronos. Usa try/catch para evitar que un plugin falle todo el build.

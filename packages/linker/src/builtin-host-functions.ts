@@ -174,8 +174,21 @@ export function registerBuiltinHostFunctions(registry: HostFunctionRegistry): vo
     auto* _data = _span.data();
     auto _sz = _span.size();
     int32_t allocSz = 8 + (_len > 0 ? _len : 0);
-    (void)allocSz; (void)_data; (void)_sz;
-    results[0] = Val(int32_t(0));
+    auto _new_fn = caller.get_export("__new");
+    if (!_new_fn) return Trap("crypto.getRandomValuesN: __new export missing");
+    auto* _new = std::get_if<wasmtime::Func>(&*_new_fn);
+    if (!_new) return Trap("crypto.getRandomValuesN: __new not a function");
+    auto _ptr_result = _new->call(ctx, {Val(int32_t(allocSz)), Val(int32_t(0))});
+    if (!_ptr_result) return Trap("crypto.getRandomValuesN: allocation failed");
+    int32_t _ptr = (*_ptr_result)[0].i32();
+    if (_ptr > 0 && _len > 0) {
+      auto* _buf = _data + _ptr;
+      for (int32_t _i = 0; _i < _len; _i++) {
+        _buf[_i] = (uint8_t)(_wasm_rng() & 0xFF);
+      }
+      *reinterpret_cast<int32_t*>(_data + _ptr - 4) = _len;
+    }
+    results[0] = Val(_ptr);
     return std::monostate{};`);
 
   registry.register('env', 'Math.random', (_params, _results) => `
@@ -199,7 +212,7 @@ export function registerBuiltinHostFunctions(registry: HostFunctionRegistry): vo
   registry.register('env', 'Math.floor', (_params, _results) => `results[0] = Val(double(std::floor(args[0].f64()))); return std::monostate{};`);
   registry.register('env', 'Math.fround', (_params, _results) => `results[0] = Val(float((float)args[0].f64())); return std::monostate{};`);
   registry.register('env', 'Math.hypot', (_params, _results) => `results[0] = Val(double(std::hypot(args[0].f64(), args[1].f64()))); return std::monostate{};`);
-  registry.register('env', 'Math.imul', (_params, _results) => `results[0] = Val(double((double)((int32_t)args[0].f64() * (int32_t)args[1].f64()))); return std::monostate{};`);
+  registry.register('env', 'Math.imul', (_params, _results) => `results[0] = Val(double((double)((uint32_t)args[0].f64() * (uint32_t)args[1].f64()))); return std::monostate{};`);
   registry.register('env', 'Math.log', (_params, _results) => `results[0] = Val(double(std::log(args[0].f64()))); return std::monostate{};`);
   registry.register('env', 'Math.log10', (_params, _results) => `results[0] = Val(double(std::log10(args[0].f64()))); return std::monostate{};`);
   registry.register('env', 'Math.log1p', (_params, _results) => `results[0] = Val(double(std::log1p(args[0].f64()))); return std::monostate{};`);

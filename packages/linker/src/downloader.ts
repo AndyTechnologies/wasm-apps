@@ -62,6 +62,9 @@ async function doDownload(
           return;
         }
         response.destroy();
+        if (fs.existsSync(partPath)) {
+          fs.rmSync(partPath);
+        }
         spinner!.text = `${options?.label || 'Descargando'} (redirigiendo...)`;
         resolve(doDownload(location, dest, options, spinner));
         return;
