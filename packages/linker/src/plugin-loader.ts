@@ -5,7 +5,22 @@ import { pipeline } from './pipeline.js';
 
 const DEFAULT_PLUGINS: PluginConfig[] = [
   { id: 'stdlib-plugin', enabled: true, config: {} },
+  { id: 'size-optimizer-plugin', enabled: true, config: {} },
 ];
+
+function createContext(cfg: PluginConfig): PluginContext {
+  return {
+    hostFunctions: hostFunctionRegistry,
+    pipeline,
+    config: cfg.config,
+    logger,
+  };
+}
+
+function registerPlugin(plugin: WasmPlugin, context: PluginContext): void {
+  plugin.register(context);
+  logger.detail(`Plugin cargado: ${plugin.id}`);
+}
 
 export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void> {
   const configs = (pluginConfigs && pluginConfigs.length > 0) ? pluginConfigs : DEFAULT_PLUGINS;
@@ -13,14 +28,15 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
   for (const cfg of configs) {
     if (!cfg.enabled) continue;
 
-    const context: PluginContext = {
-      hostFunctions: hostFunctionRegistry,
-      pipeline,
-      config: cfg.config,
-      logger,
-    };
+    const context = createContext(cfg);
 
     if (cfg.id === 'stdlib-plugin') {
+      continue;
+    }
+
+    if (cfg.id === 'size-optimizer-plugin') {
+      const { default: sizePlugin } = await import('./size-optimizer-plugin.js');
+      registerPlugin(sizePlugin, context);
       continue;
     }
 
