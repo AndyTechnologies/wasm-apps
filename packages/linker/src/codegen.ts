@@ -1,35 +1,6 @@
 import os from 'node:os';
-import { ResolvedLink, HostFuncDef, WasmImportFuncType } from '@wasm-apps/types';
-
-const ABORT_BODY = `
-    int32_t msgPtr = message;
-    int32_t fnPtr = fileName;
-    if (msgPtr > 0) {
-      std::cerr << "ABORT: " << _readAsString(caller, msgPtr);
-    }
-    if (fnPtr > 0) {
-      std::cerr << " in " << _readAsString(caller, fnPtr);
-    }
-    std::cerr << ":" << line << ":" << col << std::endl;
-    std::exit(1);
-    `;
-
-const DEFAULT_HOST_FUNCS: HostFuncDef[] = [
-  {
-    module: 'env',
-    name: 'abort',
-    params: ['int32_t message', 'int32_t fileName', 'int32_t line', 'int32_t col'],
-    paramsType: 'std::tuple<int32_t,int32_t,int32_t,int32_t>',
-    body: ABORT_BODY,
-  },
-  {
-    module: 'env',
-    name: 'process.exit',
-    params: ['int32_t code'],
-    paramsType: 'std::tuple<int32_t>',
-    body: `std::exit(code);`,
-  },
-];
+import type { ResolvedLink, WasmImportFuncType } from '@wasm-apps/types';
+import { hostFunctionRegistry } from './host-function-registry.js';
 
 const VALTYPE_TO_CPP: Record<string, string> = {
   i32: 'ValType::i32()',
@@ -54,252 +25,6 @@ function funcTypeCpp(params: string[], results: string[]): string {
 function defaultResultCode(results: string[]): string {
   if (results.length === 0) return '    return std::monostate{};';
   return results.map((t, i) => `    results[${i}] = ${VALTYPE_TO_SET[t] || 'Val(int32_t('}0));`).join(os.EOL) + os.EOL + '    return std::monostate{};';
-}
-
-interface EnvImpl {
-  needsMemory: boolean;
-  hasReturn: boolean;
-  body: string;
-}
-
-const KNOWN_IMPLS: Record<string, EnvImpl> = {
-  'seed': {
-    needsMemory: false,
-    hasReturn: true,
-    body: `std::uniform_real_distribution<double> _dist(0.0, 1.0); results[0] = Val(_dist(_wasm_rng)); return std::monostate{};`,
-  },
-  'trace': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `TRACE_BODY`,
-  },
-  'console.log': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `std::cout`,
-  },
-  'console.debug': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `std::cout`,
-  },
-  'console.info': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `std::cout`,
-  },
-  'console.warn': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `std::cerr`,
-  },
-  'console.error': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `std::cerr`,
-  },
-  'console.time': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `_wasm_timers[label] = std::chrono::steady_clock::now();`,
-  },
-  'console.timeLog': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `{
-      auto it = _wasm_timers.find(label);
-      if (it != _wasm_timers.end()) {
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - it->second).count();
-        std::cerr << label << ": " << elapsed << " ms" << std::endl;
-      }
-    }`,
-  },
-  'console.timeEnd': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `{
-      auto it = _wasm_timers.find(label);
-      if (it != _wasm_timers.end()) {
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - it->second).count();
-        std::cerr << label << ": " << elapsed << " ms" << std::endl;
-        _wasm_timers.erase(it);
-      }
-    }`,
-  },
-  'console.assert': {
-    needsMemory: true,
-    hasReturn: false,
-    body: `CONSOLE_ASSERT`,
-  },
-  'Date.now': {
-    needsMemory: false,
-    hasReturn: true,
-    body: `auto _now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); results[0] = Val(double(_now)); return std::monostate{};`,
-  },
-  'performance.now': {
-    needsMemory: false,
-    hasReturn: true,
-    body: `auto _now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); results[0] = Val(double(_now)); return std::monostate{};`,
-  },
-  'crypto.getRandomValuesN': {
-    needsMemory: true,
-    hasReturn: true,
-    body: `CRYPTO_RANDOM`,
-  },
-  'Math.random': {
-    needsMemory: false,
-    hasReturn: true,
-    body: `std::uniform_real_distribution<double> _dist(0.0, 1.0); results[0] = Val(_dist(_wasm_rng)); return std::monostate{};`,
-  },
-  'Math.abs': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::abs(args[0].f64()))); return std::monostate{};` },
-  'Math.acos': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::acos(args[0].f64()))); return std::monostate{};` },
-  'Math.acosh': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::acosh(args[0].f64()))); return std::monostate{};` },
-  'Math.asin': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::asin(args[0].f64()))); return std::monostate{};` },
-  'Math.asinh': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::asinh(args[0].f64()))); return std::monostate{};` },
-  'Math.atan': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::atan(args[0].f64()))); return std::monostate{};` },
-  'Math.atan2': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::atan2(args[0].f64(), args[1].f64()))); return std::monostate{};` },
-  'Math.atanh': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::atanh(args[0].f64()))); return std::monostate{};` },
-  'Math.cbrt': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::cbrt(args[0].f64()))); return std::monostate{};` },
-  'Math.ceil': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::ceil(args[0].f64()))); return std::monostate{};` },
-  'Math.clz32': { needsMemory: false, hasReturn: true, body: `uint32_t _v = (uint32_t)args[0].f64(); results[0] = Val(double(_v == 0 ? 32 : _wasm_clz32(_v))); return std::monostate{};` },
-  'Math.cos': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::cos(args[0].f64()))); return std::monostate{};` },
-  'Math.cosh': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::cosh(args[0].f64()))); return std::monostate{};` },
-  'Math.exp': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::exp(args[0].f64()))); return std::monostate{};` },
-  'Math.expm1': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::expm1(args[0].f64()))); return std::monostate{};` },
-  'Math.floor': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::floor(args[0].f64()))); return std::monostate{};` },
-  'Math.fround': { needsMemory: false, hasReturn: true, body: `results[0] = Val(float((float)args[0].f64())); return std::monostate{};` },
-  'Math.hypot': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::hypot(args[0].f64(), args[1].f64()))); return std::monostate{};` },
-  'Math.imul': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double((double)((int32_t)args[0].f64() * (int32_t)args[1].f64()))); return std::monostate{};` },
-  'Math.log': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::log(args[0].f64()))); return std::monostate{};` },
-  'Math.log10': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::log10(args[0].f64()))); return std::monostate{};` },
-  'Math.log1p': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::log1p(args[0].f64()))); return std::monostate{};` },
-  'Math.log2': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::log2(args[0].f64()))); return std::monostate{};` },
-  'Math.max': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::max(args[0].f64(), args[1].f64()))); return std::monostate{};` },
-  'Math.min': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::min(args[0].f64(), args[1].f64()))); return std::monostate{};` },
-  'Math.pow': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::pow(args[0].f64(), args[1].f64()))); return std::monostate{};` },
-  'Math.round': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::round(args[0].f64()))); return std::monostate{};` },
-  'Math.sign': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double((args[0].f64() > 0) ? 1.0 : (args[0].f64() < 0) ? -1.0 : (args[0].f64() == 0 ? 0.0 : std::numeric_limits<double>::quiet_NaN()))); return std::monostate{};` },
-  'Math.sin': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::sin(args[0].f64()))); return std::monostate{};` },
-  'Math.sinh': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::sinh(args[0].f64()))); return std::monostate{};` },
-  'Math.sqrt': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::sqrt(args[0].f64()))); return std::monostate{};` },
-  'Math.tan': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::tan(args[0].f64()))); return std::monostate{};` },
-  'Math.tanh': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::tanh(args[0].f64()))); return std::monostate{};` },
-  'Math.trunc': { needsMemory: false, hasReturn: true, body: `results[0] = Val(double(std::trunc(args[0].f64()))); return std::monostate{};` },
-  'Object.is': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(args[0].i32() == args[1].i32())); return std::monostate{};` },
-  'Object.hasOwn': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Object.keys': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Object.values': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Object.entries': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Object.assign': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Object.getOwnPropertyNames': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Reflect.get': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Reflect.has': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Reflect.set': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'Reflect.apply': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-  'String.fromCodePoint': { needsMemory: false, hasReturn: true, body: `results[0] = Val(int32_t(0)); return std::monostate{};` },
-};
-
-function generateConsoleBody(name: string, stream: string, params: string[]): string {
-  const readLabel = name === 'console.log' || name === 'console.debug' || name === 'console.info' || name === 'console.warn' || name === 'console.error';
-
-  if (readLabel) {
-    if (params.length >= 1) {
-      return `
-    int32_t _ptr = args[0].i32();
-    std::string _str = _readAsString(caller, _ptr);
-    ${stream} << _str << std::endl;
-    return std::monostate{};`;
-    }
-    return `
-    ${stream} << std::endl;
-    return std::monostate{};`;
-  }
-
-  if (name === 'console.time' || name === 'console.timeLog' || name === 'console.timeEnd') {
-    if (params.length >= 1) {
-      return `
-    int32_t _ptr = args[0].i32();
-    std::string label = _readAsString(caller, _ptr);
-    ${KNOWN_IMPLS[name]!.body}
-    return std::monostate{};`;
-    }
-    return `return std::monostate{};`;
-  }
-
-  if (name === 'console.assert') {
-    if (params.length >= 2) {
-      return `
-    int32_t _cond = args[0].i32();
-    int32_t _ptr = args[1].i32();
-    if (!_cond) {
-      std::string _msg = _readAsString(caller, _ptr);
-      std::cerr << "Assertion failed: " << _msg << std::endl;
-    }
-    return std::monostate{};`;
-    }
-    return `return std::monostate{};`;
-  }
-
-  return 'return std::monostate{};';
-}
-
-function generateTraceBody(params: string[]): string {
-  return `
-    int32_t _off = args[0].i32();
-    std::string _msg = _readAsStringNT(caller, _off);
-    int32_t _n = args[1].i32();
-    std::cerr << "trace: " << _msg;
-    for (int32_t _i = 0; _i < _n && _i < 5; _i++) {
-      std::cerr << " " << args[2 + _i].f64();
-    }
-    std::cerr << std::endl;
-    return std::monostate{};`;
-}
-
-function generateCryptoBody(): string {
-  return `
-    int32_t _len = args[0].i32();
-    auto _mem = caller.get_export("memory");
-    if (!_mem) return Trap("crypto.getRandomValuesN: memory not found");
-    auto* _memory = std::get_if<wasmtime::Memory>(&*_mem);
-    if (!_memory) return Trap("crypto.getRandomValuesN: not a memory");
-    auto _ctx2 = caller.context();
-    auto _span = _memory->data(_ctx2);
-    auto* _data = _span.data();
-    auto _sz = _span.size();
-    int32_t allocSz = 8 + (_len > 0 ? _len : 0);
-    (void)allocSz; (void)_data; (void)_sz;
-    results[0] = Val(int32_t(0));
-    return std::monostate{};`;
-}
-
-function generateEnvStubBody(name: string, params: string[], results: string[]): string {
-  const known = KNOWN_IMPLS[name];
-
-  if (name === 'trace') return generateTraceBody(params);
-  if (name.startsWith('console.')) {
-    const entry = known;
-    if (!entry) {
-      const baseName = name.replace('console.', '');
-      if (['log', 'debug', 'info', 'warn', 'error', 'time', 'timeLog', 'timeEnd', 'assert'].includes(baseName)) {
-        return generateConsoleBody(name, baseName === 'warn' || baseName === 'error' ? 'std::cerr' : 'std::cout', params);
-      }
-      return defaultResultCode(results);
-    }
-    const stream = entry.body === 'std::cout' ? 'std::cout' : 'std::cerr';
-    return generateConsoleBody(name, stream, params);
-  }
-  if (name === 'crypto.getRandomValuesN') return generateCryptoBody();
-
-  if (known) {
-    const b = known.body;
-    if (b === 'TRACE_BODY') return generateTraceBody(params);
-    if (b === 'CONSOLE_ASSERT') return generateConsoleBody(name, 'std::cerr', params);
-    if (b === 'CRYPTO_RANDOM') return generateCryptoBody();
-    return b;
-  }
-
-  return defaultResultCode(results);
 }
 
 function sanitizeIdentifier(name: string): string {
@@ -337,7 +62,6 @@ export function generateCCode(
   link: ResolvedLink,
   entryPoint: string,
   wasi: boolean,
-  hostFuncs?: HostFuncDef[],
   importFuncTypes?: WasmImportFuncType[],
 ): string {
   const modules = link.order;
@@ -349,9 +73,6 @@ export function generateCCode(
     instanceVar: `instance${m.index}`,
   }));
 
-  const allHostFuncs = [...(hostFuncs ?? []), ...DEFAULT_HOST_FUNCS];
-
-  const neededHostFuncs = new Map<string, HostFuncDef>();
   const neededGlobals = new Map<string, { module: string; name: string }>();
 
   for (const mod of modules) {
@@ -365,14 +86,6 @@ export function generateCCode(
         }
         continue;
       }
-
-      if (imp.kind !== 'function') continue;
-
-      const key = `${imp.module}.${imp.name}`;
-      const hf = allHostFuncs.find(h => h.module === imp.module && h.name === imp.name);
-      if (hf) {
-        neededHostFuncs.set(key, hf);
-      }
     }
   }
 
@@ -383,18 +96,18 @@ export function generateCCode(
     }
   }
 
-  const envStubs: Array<{ name: string; params: string[]; results: string[] }> = [];
+  const envFuncs: Array<{ name: string; module: string; params: string[]; results: string[] }> = [];
+  const seen = new Set<string>();
   for (const mod of modules) {
     for (const imp of mod.module.imports) {
       if (imp.module !== 'env') continue;
       if (imp.kind !== 'function') continue;
-      const key = `env.${imp.name}`;
-      if (neededHostFuncs.has(key)) continue;
+      const key = `${imp.module}.${imp.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       const ft = importTypeMap.get(key);
       if (!ft) continue;
-      if (!envStubs.some(s => s.name === imp.name)) {
-        envStubs.push({ name: imp.name, params: ft.params, results: ft.results });
-      }
+      envFuncs.push({ name: imp.name, module: imp.module, params: ft.params, results: ft.results });
     }
   }
 
@@ -534,25 +247,16 @@ export function generateCCode(
 `;
   }
 
-  for (const [, hf] of neededHostFuncs) {
-    cpp += `\n  linker.func_wrap("${hf.module}", "${hf.name}", [](Caller caller`;
-    for (const p of hf.params) {
-      cpp += `, ${p}`;
-    }
-    cpp += ') -> std::monostate {\n';
-    if (hf.body) {
-      cpp += `${hf.body}\n`;
-    }
-    cpp += '    return std::monostate{};\n  }).unwrap();\n';
-  }
-
-  for (const stub of envStubs) {
-    const funcType = funcTypeCpp(stub.params, stub.results);
-    const body = generateEnvStubBody(stub.name, stub.params, stub.results);
+  for (const func of envFuncs) {
+    const generator = hostFunctionRegistry.get(func.module, func.name);
+    const body = generator
+      ? generator(func.params, func.results)
+      : defaultResultCode(func.results);
+    const funcType = funcTypeCpp(func.params, func.results);
     cpp += `
   {
     auto ty = ${funcType};
-    linker.define(ctx, "env", "${stub.name}",
+    linker.define(ctx, "${func.module}", "${func.name}",
       Func(ctx, ty, [](Caller caller, Span<const Val> args, Span<Val> results) -> Result<std::monostate, Trap> {
 ${body}
       })

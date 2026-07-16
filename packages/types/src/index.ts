@@ -47,6 +47,14 @@ export interface HostFuncDef {
   body: string;
 }
 
+export type HostFunctionGenerator = (params: string[], results: string[]) => string;
+
+export interface RegisteredHostFunction {
+  module: string;
+  name: string;
+  generator: HostFunctionGenerator;
+}
+
 export interface NativeAppOptions {
   inputPaths: string[];
   output: string;
