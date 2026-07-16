@@ -4,8 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-pnpmfileChecksum: sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
-
 importers:
 
   .:
@@ -50,8 +48,8 @@ importers:
         specifier: workspace:*
         version: link:../types
       assemblyscript:
-        specifier: file:~/.pnpm/assemblyscript-0.28.19
-        version: file:../../../.pnpm/assemblyscript-0.28.19
+        specifier: ^0.28.19
+        version: 0.28.19
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -361,8 +359,8 @@ packages:
     resolution: {integrity: sha512-HGyxoOTYUyCM6stUe6EJgnd4EoewAI7zMdfqO+kGjnlZmBDz/cR5pf8r/cR4Wq60sL/p0IkcjUEEPwS3GFrIyw==}
     engines: {node: '>=8'}
 
-  assemblyscript@file:../../../.pnpm/assemblyscript-0.28.19:
-    resolution: {directory: ../../../.pnpm/assemblyscript-0.28.19, type: directory}
+  assemblyscript@0.28.19:
+    resolution: {integrity: sha512-yOAlAb9EsrI00oUaf6qUTtTcYYeelG2iC3f1LnA45XUeSlMrp2O2FF5Llj4P+Y84ZiIlh/ciEEpOaPwwmOKq8g==}
     engines: {node: '>=20', npm: '>=10'}
     hasBin: true
 
@@ -374,8 +372,8 @@ packages:
     resolution: {integrity: sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g==}
     engines: {node: '>=4'}
 
-  binaryen@file:../../../.pnpm/binaryen.js-130.0.0-nightly.20260609:
-    resolution: {directory: ../../../.pnpm/binaryen.js-130.0.0-nightly.20260609, type: directory}
+  binaryen@130.0.0-nightly.20260609:
+    resolution: {integrity: sha512-Zyl9Tw638x08LDew22YtxdYiUGxn+quzpR3ySIS4Nccv6yAiO5j1Yko9IEPNpj/aBZf71xtD/6hYXsgZ2ye3ew==}
     hasBin: true
 
   brace-expansion@5.0.7:
@@ -1183,9 +1181,9 @@ snapshots:
 
   array-union@2.1.0: {}
 
-  assemblyscript@file:../../../.pnpm/assemblyscript-0.28.19:
+  assemblyscript@0.28.19:
     dependencies:
-      binaryen: file:../../../.pnpm/binaryen.js-130.0.0-nightly.20260609
+      binaryen: 130.0.0-nightly.20260609
       long: 5.3.2
 
   balanced-match@4.0.4: {}
@@ -1194,7 +1192,7 @@ snapshots:
     dependencies:
       is-windows: 1.0.2
 
-  binaryen@file:../../../.pnpm/binaryen.js-130.0.0-nightly.20260609: {}
+  binaryen@130.0.0-nightly.20260609: {}
 
   brace-expansion@5.0.7:
     dependencies:
