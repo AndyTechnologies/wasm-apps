@@ -21,15 +21,51 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm -r build
-      - uses: changesets/action@v1
-        with:
-          version: pnpm changeset version
-          publish: pnpm changeset publish
-          commit: "chore: version packages"
-          title: "chore: version packages"
-          createGithubReleases: aggregate
+
+      - name: Install & Build
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm -r build
+
+      - name: Check for pending changesets
+        id: check
+        run: |
+          if ls .changeset/*.md 2>/dev/null | grep -vqE '(README|config)'; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Version packages
+        if: steps.check.outputs.has_changesets == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          pnpm install --no-frozen-lockfile
+          pnpm changeset version
+          pnpm install --no-frozen-lockfile
+          git add -A
+          git commit -m "chore: version packages" || true
+          git push origin HEAD:changeset-release/main --force
+
+      - name: Create Version PR
+        if: steps.check.outputs.has_changesets == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head changeset-release/main \
+            --title "chore: version packages" \
+            --body "Version bump via Changesets" \
+            --label automated || true
+
+      - name: Publish to npm
+        if: steps.check.outputs.has_changesets == 'false'
+        env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          pnpm changeset publish
+          echo "Published to npm"
