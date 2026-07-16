@@ -55,31 +55,41 @@ async function extractZipInner(archive: string, cwd: string): Promise<void> {
 }
 
 function moveWithStrip(srcDir: string, dstDir: string, strip: number): void {
-  const walkAndMove = (currentDir: string, remaining: number) => {
+  const renameWithFallback = (src: string, dest: string): void => {
+    try {
+      fs.renameSync(src, dest);
+    } catch {
+      fs.cpSync(src, dest, { recursive: true });
+      fs.rmSync(src, { recursive: true, force: true });
+    }
+  };
+
+  const walkAndMove = (currentDir: string, remaining: number, relBase: string) => {
     const entries = fs.readdirSync(currentDir);
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry);
       if (fs.statSync(fullPath).isDirectory()) {
         if (remaining > 0) {
-          walkAndMove(fullPath, remaining - 1);
+          walkAndMove(fullPath, remaining - 1, fullPath);
         } else {
-          const target = path.join(dstDir, path.relative(srcDir, fullPath));
+          const targetRel = path.relative(relBase, fullPath);
+          const target = path.join(dstDir, targetRel);
           fs.mkdirSync(target, { recursive: true });
           const inner = fs.readdirSync(fullPath);
           for (const innerEntry of inner) {
-            fs.renameSync(path.join(fullPath, innerEntry), path.join(target, innerEntry));
+            renameWithFallback(path.join(fullPath, innerEntry), path.join(target, innerEntry));
           }
         }
       } else if (remaining === 0) {
-        const relPath = path.relative(srcDir, currentDir);
-        const targetDir = path.join(dstDir, relPath);
-        if (relPath) fs.mkdirSync(targetDir, { recursive: true });
-        fs.renameSync(fullPath, path.join(targetDir || dstDir, entry));
+        const targetRel = path.relative(relBase, currentDir);
+        const targetDir = path.join(dstDir, targetRel);
+        if (targetRel) fs.mkdirSync(targetDir, { recursive: true });
+        renameWithFallback(fullPath, path.join(targetDir, entry));
       }
     }
   };
 
-  walkAndMove(srcDir, strip);
+  walkAndMove(srcDir, strip, srcDir);
 
   const removeEmptyDirs = (dir: string): void => {
     const entries = fs.readdirSync(dir);

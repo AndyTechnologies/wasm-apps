@@ -8,7 +8,7 @@
     "compiler": "node ./packages/compiler/dist/cli.js",
     "linker": "node ./packages/linker/dist/cli.js",
     "cli": "node ./packages/cli/dist/cli.js",
-    "test": "pnpm -r build && node scripts/test-examples.mjs"
+    "test": "node scripts/test-examples.mjs"
   },
   "keywords": [],
   "author": "",

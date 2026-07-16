@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { logger, type PluginConfig, type PluginContext, type WasmPlugin } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { pipeline } from './pipeline.js';
@@ -43,7 +44,7 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
     if (cfg.path) {
       const resolvedPath = path.resolve(cfg.path);
       try {
-        const mod = await import(resolvedPath) as { default?: WasmPlugin; register?: (ctx: PluginContext) => void };
+        const mod = await import(pathToFileURL(resolvedPath).href) as { default?: WasmPlugin; register?: (ctx: PluginContext) => void };
         const plugin: WasmPlugin | undefined = mod.default || (mod as unknown as WasmPlugin);
         if (plugin && typeof plugin.register === 'function') {
           plugin.register(context);
