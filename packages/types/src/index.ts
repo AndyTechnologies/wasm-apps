@@ -123,6 +123,10 @@ export interface WappConfig {
     shrinkLevel?: number;
     sourceMap?: boolean;
   };
+  optimization?: {
+    level?: 'z' | 's' | '0' | '1' | '2' | '3';
+  };
+  plugins?: PluginConfig[];
 }
 
 export interface CrossCompileTarget {

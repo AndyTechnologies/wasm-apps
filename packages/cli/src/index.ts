@@ -4,7 +4,7 @@ import os from 'node:os';
 import { glob } from 'glob';
 import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { compileWasm, getCompileCacheInfo, clearCompileCache } from '@wasm-apps/compiler';
-import { createNativeApp, runSetup as linkerSetup, getCacheInfo, clearCache as linkerClearCache, checkSetupStatus, getBuildCacheInfo, clearBuildCache } from '@wasm-apps/linker';
+import { createNativeApp, runSetup as linkerSetup, getCacheInfo, clearCache as linkerClearCache, checkSetupStatus, getBuildCacheInfo, clearBuildCache, loadPlugins } from '@wasm-apps/linker';
 
 const CONFIG_FILE = 'wapp.json';
 
@@ -36,7 +36,12 @@ export function resolveConfig(rootDir: string, overrides?: Partial<WappConfig>):
   if (fs.existsSync(configPath)) {
     try {
       const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      config = { ...config, ...raw, compiler: { ...config.compiler, ...raw.compiler } };
+      config = {
+        ...config, ...raw,
+        compiler: { ...config.compiler, ...raw.compiler },
+        plugins: raw.plugins ?? config.plugins,
+        optimization: raw.optimization ?? config.optimization,
+      };
     } catch (err: any) {
       throw new ConfigError(`Error leyendo ${CONFIG_FILE}: ${err.message}`, { configPath });
     }
@@ -45,7 +50,12 @@ export function resolveConfig(rootDir: string, overrides?: Partial<WappConfig>):
   if (overrides) {
     const cleaned = cleanUndefined(overrides);
     if (Object.keys(cleaned).length > 0) {
-      config = { ...config, ...cleaned, compiler: { ...config.compiler, ...cleaned.compiler } };
+      config = {
+        ...config, ...cleaned,
+        compiler: { ...config.compiler, ...cleaned.compiler },
+        plugins: cleaned.plugins ?? config.plugins,
+        optimization: cleaned.optimization ?? config.optimization,
+      };
     }
   }
 
@@ -95,6 +105,8 @@ export async function buildProject(options: {
     output: options.output,
     compiler: Object.keys(compilerOverrides).length > 0 ? compilerOverrides : undefined,
   });
+
+  await loadPlugins(config.plugins);
 
   const sourceDir = path.resolve(rootDir, config.sourceDir || 'src');
   const outDir = path.resolve(rootDir, config.outDir || 'wasm-out');

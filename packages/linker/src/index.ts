@@ -21,6 +21,8 @@ export type { SetupOptions, SetupStatus } from './setup.js';
 export { HostFunctionRegistry, hostFunctionRegistry } from './host-function-registry.js';
 export type { RegisteredHostFunction, HostFunctionGenerator } from '@wasm-apps/types';
 export { Pipeline, pipeline } from './pipeline.js';
+export { loadPlugins } from './plugin-loader.js';
+export type { PluginContext, WasmPlugin } from './plugin-loader.js';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
   const exeSuffix = process.platform === 'win32' && !options.output.endsWith('.exe') ? '.exe' : '';
