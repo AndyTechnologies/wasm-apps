@@ -1,5 +1,8 @@
 export { logger, colorizeByStatus, formatBytes } from './logger.js';
 export type { Logger } from './logger.js';
+import type { Logger as __Logger } from './logger.js';
+
+type Logger = __Logger;
 
 export interface WasmExport {
   name: string;
@@ -176,6 +179,24 @@ export interface PipelineContext {
 }
 
 export type PipelineHook = (context: PipelineContext) => Promise<void> | void;
+
+export interface PluginContext {
+  hostFunctions: {
+    register(module: string, name: string, generator: HostFunctionGenerator): void;
+    get(module: string, name: string): HostFunctionGenerator | undefined;
+    has(module: string, name: string): boolean;
+  };
+  pipeline: {
+    register(phase: PipelinePhase, pluginId: string, hook: PipelineHook): void;
+  };
+  config?: Record<string, unknown>;
+  logger: Logger;
+}
+
+export interface WasmPlugin {
+  id: string;
+  register(ctx: PluginContext): void;
+}
 
 export interface WatchEvent {
   type: 'change' | 'add' | 'unlink';

@@ -1,19 +1,7 @@
 import path from 'node:path';
-import { logger, type PluginConfig } from '@wasm-apps/types';
+import { logger, type PluginConfig, type PluginContext, type WasmPlugin } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { pipeline } from './pipeline.js';
-
-export interface PluginContext {
-  hostFunctions: typeof hostFunctionRegistry;
-  pipeline: typeof pipeline;
-  config?: Record<string, unknown>;
-  logger: typeof logger;
-}
-
-export interface WasmPlugin {
-  id: string;
-  register(ctx: PluginContext): void;
-}
 
 const DEFAULT_PLUGINS: PluginConfig[] = [
   { id: 'stdlib-plugin', enabled: true, config: {} },

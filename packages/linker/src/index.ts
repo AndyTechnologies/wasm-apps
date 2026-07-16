@@ -22,7 +22,8 @@ export { HostFunctionRegistry, hostFunctionRegistry } from './host-function-regi
 export type { RegisteredHostFunction, HostFunctionGenerator } from '@wasm-apps/types';
 export { Pipeline, pipeline } from './pipeline.js';
 export { loadPlugins } from './plugin-loader.js';
-export type { PluginContext, WasmPlugin } from './plugin-loader.js';
+export type { PluginContext, WasmPlugin, PipelineContext, PipelineHook } from '@wasm-apps/types';
+export { PipelinePhase } from '@wasm-apps/types';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
   const exeSuffix = process.platform === 'win32' && !options.output.endsWith('.exe') ? '.exe' : '';
@@ -83,6 +84,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
   const allImportTypes = resolved.order.flatMap(mod => parseImportFuncTypes(mod.module.buffer));
 
   let ctx: PipelineContext = {
+    wasmModules: modules,
     resolvedLink: resolved,
     importFuncTypes: allImportTypes,
     cppCode: undefined,

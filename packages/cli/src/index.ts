@@ -4,7 +4,7 @@ import os from 'node:os';
 import { glob } from 'glob';
 import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { compileWasm, getCompileCacheInfo, clearCompileCache } from '@wasm-apps/compiler';
-import { createNativeApp, runSetup as linkerSetup, getCacheInfo, clearCache as linkerClearCache, checkSetupStatus, getBuildCacheInfo, clearBuildCache, loadPlugins } from '@wasm-apps/linker';
+import { createNativeApp, runSetup as linkerSetup, getCacheInfo, clearCache as linkerClearCache, checkSetupStatus, getBuildCacheInfo, clearBuildCache, loadPlugins, pipeline, PipelinePhase } from '@wasm-apps/linker';
 
 const CONFIG_FILE = 'wapp.json';
 
@@ -129,6 +129,23 @@ export async function buildProject(options: {
   const isDev = !config.compiler?.release;
   const wasmFiles: string[] = [];
 
+  const compileCtx = {
+    sourceDir,
+    outDir,
+    options: {
+      entry: config.entry || '_start',
+      wasi: config.wasi || false,
+      moduleMatching: config.moduleMatching || 'file-name',
+      target: config.target,
+      release: config.compiler?.release,
+      optimizeLevel: config.compiler?.optimizeLevel,
+      shrinkLevel: config.compiler?.shrinkLevel,
+    },
+    pluginConfigs: config.plugins,
+  };
+
+  await pipeline.runPhase(PipelinePhase.BeforeModuleCompile, compileCtx);
+
   for (const file of wasmTsFiles) {
     const sourceCode = fs.readFileSync(file, 'utf-8');
     const relativeName = path.relative(rootDir, file);
@@ -151,6 +168,8 @@ export async function buildProject(options: {
 
     wasmFiles.push(wasmPath);
   }
+
+  await pipeline.runPhase(PipelinePhase.AfterModuleCompile, compileCtx);
 
   logger.success(`Compilacion completada: ${wasmFiles.length} archivos .wasm generados en ${outDir}`);
 
