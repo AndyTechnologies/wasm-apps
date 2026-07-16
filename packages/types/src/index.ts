@@ -69,13 +69,15 @@ export interface NativeAppOptions {
   wasmtimePath?: string;
 }
 
+export type AsRuntime = 'incremental' | 'minimal' | 'stub' | 'full';
+
 export interface CompileOptions {
   fileName: string;
   sourceCode: string;
   maxMemoryCacheSize?: number;
   ext?: string;
   isDev?: boolean;
-  runtime?: string;
+  runtime?: AsRuntime;
   sourceMap?: boolean;
   optimizeLevel?: number;
   shrinkLevel?: number;
@@ -121,7 +123,7 @@ export interface WappConfig {
   wasmtimePath?: string;
   compiler?: {
     release?: boolean;
-    runtime?: 'incremental' | 'minimal' | 'stub' | 'full';
+    runtime?: AsRuntime;
     optimizeLevel?: number;
     shrinkLevel?: number;
     sourceMap?: boolean;

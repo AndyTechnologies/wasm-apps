@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { logger } from '@wasm-apps/types';
+import { logger, AsRuntime } from '@wasm-apps/types';
 import { glob } from 'glob';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -37,7 +37,7 @@ interface CompileFileOptions {
   outDir: string;
   isDev: boolean;
   sourceMap: boolean;
-  runtime: string;
+  runtime: AsRuntime;
   optimizeLevel: number;
   shrinkLevel?: number;
 }
@@ -108,7 +108,7 @@ async function buildCommand(files: string[], options: {
     outDir,
     isDev,
     sourceMap,
-    runtime: options.runtime,
+    runtime: options.runtime as AsRuntime,
     optimizeLevel: parseInt(options.optimizeLevel, 10),
     shrinkLevel: options.shrinkLevel ? parseInt(options.shrinkLevel, 10) : undefined,
   };
@@ -192,7 +192,7 @@ async function watchCommand(files: string[], options: {
   const debouncedCompile = debounce(async (changedFile: string) => {
     logger.step(`\nCambio detectado en ${path.relative(process.cwd(), changedFile)}, recompilando...\n`);
     try {
-      const result = await compileSingleFile(changedFile, { outDir, isDev, sourceMap: options.sourcemap, runtime: options.runtime, optimizeLevel: parseInt(options.optimizeLevel, 10) });
+      const result = await compileSingleFile(changedFile, { outDir, isDev, sourceMap: options.sourcemap, runtime: options.runtime as AsRuntime, optimizeLevel: parseInt(options.optimizeLevel, 10) });
       if (result.success) {
         logger.success(`OK: ${result.file} -> ${result.output}`);
       } else {

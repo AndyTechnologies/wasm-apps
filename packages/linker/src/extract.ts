@@ -7,27 +7,31 @@ import os from 'node:os';
 
 export async function extract(archive: string, cwd: string, strip: number): Promise<void> {
   const commands = ['tar', 'unzip'];
-  const command = commands.find(cmd => commandExists.sync(cmd));
-  
+  let command = commands.find(cmd => commandExists.sync(cmd));
+
+  if (command === 'tar' && os.platform() === 'darwin' && commandExists.sync('gtar')) {
+    command = 'gtar';
+  }
+
   if (!command) {
     throw new Error('No se encontró ninguna de las siguientes comandos: tar, unzip');
   }
 
   if (archive.endsWith('.zip')) {
     await extractWithZip(archive, cwd, strip);
-  } else if (command === 'tar') {
-    await extractWithTar(archive, cwd, strip);
+  } else if (command === 'tar' || command === 'gtar') {
+    await extractWithTar(archive, cwd, strip, command);
   } else {
     throw new Error(`No se pudo extraer el archivo ${archive}: \n\t- No se encontró un comando compatible. (${command} no soporta ${path.extname(archive)})\n`);
   }
 }
 
-async function extractWithTar(archive: string, cwd: string, strip: number): Promise<void> {
-  const proc = spawn('tar', ['-xJf', archive, '--strip-components', strip.toString(), '-C', cwd], { stdio: 'inherit' });
+async function extractWithTar(archive: string, cwd: string, strip: number, tarCmd: string = 'tar'): Promise<void> {
+  const proc = spawn(tarCmd, ['-xJf', archive, '--strip-components', strip.toString(), '-C', cwd], { stdio: 'inherit' });
 
   return new Promise<void>((resolve, reject) => {
-    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`tar -xJf fallo (codigo ${code})`)));
-    proc.on('error', (err) => reject(new Error(`No se pudo ejecutar 'tar': ${err.message}.`)));
+    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`${tarCmd} -xJf fallo (codigo ${code})`)));
+    proc.on('error', (err) => reject(new Error(`No se pudo ejecutar '${tarCmd}': ${err.message}.`)));
   });
 }
 
