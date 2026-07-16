@@ -1,0 +1,23 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "plugin-avanzado",
+  "entry": "_start",
+  "moduleMatching": "file-name",
+  "plugins": [
+    {
+      "id": "custom-host-plugin",
+      "enabled": true,
+      "path": "./plugins/custom-host-plugin.js",
+      "config": {
+        "prefix": "[WASM]"
+      }
+    }
+  ],
+  "compiler": {
+    "release": false,
+    "runtime": "incremental",
+    "optimizeLevel": 2,
+    "sourceMap": false
+  }
+}

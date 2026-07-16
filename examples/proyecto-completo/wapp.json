@@ -1,0 +1,34 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "calculadora",
+  "entry": "_start",
+  "moduleMatching": "file-name",
+  "wasi": false,
+  "plugins": [
+    {
+      "id": "stdlib-plugin",
+      "enabled": true,
+      "config": {
+        "console": true,
+        "math": true,
+        "memory_pages": 256
+      }
+    },
+    {
+      "id": "metrics-plugin",
+      "enabled": true,
+      "path": "./plugins/metrics-plugin.js",
+      "config": {
+        "logLevel": "detailed"
+      }
+    }
+  ],
+  "compiler": {
+    "release": false,
+    "runtime": "incremental",
+    "optimizeLevel": 3,
+    "shrinkLevel": 0,
+    "sourceMap": true
+  }
+}

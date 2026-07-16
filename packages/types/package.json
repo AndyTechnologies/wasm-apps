@@ -1,6 +1,6 @@
 {
   "name": "@wasm-apps/types",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "Tipos compartidos para los paquetes de wasm-apps",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,7 +19,9 @@
     "access": "public",
     "provenance": true
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/AndyTechnologies/wasm-apps.git",

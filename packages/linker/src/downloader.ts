@@ -28,12 +28,18 @@ export async function downloadFileWithResume(
   }
 }
 
+const MAX_REDIRECTS = 10;
+
 async function doDownload(
   fileUrl: string,
   dest: string,
   options?: DownloadOptions,
   spinner?: Ora,
+  redirectDepth: number = 0,
 ): Promise<void> {
+  if (redirectDepth > MAX_REDIRECTS) {
+    throw new DownloadError(`Demasiadas redirecciones (${MAX_REDIRECTS})`, fileUrl, undefined);
+  }
   const partPath = dest + '.part';
   const ignoreCache = options?.ignoreCache ?? false;
   const onProgress = options?.onProgress;
@@ -62,8 +68,11 @@ async function doDownload(
           return;
         }
         response.destroy();
+        if (fs.existsSync(partPath)) {
+          fs.rmSync(partPath);
+        }
         spinner!.text = `${options?.label || 'Descargando'} (redirigiendo...)`;
-        resolve(doDownload(location, dest, options, spinner));
+        resolve(doDownload(location, dest, options, spinner, redirectDepth + 1));
         return;
       }
 

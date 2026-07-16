@@ -1,4 +1,4 @@
-import { logger, NativeAppOptions, LinkerError } from '@wasm-apps/types';
+import { logger, NativeAppOptions, LinkerError, PipelinePhase, type PipelineContext, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { glob } from 'glob';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -8,14 +8,25 @@ import { generateCCode, validateEntryExport } from './codegen.js';
 import { ensureWasmtimeAvailable, WASMTIME_VERSION } from './wasmtime-dl.js';
 import { compileWithCMake } from './compiler.js';
 import { isBuildUpToDate, saveBuildManifest } from './build-cache.js';
+import { hostFunctionRegistry } from './host-function-registry.js';
+import { registerBuiltinHostFunctions } from './builtin-host-functions.js';
+import { pipeline } from './pipeline.js';
+
+registerBuiltinHostFunctions(hostFunctionRegistry);
 
 export { runSetup, checkSetupStatus } from './setup.js';
 export { getCacheInfo, clearCache, cacheRootDir } from './cache.js';
 export { getBuildCacheInfo, clearBuildCache } from './build-cache.js';
 export type { SetupOptions, SetupStatus } from './setup.js';
+export { HostFunctionRegistry, hostFunctionRegistry } from './host-function-registry.js';
+export type { RegisteredHostFunction, HostFunctionGenerator } from '@wasm-apps/types';
+export { Pipeline, pipeline } from './pipeline.js';
+export { loadPlugins } from './plugin-loader.js';
+export type { PluginContext, WasmPlugin, PipelineContext, PipelineHook } from '@wasm-apps/types';
+export { PipelinePhase } from '@wasm-apps/types';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
-  const exeSuffix = process.platform === 'win32' && !options.output.endsWith('.exe') ? '.exe' : '';
+  const exeSuffix = process.platform === 'win32' && !options.output.toLowerCase().endsWith('.exe') ? '.exe' : '';
   const output = options.output + exeSuffix;
   let wasmFiles: string[] = [];
   for (const p of options.inputPaths) {
@@ -72,7 +83,26 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
 
   const allImportTypes = resolved.order.flatMap(mod => parseImportFuncTypes(mod.module.buffer));
 
-  const cCode = generateCCode(resolved, options.entry, options.wasi, undefined, allImportTypes);
+  let ctx: PipelineContext = {
+    wasmModules: modules,
+    resolvedLink: resolved,
+    importFuncTypes: allImportTypes,
+    cppCode: undefined,
+    outputPath: path.resolve(output),
+    options: {
+      entry: options.entry,
+      wasi: options.wasi,
+      moduleMatching: options.moduleMatching as ModuleMatchingStrategy,
+      target: options.target,
+    },
+  };
+
+  ctx = await pipeline.runPhase(PipelinePhase.BeforeCodeGen, ctx);
+
+  const cCode = generateCCode(resolved, options.entry, options.wasi, allImportTypes);
+  ctx.cppCode = cCode;
+
+  ctx = await pipeline.runPhase(PipelinePhase.AfterCodeGen, ctx);
 
   const buildDir = path.join(process.cwd(), '.wapp_build');
   if (!fs.existsSync(buildDir)) {
@@ -84,6 +114,8 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
 
   const wasmtimeLib = await wasmtimePromise;
 
+  ctx = await pipeline.runPhase(PipelinePhase.BeforeLink, ctx);
+
   await compileWithCMake({
     source: cFilePath,
     includeDir: wasmtimeLib.includeDir,
@@ -91,7 +123,10 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     output,
     target: options.target,
     wasi: options.wasi,
+    verbose: false,
   });
+
+  ctx = await pipeline.runPhase(PipelinePhase.AfterLink, ctx);
 
   if (process.platform === 'win32') {
     const wasmtimeCacheDir = path.dirname(path.dirname(wasmtimeLib.libPath));
@@ -112,6 +147,8 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     wasmtimePath: options.wasmtimePath,
     wasmtimeVersion,
   });
+
+  await pipeline.runPhase(PipelinePhase.AfterBundle, ctx);
 }
 
 function getLibName(): string {

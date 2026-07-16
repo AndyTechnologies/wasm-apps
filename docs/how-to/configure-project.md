@@ -1,20 +1,20 @@
-# How to configure a project
+# Cómo configurar un proyecto
 
-## Using wapp.json
+## Usando wapp.json
 
-Initialise a project with default config:
+Inicializa un proyecto con la configuración por defecto:
 
 ```bash
-wapp init my-project
+wapp init mi-proyecto
 ```
 
-Edit `wapp.json` to customise behaviour:
+Edita `wapp.json` para personalizar el comportamiento:
 
 ```json
 {
   "sourceDir": "src",
   "outDir": "wasm-out",
-  "output": "my-app",
+  "output": "mi-app",
   "entry": "_start",
   "moduleMatching": "file-name",
   "wasi": false,
@@ -29,25 +29,25 @@ Edit `wapp.json` to customise behaviour:
 }
 ```
 
-| Field | Purpose |
+| Campo | Propósito |
 |---|---|
-| `sourceDir` | Directory containing `.wasm.ts` files |
-| `outDir` | Output directory for intermediate `.wasm` files |
-| `output` | Name of the final native executable |
-| `entry` | Export name to call on startup (default `_start`) |
-| `moduleMatching` | How to match imports to source files |
-| `wasi` | Enable WASI interface |
-| `target` | Cross-compilation target triple |
-| `compiler` | AssemblyScript compiler flags |
+| `sourceDir` | Directorio que contiene archivos `.wasm.ts` |
+| `outDir` | Directorio de salida para archivos `.wasm` intermedios |
+| `output` | Nombre del ejecutable nativo final |
+| `entry` | Nombre del export a llamar al iniciar (por defecto `_start`) |
+| `moduleMatching` | Cómo emparejar imports con archivos fuente |
+| `wasi` | Habilitar interfaz WASI |
+| `target` | Tripleta de destino para compilación cruzada |
+| `compiler` | Flags del compilador AssemblyScript |
 
-## CLI overrides
+## Sobrescrituras desde CLI
 
-Every config field can be overridden on the command line:
+Cada campo de configuración se puede sobrescribir desde la línea de comandos:
 
 ```bash
 wapp build --release --output dist/app --wasi --optimize-level 2
 ```
 
-## No config file
+## Sin archivo de configuración
 
-Without `wapp.json`, the tool uses defaults (`src/` → `wasm-out/`, no WASI, entry=`_start`).
+Sin `wapp.json`, la herramienta usa valores por defecto (`src/` → `wasm-out/`, sin WASI, entry=`_start`).

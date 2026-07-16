@@ -6,13 +6,21 @@ import type { CompileOptions, CompileResult } from '@wasm-apps/types';
 const CACHE_DIR_NAME = '.wapp_cache';
 const COMPILER_CACHE_NAME = 'compiler';
 
-function getCacheDir(rootDir?: string): string {
+function getCacheDirPath(rootDir?: string): string {
   const base = rootDir || process.cwd();
-  const dir = path.join(base, CACHE_DIR_NAME, COMPILER_CACHE_NAME);
+  return path.join(base, CACHE_DIR_NAME, COMPILER_CACHE_NAME);
+}
+
+function ensureCacheDir(rootDir?: string): string {
+  const dir = getCacheDirPath(rootDir);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
   return dir;
+}
+
+function getCacheDir(rootDir?: string): string {
+  return getCacheDirPath(rootDir);
 }
 
 export function computeKey(sourceCode: string, options: CompileOptions): string {
@@ -35,7 +43,7 @@ interface CacheMetadata {
 }
 
 export function getCached(key: string, rootDir?: string): CompileResult | null {
-  const entryDir = path.join(getCacheDir(rootDir), key);
+  const entryDir = path.join(getCacheDirPath(rootDir), key);
   const metaPath = path.join(entryDir, 'result.json');
   const wasmPath = path.join(entryDir, 'out.wasm');
   const dtsPath = path.join(entryDir, 'out.d.ts');
@@ -73,7 +81,7 @@ export function getCached(key: string, rootDir?: string): CompileResult | null {
 }
 
 export function saveToCache(key: string, result: CompileResult, rootDir?: string): void {
-  const entryDir = path.join(getCacheDir(rootDir), key);
+  const entryDir = path.join(ensureCacheDir(rootDir), key);
   if (!fs.existsSync(entryDir)) {
     fs.mkdirSync(entryDir, { recursive: true });
   }
@@ -96,7 +104,7 @@ export function saveToCache(key: string, result: CompileResult, rootDir?: string
 }
 
 export function getCompileCacheInfo(rootDir?: string): { path: string; exists: boolean; size: number; humanSize: string; entries: number } {
-  const dir = getCacheDir(rootDir);
+  const dir = getCacheDirPath(rootDir);
   const exists = fs.existsSync(dir);
 
   if (!exists) {
@@ -129,7 +137,7 @@ export function getCompileCacheInfo(rootDir?: string): { path: string; exists: b
 }
 
 export function clearCompileCache(rootDir?: string): void {
-  const dir = getCacheDir(rootDir);
+  const dir = getCacheDirPath(rootDir);
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }

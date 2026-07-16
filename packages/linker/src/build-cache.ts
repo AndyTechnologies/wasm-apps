@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 function normalizeOutput(output: string): string {
-  if (process.platform === 'win32' && !output.endsWith('.exe')) {
+  if (process.platform === 'win32' && !output.toLowerCase().endsWith('.exe')) {
     return output + '.exe';
   }
   return output;
@@ -77,11 +77,12 @@ export async function isBuildUpToDate(
     wasmtimePath?: string;
     wasmtimeVersion: string;
   },
+  rootDir?: string,
 ): Promise<boolean> {
   output = normalizeOutput(output);
   if (!fs.existsSync(output)) return false;
 
-  const manifest = loadManifest();
+  const manifest = loadManifest(rootDir);
   if (!manifest) return false;
   if (manifest.version !== 1) return false;
 
@@ -94,7 +95,7 @@ export async function isBuildUpToDate(
 
   if (manifest.wasmFiles.length !== wasmFiles.length) return false;
   for (let i = 0; i < wasmFiles.length; i++) {
-    if (manifest.wasmFiles[i].path !== wasmFiles[i]) return false;
+    if (path.resolve(manifest.wasmFiles[i].path) !== path.resolve(wasmFiles[i])) return false;
     if (manifest.wasmFiles[i].contentHash !== fileHash(wasmFiles[i])) return false;
   }
 
@@ -115,10 +116,11 @@ export function saveBuildManifest(
     wasmtimePath?: string;
     wasmtimeVersion: string;
   },
+  rootDir?: string,
 ): void {
   output = normalizeOutput(output);
   const wasmEntries = wasmFiles.map(f => ({
-    path: f,
+    path: path.resolve(f),
     contentHash: fileHash(f),
   }));
 
@@ -137,7 +139,7 @@ export function saveBuildManifest(
     createdAt: new Date().toISOString(),
   };
 
-  saveManifest(manifest);
+  saveManifest(manifest, rootDir);
 }
 
 export function getBuildCacheInfo(rootDir?: string): { path: string; exists: boolean; size: number; humanSize: string; entries: number } {

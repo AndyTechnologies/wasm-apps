@@ -1,32 +1,32 @@
-# How caching works
+# Cómo funciona la caché
 
-Three independent cache layers speed up repeated builds by avoiding unnecessary work.
+Tres capas independientes de caché aceleran las compilaciones repetidas evitando trabajo innecesario.
 
-## Compiler cache
+## Caché del compilador
 
-**Location:** `.wapp_cache/compiler/` (project-local)
+**Ubicación:** `.wapp_cache/compiler/` (local al proyecto)
 
-**Key:** SHA-256 of `{sourceCode, runtime, isDev, sourceMap, optimizeLevel, shrinkLevel}`
+**Clave:** SHA-256 de `{sourceCode, runtime, isDev, sourceMap, optimizeLevel, shrinkLevel}`
 
-**Storage:** One directory per key containing `result.json`, `out.wasm`, `out.d.ts`, `out.js`, `out.wasm.map`
+**Almacenamiento:** Un directorio por clave que contiene `result.json`, `out.wasm`, `out.d.ts`, `out.js`, `out.wasm.map`
 
-Any change to source code or compiler flags produces a different hash → cache miss → fresh compilation. Identical input → cache hit → skips `asc.main()` entirely and loads artifacts from disk.
+Cualquier cambio en el código fuente o en los flags del compilador produce un hash diferente → cache miss → compilación nueva. Entrada idéntica → cache hit → omite `asc.main()` por completo y carga los artefactos desde disco.
 
-## Build manifest
+## Manifiesto de build
 
-**Location:** `.wapp_build/build-manifest.json` (project-local)
+**Ubicación:** `.wapp_build/build-manifest.json` (local al proyecto)
 
-The manifest stores hashes of all input `.wasm` files plus linker options (entry, target, wasi, moduleMatching, wasmtimePath, wasmtimeVersion). If the current state matches the manifest, `createNativeApp()` returns immediately.
+El manifiesto almacena hashes de todos los archivos `.wasm` de entrada más las opciones del linker (entry, target, wasi, moduleMatching, wasmtimePath, wasmtimeVersion). Si el estado actual coincide con el manifiesto, `createNativeApp()` retorna inmediatamente.
 
-## Download cache
+## Caché de descarga
 
-**Location:** `~/.wasm-linker/wasmtime/` (user-global)
+**Ubicación:** `~/.wasm-linker/wasmtime/` (global al usuario)
 
-The Wasmtime C-API archive (~15 MB) is downloaded once and cached globally. HTTP range requests enable resumable downloads. Cleared with `wapp cache clear` and regenerated with `wapp setup`.
+El archivo de Wasmtime C-API (~15 MB) se descarga una vez y se almacena en caché global. Las peticiones HTTP range permiten descargas reanudables. Se limpia con `wapp cache clear` y se regenera con `wapp setup`.
 
-## Cache management
+## Gestión de caché
 
-| Command | Effect |
+| Comando | Efecto |
 |---|---|
-| `wapp cache info` | Show all three caches with size and content count |
-| `wapp cache clear` | Delete all three caches completely |
+| `wapp cache info` | Muestra las tres cachés con tamaño y cantidad de elementos |
+| `wapp cache clear` | Elimina las tres cachés por completo |

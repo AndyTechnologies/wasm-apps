@@ -7,27 +7,31 @@ import os from 'node:os';
 
 export async function extract(archive: string, cwd: string, strip: number): Promise<void> {
   const commands = ['tar', 'unzip'];
-  const command = commands.find(cmd => commandExists.sync(cmd));
-  
+  let command = commands.find(cmd => commandExists.sync(cmd));
+
+  if (command === 'tar' && os.platform() === 'darwin' && commandExists.sync('gtar')) {
+    command = 'gtar';
+  }
+
   if (!command) {
     throw new Error('No se encontró ninguna de las siguientes comandos: tar, unzip');
   }
 
   if (archive.endsWith('.zip')) {
     await extractWithZip(archive, cwd, strip);
-  } else if (command === 'tar') {
-    await extractWithTar(archive, cwd, strip);
+  } else if (command === 'tar' || command === 'gtar') {
+    await extractWithTar(archive, cwd, strip, command);
   } else {
     throw new Error(`No se pudo extraer el archivo ${archive}: \n\t- No se encontró un comando compatible. (${command} no soporta ${path.extname(archive)})\n`);
   }
 }
 
-async function extractWithTar(archive: string, cwd: string, strip: number): Promise<void> {
-  const proc = spawn('tar', ['-xJf', archive, '--strip-components', strip.toString(), '-C', cwd], { stdio: 'inherit' });
+async function extractWithTar(archive: string, cwd: string, strip: number, tarCmd: string = 'tar'): Promise<void> {
+  const proc = spawn(tarCmd, ['-xJf', archive, '--strip-components', strip.toString(), '-C', cwd], { stdio: 'inherit' });
 
   return new Promise<void>((resolve, reject) => {
-    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`tar -xJf fallo (codigo ${code})`)));
-    proc.on('error', (err) => reject(new Error(`No se pudo ejecutar 'tar': ${err.message}.`)));
+    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`${tarCmd} -xJf fallo (codigo ${code})`)));
+    proc.on('error', (err) => reject(new Error(`No se pudo ejecutar '${tarCmd}': ${err.message}.`)));
   });
 }
 
@@ -50,25 +54,65 @@ async function extractZipInner(archive: string, cwd: string): Promise<void> {
   });
 }
 
+function moveWithStrip(srcDir: string, dstDir: string, strip: number): void {
+  const renameWithFallback = (src: string, dest: string): void => {
+    try {
+      fs.renameSync(src, dest);
+    } catch {
+      fs.cpSync(src, dest, { recursive: true });
+      fs.rmSync(src, { recursive: true, force: true });
+    }
+  };
+
+  const walkAndMove = (currentDir: string, remaining: number, relBase: string) => {
+    const entries = fs.readdirSync(currentDir);
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry);
+      if (fs.statSync(fullPath).isDirectory()) {
+        if (remaining > 0) {
+          walkAndMove(fullPath, remaining - 1, fullPath);
+        } else {
+          const targetRel = path.relative(relBase, fullPath);
+          const target = path.join(dstDir, targetRel);
+          fs.mkdirSync(target, { recursive: true });
+          const inner = fs.readdirSync(fullPath);
+          for (const innerEntry of inner) {
+            renameWithFallback(path.join(fullPath, innerEntry), path.join(target, innerEntry));
+          }
+        }
+      } else if (remaining === 0) {
+        const targetRel = path.relative(relBase, currentDir);
+        const targetDir = path.join(dstDir, targetRel);
+        if (targetRel) fs.mkdirSync(targetDir, { recursive: true });
+        renameWithFallback(fullPath, path.join(targetDir, entry));
+      }
+    }
+  };
+
+  walkAndMove(srcDir, strip, srcDir);
+
+  const removeEmptyDirs = (dir: string): void => {
+    const entries = fs.readdirSync(dir);
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      if (fs.statSync(fullPath).isDirectory()) {
+        removeEmptyDirs(fullPath);
+      }
+    }
+    if (fs.readdirSync(dir).length === 0 && dir !== srcDir) {
+      fs.rmdirSync(dir);
+    }
+  };
+  removeEmptyDirs(srcDir);
+}
+
 async function extractWithZip(archive: string, cwd: string, strip: number = 0): Promise<void> {
   if (strip > 0) {
     const tmpDir = path.join(cwd, `.tmp_extract_${Date.now()}`);
     fs.mkdirSync(tmpDir, { recursive: true });
     try {
       await extractZipInner(archive, tmpDir);
-      const entries = fs.readdirSync(tmpDir).filter(e => e !== '.' && e !== '..');
-
-      if (strip === 1 && entries.length === 1 && fs.statSync(path.join(tmpDir, entries[0])).isDirectory()) {
-        const topDir = path.join(tmpDir, entries[0]);
-        const innerEntries = fs.readdirSync(topDir);
-        for (const entry of innerEntries) {
-          fs.renameSync(path.join(topDir, entry), path.join(cwd, entry));
-        }
-      } else {
-        for (const entry of entries) {
-          fs.renameSync(path.join(tmpDir, entry), path.join(cwd, entry));
-        }
-      }
+      moveWithStrip(tmpDir, cwd, strip);
     } finally {
       if (fs.existsSync(tmpDir)) {
         fs.rmSync(tmpDir, { recursive: true, force: true });

@@ -1,34 +1,34 @@
-# Build your first WebAssembly native app
+# Crea tu primera app nativa WebAssembly
 
-In this tutorial you'll write an AssemblyScript module and compile it into a standalone native executable. No prior WebAssembly experience is needed.
+En este tutorial escribirás un módulo AssemblyScript y lo compilarás en un ejecutable nativo autocontenido. No necesitas experiencia previa en WebAssembly.
 
-## Prerequisites
+## Prerrequisitos
 
 - Node.js ≥ 22
 - pnpm
-- CMake + Ninja (or Make)
-- A C++ toolchain (GCC, Clang, MSVC, or Zig)
+- CMake + Ninja (o Make)
+- Un toolchain de C++ (GCC, Clang, MSVC o Zig)
 
-Install the CLI globally:
+Instala el CLI globalmente:
 
 ```bash
 pnpm install --global @wasm-apps/cli
 ```
 
-## Step 1 — Create a project directory
+## Paso 1 — Crea un directorio para el proyecto
 
 ```bash
-mkdir my-first-wasm-app
-cd my-first-wasm-app
+mkdir mi-primera-app-wasm
+cd mi-primera-app-wasm
 ```
 
-## Step 2 — Initialise the project
+## Paso 2 — Inicializa el proyecto
 
 ```bash
 wapp init
 ```
 
-This creates a `wapp.json` with sensible defaults:
+Esto crea un `wapp.json` con valores por defecto:
 
 ```json
 {
@@ -45,9 +45,9 @@ This creates a `wapp.json` with sensible defaults:
 }
 ```
 
-## Step 3 — Write some AssemblyScript
+## Paso 3 — Escribe algo de AssemblyScript
 
-Create `src/hello.wasm.ts`:
+Crea `src/hello.wasm.ts`:
 
 ```typescript
 function factorial(n: number): number {
@@ -56,34 +56,34 @@ function factorial(n: number): number {
 }
 
 export function _start(): void {
-  console.log("Hello from AssemblyScript!");
+  console.log("¡Hola desde AssemblyScript!");
   for (let i = 1; i <= 10; i++) {
     console.log(`factorial(${i}) = ${factorial(i)}`);
   }
 }
 ```
 
-`_start` is the entry point — it runs when the executable starts.
+`_start` es el punto de entrada — se ejecuta cuando arranca el ejecutable.
 
-## Step 4 — Build the native executable
+## Paso 4 — Compila el ejecutable nativo
 
 ```bash
 wapp build
 ```
 
-What happens:
-1. The compiler finds `src/hello.wasm.ts` and compiles it to `wasm-out/hello.wasm`
-2. The linker reads the `.wasm`, generates C++ host functions, and compiles everything into a standalone binary
+Qué sucede:
+1. El compilador encuentra `src/hello.wasm.ts` y lo compila a `wasm-out/hello.wasm`
+2. El linker lee el `.wasm`, genera funciones host en C++ y compila todo en un binario autocontenido
 
-On first build, the linker downloads the Wasmtime C-API (~15 MB) and caches it.
+En la primera compilación, el linker descarga la Wasmtime C-API (~15 MB) y la almacena en caché.
 
-## Step 5 — Run it
+## Paso 5 — Ejecútalo
 
 ```bash
 ./hello
 ```
 
-You should see:
+Deberías ver:
 
 ```
 Hello from AssemblyScript!
@@ -99,8 +99,8 @@ factorial(9) = 362880
 factorial(10) = 3628800
 ```
 
-## Next steps
+## Siguientes pasos
 
-- Learn how to [configure your project](../how-to/configure-project.md)
-- Add WASI support with `wapp build --wasi`
-- Cross-compile for a different target: `wapp build --target aarch64-linux-gnu`
+- Aprende a [configurar tu proyecto](../how-to/configure-project.md)
+- Añade soporte WASI con `wapp build --wasi`
+- Compilación cruzada para otro destino: `wapp build --target aarch64-linux-gnu`

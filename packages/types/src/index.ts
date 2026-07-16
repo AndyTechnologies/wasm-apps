@@ -1,5 +1,8 @@
 export { logger, colorizeByStatus, formatBytes } from './logger.js';
 export type { Logger } from './logger.js';
+import type { Logger as __Logger } from './logger.js';
+
+type Logger = __Logger;
 
 export interface WasmExport {
   name: string;
@@ -47,6 +50,14 @@ export interface HostFuncDef {
   body: string;
 }
 
+export type HostFunctionGenerator = (params: string[], results: string[]) => string;
+
+export interface RegisteredHostFunction {
+  module: string;
+  name: string;
+  generator: HostFunctionGenerator;
+}
+
 export interface NativeAppOptions {
   inputPaths: string[];
   output: string;
@@ -58,13 +69,15 @@ export interface NativeAppOptions {
   wasmtimePath?: string;
 }
 
+export type AsRuntime = 'incremental' | 'minimal' | 'stub' | 'full';
+
 export interface CompileOptions {
   fileName: string;
   sourceCode: string;
   maxMemoryCacheSize?: number;
   ext?: string;
   isDev?: boolean;
-  runtime?: string;
+  runtime?: AsRuntime;
   sourceMap?: boolean;
   optimizeLevel?: number;
   shrinkLevel?: number;
@@ -110,11 +123,15 @@ export interface WappConfig {
   wasmtimePath?: string;
   compiler?: {
     release?: boolean;
-    runtime?: 'incremental' | 'minimal' | 'stub' | 'full';
+    runtime?: AsRuntime;
     optimizeLevel?: number;
     shrinkLevel?: number;
     sourceMap?: boolean;
   };
+  optimization?: {
+    level?: 'z' | 's' | '0' | '1' | '2' | '3';
+  };
+  plugins?: PluginConfig[];
 }
 
 export interface CrossCompileTarget {
@@ -123,6 +140,64 @@ export interface CrossCompileTarget {
   output?: string;
   entry?: string;
   wasi?: boolean;
+}
+
+export enum PipelinePhase {
+  BeforeModuleCompile = 'beforeModuleCompile',
+  AfterModuleCompile = 'afterModuleCompile',
+  BeforeCodeGen = 'beforeCodeGen',
+  AfterCodeGen = 'afterCodeGen',
+  BeforeLink = 'beforeLink',
+  AfterLink = 'afterLink',
+  AfterBundle = 'afterBundle',
+}
+
+export interface PluginConfig {
+  id: string;
+  enabled: boolean;
+  path?: string;
+  config?: Record<string, unknown>;
+}
+
+export interface PipelineContext {
+  sourceDir?: string;
+  outDir?: string;
+  options: {
+    entry: string;
+    wasi: boolean;
+    moduleMatching: ModuleMatchingStrategy;
+    target?: string;
+    release?: boolean;
+    optimizeLevel?: number;
+    shrinkLevel?: number;
+  };
+  pluginConfigs?: PluginConfig[];
+  sourceFiles?: Array<{ fileName: string; sourceCode: string }>;
+  wasmModules?: WasmModuleInfo[];
+  resolvedLink?: ResolvedLink;
+  importFuncTypes?: WasmImportFuncType[];
+  cppCode?: string;
+  outputPath?: string;
+}
+
+export type PipelineHook = (context: PipelineContext) => Promise<void> | void;
+
+export interface PluginContext {
+  hostFunctions: {
+    register(module: string, name: string, generator: HostFunctionGenerator): void;
+    get(module: string, name: string): HostFunctionGenerator | undefined;
+    has(module: string, name: string): boolean;
+  };
+  pipeline: {
+    register(phase: PipelinePhase, pluginId: string, hook: PipelineHook): void;
+  };
+  config?: Record<string, unknown>;
+  logger: Logger;
+}
+
+export interface WasmPlugin {
+  id: string;
+  register(ctx: PluginContext): void;
 }
 
 export interface WatchEvent {

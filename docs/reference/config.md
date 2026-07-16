@@ -1,17 +1,17 @@
-# wapp.json reference
+# Referencia de wapp.json
 
-## Schema
+## Esquema
 
 ```json
 {
   "sourceDir": "src",
   "outDir": "wasm-out",
-  "output": "my-app",
+  "output": "mi-app",
   "entry": "_start",
   "moduleMatching": "file-name",
   "wasi": false,
   "target": "x86_64-linux",
-  "wasmtimePath": "/path/to/wasmtime",
+  "wasmtimePath": "/ruta/a/wasmtime",
   "compiler": {
     "release": false,
     "runtime": "incremental",
@@ -22,56 +22,56 @@
 }
 ```
 
-## Fields
+## Campos
 
 ### sourceDir
-*string, default: `"src"`*
+*string, por defecto: `"src"`*
 
-Directory scanned for `.wasm.ts` files. Scanned recursively.
+Directorio donde se buscan archivos `.wasm.ts`. Se escanea recursivamente.
 
 ### outDir
-*string, default: `"wasm-out"`*
+*string, por defecto: `"wasm-out"`*
 
-Directory where intermediate `.wasm` files are written.
+Directorio donde se escriben los archivos `.wasm` intermedios.
 
 ### output
-*string, default: basename of project directory*
+*string, por defecto: nombre base del directorio del proyecto*
 
-Name of the final native executable.
+Nombre del ejecutable nativo final.
 
 ### entry
-*string, default: `"_start"`*
+*string, por defecto: `"_start"`*
 
-WASM export name called on startup.
+Nombre del export WASM que se ejecuta al iniciar.
 
 ### moduleMatching
-*string, default: `"file-name"`*
+*string, por defecto: `"file-name"`*
 
-- `"file-name"` — match imports to source files by filename stem
-- `"name-only"` — match by export name
+- `"file-name"` — empareja imports con archivos fuente por nombre de archivo
+- `"name-only"` — empareja por nombre de export
 
 ### wasi
-*boolean, default: `false`*
+*boolean, por defecto: `false`*
 
-When true, links with WASI interface instead of raw `env` imports.
+Cuando es `true`, enlaza con la interfaz WASI en lugar de imports `env` directos.
 
 ### target
-*string, default: native platform*
+*string, por defecto: plataforma nativa*
 
-Cross-compilation target triple (e.g. `aarch64-linux-gnu`, `x86_64-windows`).
+Tripleta de destino para compilación cruzada (ej. `aarch64-linux-gnu`, `x86_64-windows`).
 
 ### wasmtimePath
-*string, optional*
+*string, opcional*
 
-Override path to a custom Wasmtime C-API installation.
+Ruta personalizada a una instalación de Wasmtime C-API.
 
 ### compiler
 *object*
 
-| Field | Type | Default | Description |
+| Campo | Tipo | Por defecto | Descripción |
 |---|---|---|---|
-| `release` | boolean | `false` | Release mode (optimised, no sourcemaps) |
-| `runtime` | string | `"incremental"` | AS runtime: `incremental`, `minimal`, `stub`, `full` |
-| `optimizeLevel` | number | `3` | Optimisation 0-3 |
-| `shrinkLevel` | number | `0` | Shrink level 0-2 |
-| `sourceMap` | boolean | `true` | Emit sourcemaps (disabled in release) |
+| `release` | boolean | `false` | Modo release (optimizado, sin sourcemaps) |
+| `runtime` | string | `"incremental"` | Runtime de AS: `incremental`, `minimal`, `stub`, `full` |
+| `optimizeLevel` | number | `3` | Nivel de optimización 0-3 |
+| `shrinkLevel` | number | `0` | Nivel de reducción 0-2 |
+| `sourceMap` | boolean | `true` | Generar sourcemaps (deshabilitado en release) |

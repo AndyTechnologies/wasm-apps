@@ -7,12 +7,7 @@ import {
   ModuleMatchingStrategy,
   LinkerError
 } from '@wasm-apps/types';
-
-const KNOWN_HOST_IMPORTS = new Set([
-  'env.abort',
-  'env.seed',
-  'env.trace',
-]);
+import { hostFunctionRegistry } from './host-function-registry.js';
 
 export function resolveDependencies(
   modules: WasmModuleInfo[],
@@ -38,13 +33,13 @@ export function resolveDependencies(
       if (imp.module === 'wasi_snapshot_preview1' || imp.module === 'wasi_unstable') {
         continue;
       }
-      if (KNOWN_HOST_IMPORTS.has(`${imp.module}.${imp.name}`)) {
+      if (hostFunctionRegistry.has(imp.module, imp.name)) {
         continue;
       }
       const lookupKey = strategy === 'name-only' ? imp.name : `${imp.module}:${imp.name}`;
       const expInfo = availableExports.get(lookupKey);
       if (!expInfo) {
-        if (imp.module === 'env') continue;
+        if (imp.module === 'env' || hostFunctionRegistry.has('env', imp.name)) continue;
         throw new LinkerError(`Importacion no resuelta: '${imp.module}.${imp.name}' requerida por ${mod.fileName}`);
       }
       if (expInfo.module !== mod) {

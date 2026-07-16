@@ -1,20 +1,20 @@
-# Project structure
+# Estructura del proyecto
 
 ```
 wasm-apps/
 ├── packages/
-│   ├── types/          # Shared types, logger, error classes
-│   ├── cli/            # Orchestrator CLI (wapp)
-│   ├── compiler/       # AS → WASM compiler
-│   └── linker/         # WASM → native binary linker
-├── examples/           # Sample .wasm.ts files
-├── scripts/            # Build and test helpers
-├── .wapp_cache/        # Compiler cache (gitignored)
-├── .wapp_build/        # Build manifest (gitignored)
-└── wapp.json           # Project configuration
+│   ├── types/          # Tipos compartidos, logger, clases de error
+│   ├── cli/            # CLI orquestador (wapp)
+│   ├── compiler/       # Compilador AS → WASM
+│   └── linker/         # Linker WASM → binario nativo
+├── examples/           # Archivos .wasm.ts de ejemplo
+├── scripts/            # Scripts de build y test
+├── .wapp_cache/        # Caché del compilador (gitignored)
+├── .wapp_build/        # Manifiesto de build (gitignored)
+└── wapp.json           # Configuración del proyecto
 ```
 
-## Package dependency order
+## Orden de dependencias entre paquetes
 
 ```
 types ← compiler
@@ -24,13 +24,13 @@ cli    ← compiler
 cli    ← linker
 ```
 
-All packages publish together with the same version via Changesets.
+Todos los paquetes se publican juntos con la misma versión via Changesets.
 
-## Module resolution
+## Resolución de módulos
 
-Source files are matched to WASM imports using the `moduleMatching` strategy:
+Los archivos fuente se emparejan con imports WASM usando la estrategia `moduleMatching`:
 
-- **`file-name`** (default): the import name is resolved against the filename stem of each compiled `.wasm`
-- **`name-only`**: modules are matched purely by their exported name
+- **`file-name`** (por defecto): el nombre del import se resuelve contra el nombre del archivo de cada `.wasm` compilado
+- **`name-only`**: los módulos se emparejan puramente por su nombre exportado
 
-This determines how the linker maps import calls across multiple WASM modules.
+Esto determina cómo el linker mapea llamadas de import entre múltiples módulos WASM.

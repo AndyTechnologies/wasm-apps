@@ -1,31 +1,31 @@
-# How to manage the cache
+# Cómo gestionar la caché
 
-Three independent caching layers speed up repeated builds.
+Tres capas independientes de caché aceleran las compilaciones repetidas.
 
-## View cache status
+## Ver estado de la caché
 
 ```bash
 wapp cache info
 ```
 
-Shows the path, size, and content count for each cache layer.
+Muestra la ruta, tamaño y cantidad de elementos de cada capa de caché.
 
-## Clear all caches
+## Limpiar todas las cachés
 
 ```bash
 wapp cache clear
 ```
 
-Removes all three caches. Next build will be from scratch.
+Elimina las tres cachés. La siguiente compilación será desde cero.
 
-## Cache layers
+## Capas de caché
 
-| Layer | Location | What it stores | Invalidated by |
+| Capa | Ubicación | Qué almacena | Se invalida por |
 |---|---|---|---|
-| **Compiler cache** | `.wapp_cache/compiler/` | Compiled `.wasm`, `.d.ts`, `.js`, sourcemaps | Source code or compiler flag changes |
-| **Build manifest** | `.wapp_build/build-manifest.json` | WASM hashes + linker options | Input `.wasm` or linker option changes |
-| **Download cache** | `~/.wasm-linker/` | Wasmtime C-API archive | `wapp setup` or `cache clear` |
+| **Caché del compilador** | `.wapp_cache/compiler/` | `.wasm`, `.d.ts`, `.js`, sourcemaps compilados | Cambios en código fuente o flags del compilador |
+| **Manifiesto de build** | `.wapp_build/build-manifest.json` | Hashes WASM + opciones del linker | Cambios en `.wasm` de entrada o en opciones del linker |
+| **Caché de descarga** | `~/.wasm-linker/` | Archivo Wasmtime C-API | `wapp setup` o `cache clear` |
 
-## Bypass cache
+## Omitir la caché
 
-Compiler cache can be skipped per-invocation (not exposed via CLI yet). For the linker, modify any option or input file to trigger a rebuild.
+La caché del compilador se puede saltar por invocación (aún no expuesto vía CLI). Para el linker, modifica cualquier opción o archivo de entrada para forzar una reconstrucción.
