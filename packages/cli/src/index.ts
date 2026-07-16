@@ -17,6 +17,7 @@ const DEFAULT_CONFIG: WappConfig = {
     release: false,
     runtime: 'incremental',
     optimizeLevel: 3,
+    shrinkLevel: 2,
     sourceMap: true,
   },
 };
