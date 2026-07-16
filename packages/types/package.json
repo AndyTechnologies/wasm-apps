@@ -1,6 +1,6 @@
 {
   "name": "@wasm-apps/types",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Tipos compartidos para los paquetes de wasm-apps",
   "type": "module",
   "main": "./dist/index.js",

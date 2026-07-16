@@ -1,5 +1,28 @@
 # @wasm-apps/compiler
 
+## 1.2.0
+
+### Minor Changes
+
+- feat: test infrastructure with examples runner + cross-platform fixes
+
+  - test-examples.mjs runner for 4 examples (basico, proyecto-completo, plugin-basico, plugin-avanzado)
+  - linker: resolve host functions from any module (not just env)
+  - linker: deduplicate exports in define_exports (unordered_set)
+  - linker: support gtar on macOS for GNU tar flags
+  - linker: HTTP redirect limit (max 10)
+  - linker: normalize paths in build-cache (path.resolve)
+  - linker: multi-level strip for zip extraction
+  - linker: crypto.getRandomValuesN uses \_\_new export for WASM memory alloc
+  - compiler: disk-cache split into getCacheDirPath (read-only) and ensureCacheDir
+  - compiler: AsRuntime union type for runtime options
+  - types: AsRuntime exported type (incremental | minimal | stub | full)
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @wasm-apps/types@1.2.0
+
 ## 1.1.0
 
 ### Patch Changes

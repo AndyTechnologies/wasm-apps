@@ -1,6 +1,6 @@
 {
   "name": "@wasm-apps/cli",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Orquestador para compilar y linkear proyectos AssemblyScript en ejecutables nativos",
   "publishConfig": {
     "access": "public",
