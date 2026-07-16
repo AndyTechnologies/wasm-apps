@@ -74,3 +74,40 @@ jobs:
         run: |
           pnpm changeset publish
           echo "Published to npm"
+
+      - name: Get version
+        if: steps.check.outputs.has_changesets == 'false'
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog
+        if: steps.check.outputs.has_changesets == 'false'
+        id: changelog
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          awk -v ver="$VERSION" '
+            /^## / {
+              if (found) exit
+              if ($0 ~ "^## " ver "$") found=1
+              next
+            }
+            found { print }
+          ' packages/cli/CHANGELOG.md > /tmp/release_body.md
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.has_changesets == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION ya existe, saltando release"
+            exit 0
+          fi
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file /tmp/release_body.md \
+            --target "${{ github.sha }}"
