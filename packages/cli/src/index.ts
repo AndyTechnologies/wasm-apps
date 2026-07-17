@@ -199,6 +199,122 @@ export async function buildProject(options: {
   logger.success(`Ejecutable creado: ${path.resolve(output)}`);
 }
 
+async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string, outDir: string, wasi: boolean): Promise<void> {
+  const wasmTsFiles = await glob('**/*.wasm.ts', { cwd: sourceDir, absolute: true, nodir: true });
+  if (wasmTsFiles.length === 0) {
+    logger.warn('No se encontraron archivos .wasm.ts.');
+    return;
+  }
+
+  const isDev = !config.compiler?.release;
+  const wasmFiles: string[] = [];
+
+  for (const file of wasmTsFiles) {
+    const sourceCode = fs.readFileSync(file, 'utf-8');
+    const result = await compileWasm({
+      fileName: file,
+      sourceCode,
+      isDev,
+      runtime: config.compiler?.runtime || 'incremental',
+      sourceMap: isDev ? config.compiler?.sourceMap : false,
+      optimizeLevel: config.compiler?.optimizeLevel,
+      shrinkLevel: config.compiler?.shrinkLevel,
+    });
+
+    let baseName = path.basename(file, '.wasm.ts');
+    const wasmPath = path.join(outDir, `${baseName}.wasm`);
+    fs.writeFileSync(wasmPath, result.wasmBytes);
+    wasmFiles.push(wasmPath);
+  }
+
+  const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+  const outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
+  const output = (path.isAbsolute(outputName)
+    ? outputName
+    : outputName.includes(path.sep)
+      ? path.resolve(rootDir, outputName)
+      : path.join(outDir, outputName)) + exeSuffix;
+
+  await createNativeApp({
+    inputPaths: wasmFiles,
+    output,
+    target: config.target,
+    entry: config.entry || '_start',
+    wasi,
+    moduleMatching: config.moduleMatching || 'file-name',
+    wasmtimePath: config.wasmtimePath,
+  });
+}
+
+export async function devCommand(options: {
+  rootDir: string;
+  output?: string;
+  target?: string;
+  entry?: string;
+  wasi?: boolean;
+  release?: boolean;
+  sourceDir?: string;
+  outDir?: string;
+}): Promise<void> {
+  const rootDir = path.resolve(options.rootDir);
+  const config = resolveConfig(rootDir, {
+    entry: options.entry,
+    target: options.target,
+    output: options.output,
+    sourceDir: options.sourceDir,
+    outDir: options.outDir,
+  });
+
+  const sourceDir = path.resolve(rootDir, config.sourceDir || 'src');
+  const outDir = path.resolve(rootDir, config.outDir || 'wasm-out');
+  const wasi = options.wasi || config.wasi || false;
+
+  if (!fs.existsSync(sourceDir)) {
+    throw new ConfigError(`El directorio fuente '${sourceDir}' no existe.`, { sourceDir });
+  }
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true });
+  }
+
+  await loadPlugins(config.plugins);
+
+  if (process.platform !== 'win32') {
+    process.on('SIGINT', () => { logger.info('\nDeteniendo watch...'); process.exit(0); });
+    process.on('SIGTERM', () => { logger.info('\nDeteniendo watch...'); process.exit(0); });
+  }
+
+  logger.step('Build inicial...');
+  await buildOnce(config, rootDir, sourceDir, outDir, wasi);
+
+  logger.step(`Vigilando ${sourceDir} por cambios en .wasm.ts...`);
+  logger.detail('Esperando cambios... (Ctrl+C para salir)\n');
+
+  if (process.platform === 'linux') {
+    logger.detail('Nota: en Linux, fs.watch recursive no vigila subdirectorios. Para watch completo, instala chokidar.');
+  }
+
+  let debounceTimer: ReturnType<typeof setTimeout>;
+  const buildKey = (fn: string) => options.entry || config.entry || fn.replace('.wasm.ts', '');
+
+  fs.watch(sourceDir, { recursive: true }, (_eventType, filename) => {
+    const normalizedName = filename ? path.normalize(filename) : null;
+    if (normalizedName && (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.ts'))) {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        logger.step(`\nCambio detectado en ${normalizedName}, recompilando...`);
+        try {
+          await buildOnce(config, rootDir, sourceDir, outDir, wasi);
+        } catch (err: any) {
+          logger.error(`Error: ${err.message}`);
+        }
+        logger.detail('\nEsperando cambios... (Ctrl+C para salir)\n');
+      }, 300);
+    }
+  });
+
+  await new Promise(() => {});
+}
+
 export async function runSetup(): Promise<void> {
   await linkerSetup();
 }

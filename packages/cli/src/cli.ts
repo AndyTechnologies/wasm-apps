@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { logger, type ModuleMatchingStrategy } from '@wasm-apps/types';
-import { initProject, buildProject, runSetup, cacheInfo, clearCache } from './index.js';
+import { initProject, buildProject, devCommand, runSetup, cacheInfo, clearCache } from './index.js';
 import path from 'node:path';
 
 const program = new Command();
@@ -64,6 +64,34 @@ program
       if (err.details) {
         logger.detail(JSON.stringify(err.details, null, 2));
       }
+      process.exit(1);
+    }
+  });
+
+program
+  .command('dev')
+  .description('Vigila archivos .wasm.ts y recompila+linkea automaticamente')
+  .option('-o, --output <file>', 'Ruta del ejecutable de salida')
+  .option('-t, --target <triple>', 'Target de cross-compilacion (ej. x86_64-linux-gnu, aarch64-macos)')
+  .option('-e, --entry <name>', 'Funcion de entrada', '_start')
+  .option('--wasi', 'Habilitar interfaz WASI', false)
+  .option('--release', 'Modo release (optimizado, sin sourcemaps)', false)
+  .option('--source-dir <dir>', 'Directorio con archivos fuente .wasm.ts')
+  .option('--out-dir <dir>', 'Directorio para archivos .wasm intermedios')
+  .action(async (options) => {
+    try {
+      await devCommand({
+        rootDir: process.cwd(),
+        output: options.output,
+        target: options.target,
+        entry: options.entry,
+        wasi: options.wasi,
+        release: options.release,
+        sourceDir: options.sourceDir,
+        outDir: options.outDir,
+      });
+    } catch (err: any) {
+      logger.error(`\nError: ${err.message}`);
       process.exit(1);
     }
   });

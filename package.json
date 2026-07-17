@@ -8,7 +8,11 @@
     "compiler": "node ./packages/compiler/dist/cli.js",
     "linker": "node ./packages/linker/dist/cli.js",
     "cli": "node ./packages/cli/dist/cli.js",
-    "test": "node scripts/test-examples.mjs"
+    "test": "pnpm test:unit",
+    "lint": "pnpm -r build",
+    "test:unit": "vitest run",
+    "test:integration": "node ./scripts/test-examples.mjs",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +23,7 @@
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@types/node": "^26.1.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }

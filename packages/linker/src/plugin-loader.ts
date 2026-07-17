@@ -7,6 +7,7 @@ import { pipeline } from './pipeline.js';
 const DEFAULT_PLUGINS: PluginConfig[] = [
   { id: 'stdlib-plugin', enabled: true, config: {} },
   { id: 'size-optimizer-plugin', enabled: true, config: {} },
+  { id: 'tree-shake-plugin', enabled: true, config: {} },
 ];
 
 function createContext(cfg: PluginConfig): PluginContext {
@@ -38,6 +39,12 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
     if (cfg.id === 'size-optimizer-plugin') {
       const { default: sizePlugin } = await import('./size-optimizer-plugin.js');
       registerPlugin(sizePlugin, context);
+      continue;
+    }
+
+    if (cfg.id === 'tree-shake-plugin') {
+      const { default: treeShakePlugin } = await import('./tree-shake-plugin.js');
+      registerPlugin(treeShakePlugin, context);
       continue;
     }
 
