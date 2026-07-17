@@ -199,4 +199,16 @@ describe('treeShakeWasm', () => {
     const result = treeShakeWasm(wasm);
     expect(() => new WebAssembly.Module(result)).not.toThrow();
   });
+
+  it('handles start section correctly', () => {
+    const wasm = buildWasm([
+      sharedTypes,
+      funcSection([0, 0, 0]),
+      exportSection([{ name: 'main', kind: 0, index: 0 }]),
+      { id: 8, content: [0x02] },
+      codeSection([simpleBody([]), simpleBody([]), simpleBody([0])]),
+    ]);
+    const result = treeShakeWasm(wasm);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
+  });
 });

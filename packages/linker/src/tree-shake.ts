@@ -159,7 +159,14 @@ function getFuncImportCount(wasm: Uint8Array, sections: ParsedSection[]): number
   return count;
 }
 
-function buildCallGraph(bodies: ParsedCodeBody[], importCount: number, exportedFuncs: number[]): Set<number> {
+function getStartFuncIndex(wasm: Uint8Array, sections: ParsedSection[]): number | undefined {
+  const sec = sections.find(s => s.id === 8);
+  if (!sec) return undefined;
+  const [idx] = decodeLEB128(wasm, sec.contentStart);
+  return idx;
+}
+
+function buildCallGraph(bodies: ParsedCodeBody[], importCount: number, exportedFuncs: number[], startFuncIdx?: number): Set<number> {
   const reachable = new Set<number>();
   const queue: number[] = [];
 
@@ -168,6 +175,11 @@ function buildCallGraph(bodies: ParsedCodeBody[], importCount: number, exportedF
       reachable.add(idx);
       queue.push(idx);
     }
+  }
+
+  if (startFuncIdx !== undefined && !reachable.has(startFuncIdx)) {
+    reachable.add(startFuncIdx);
+    queue.push(startFuncIdx);
   }
 
   while (queue.length > 0) {
@@ -234,9 +246,10 @@ export function treeShakeWasm(wasmBuffer: Uint8Array): Uint8Array {
 
   const bodies = parseCodeBodies(wasm, sections, localFuncCount);
   const exportedFuncs = getExportedFuncIndices(wasm, sections);
-  if (exportedFuncs.length === 0) return wasm;
+  const startFuncIdx = getStartFuncIndex(wasm, sections);
+  if (exportedFuncs.length === 0 && startFuncIdx === undefined) return wasm;
 
-  const reachable = buildCallGraph(bodies, funcImportCount, exportedFuncs);
+  const reachable = buildCallGraph(bodies, funcImportCount, exportedFuncs, startFuncIdx);
 
   const keptLocalFuncs = new Set<number>();
   for (let i = 0; i < localFuncCount; i++) {
@@ -308,6 +321,12 @@ export function treeShakeWasm(wasmBuffer: Uint8Array): Uint8Array {
       }
       const sizeBytes = encodeU32(content.length);
       result.push(7, ...sizeBytes, ...content);
+    } else if (sec.id === 8) {
+      const [startIdx] = decodeLEB128(wasm, sec.contentStart);
+      const newStartIdx = remapFuncIdx(startIdx);
+      const newContent = newStartIdx >= 0 ? encodeU32(newStartIdx) : encodeU32(0);
+      const sizeBytes = encodeU32(newContent.length);
+      result.push(8, ...sizeBytes, ...newContent);
     } else if (sec.id === 10) {
       const content: number[] = [];
       content.push(...encodeU32(oldToNewLocalIdx.size));
