@@ -9,10 +9,7 @@ import path from 'node:path';
 
 const program = new Command();
 
-program
-  .name('linker')
-  .description('Convierte proyectos WebAssembly en ejecutables nativos autocontenidos')
-  .version('1.0.0');
+program.name('linker').description('Convierte proyectos WebAssembly en ejecutables nativos autocontenidos').version('1.0.0');
 
 program
   .command('build')
@@ -25,7 +22,7 @@ program
   .option('--module-matching <strategy>', 'Estrategia de resolucion: name-only (defecto) o file-name', 'name-only')
   .option('--wasmtime-path <path>', 'Ruta personalizada a la API C de Wasmtime (include/lib)')
   .action(async (files: string[], options) => {
-    const resolvedFiles = files.map(p => path.resolve(p));
+    const resolvedFiles = files.map((p) => path.resolve(p));
     try {
       await createNativeApp({
         inputPaths: resolvedFiles,
@@ -58,11 +55,17 @@ program
   .option('--wasmtime-path <path>', 'Ruta personalizada a la API C de Wasmtime')
   .action(async (files: string[], options) => {
     if (process.platform !== 'win32') {
-      process.on('SIGINT', () => { logger.info('\nDeteniendo...'); process.exit(0); });
-      process.on('SIGTERM', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+      process.on('SIGINT', () => {
+        logger.info('\nDeteniendo...');
+        process.exit(0);
+      });
+      process.on('SIGTERM', () => {
+        logger.info('\nDeteniendo...');
+        process.exit(0);
+      });
     }
 
-    const inputPaths = files.map(p => path.resolve(p));
+    const inputPaths = files.map((p) => path.resolve(p));
 
     const doBuild = async () => {
       try {
@@ -127,9 +130,7 @@ program
     }
   });
 
-const cacheCmd = program
-  .command('cache')
-  .description('Gestiona la cache de descargas de Wapp');
+const cacheCmd = program.command('cache').description('Gestiona la cache de descargas de Wapp');
 
 cacheCmd
   .command('info')
@@ -162,7 +163,9 @@ program
     try {
       const status = await checkSetupStatus();
       logger.step('\nEstado de dependencias:\n');
-      logger.info(`Wasmtime: ${status.wasmtime.status === 'ok' ? 'OK' : 'FALTA'} ${status.wasmtime.path ? `(${status.wasmtime.path})` : ''}${status.wasmtime.error ? ` - ${status.wasmtime.error}` : ''}`);
+      logger.info(
+        `Wasmtime: ${status.wasmtime.status === 'ok' ? 'OK' : 'FALTA'} ${status.wasmtime.path ? `(${status.wasmtime.path})` : ''}${status.wasmtime.error ? ` - ${status.wasmtime.error}` : ''}`,
+      );
       logger.info(`Cache:    ${status.cacheSize}`);
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);

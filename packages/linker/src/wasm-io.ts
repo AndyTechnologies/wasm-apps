@@ -1,107 +1,144 @@
 import fs from 'node:fs';
-import { WasmModuleInfo, WasmExport, WasmImport, WasmImportFuncType } from '@wasm-apps/types';
+import path from 'node:path';
+import type { WasmModuleInfo, WasmExport, WasmImport, WasmImportFuncType } from '@wasm-apps/types';
+import { readLEB128Value, countLEB128 } from './wasm-leb128.js';
 
-export async function readWasmModules(filePaths: string[]): Promise<WasmModuleInfo[]> {
-  const modules: WasmModuleInfo[] = [];
-  for (const filePath of filePaths) {
-    const buffer = fs.readFileSync(filePath);
-    const wasmModule = new WebAssembly.Module(buffer);
-    const imports = WebAssembly.Module.imports(wasmModule).map(imp => ({
-      module: imp.module,
-      name: imp.name,
-      kind: imp.kind as WasmImport['kind'],
-    }));
-    const exports = WebAssembly.Module.exports(wasmModule).map(exp => ({
-      name: exp.name,
-      kind: exp.kind as WasmExport['kind'],
-    }));
-
-    modules.push({ fileName: filePath, buffer, imports, exports });
-  }
-  return modules;
-}
-
-function decodeLEB128(bytes: Uint8Array, offset: number): [number, number] {
-  let result = 0;
-  let shift = 0;
-  let pos = offset;
-  while (true) {
-    const byte = bytes[pos++];
-    result |= (byte & 0x7f) << shift;
-    shift += 7;
-    if (!(byte & 0x80)) break;
-  }
-  return [result, pos - offset];
-}
-
-const VALTYPE_NAMES: Record<number, string> = {
-  0x7F: 'i32',
-  0x7E: 'i64',
-  0x7D: 'f32',
-  0x7C: 'f64',
+const KIND_NAMES: Record<number, WasmImport['kind']> = {
+  0: 'function',
+  1: 'table',
+  2: 'memory',
+  3: 'global',
 };
 
-export function parseImportFuncTypes(buffer: Buffer): WasmImportFuncType[] {
-  const bytes = new Uint8Array(buffer);
-  let pos = 8;
-  const funcTypes: Array<{ params: string[]; results: string[] }> = [];
-  const result: WasmImportFuncType[] = [];
+function decodeKind(kind: number): WasmImport['kind'] {
+  return KIND_NAMES[kind] || 'unknown';
+}
 
-  while (pos < bytes.length) {
-    const sectionId = bytes[pos++];
-    const [sectionSize, sLen] = decodeLEB128(bytes, pos);
-    pos += sLen;
-    const sectionEnd = pos + sectionSize;
+const VAL_TYPE_NAMES: Record<number, string> = {
+  0x7f: 'i32',
+  0x7e: 'i64',
+  0x7d: 'f32',
+  0x7c: 'f64',
+};
+
+function readValTypes(data: Buffer, offset: number, count: number): { types: string[]; offset: number } {
+  const types: string[] = [];
+  let pos = offset;
+  for (let i = 0; i < count; i++) {
+    const typeByte = data[pos++];
+    types.push(VAL_TYPE_NAMES[typeByte] || 'i32');
+  }
+  return { types, offset: pos };
+}
+
+export function parseWasmModule(filePath: string): WasmModuleInfo {
+  const buffer = fs.readFileSync(filePath);
+  const fileName = path.basename(filePath);
+
+  let offset = 8;
+  const imports: WasmImport[] = [];
+  const exports: WasmExport[] = [];
+  const typeSignatures: Array<{ params: string[]; results: string[] }> = [];
+  const importFuncTypes: WasmImportFuncType[] = [];
+  let funcImportIdx = 0;
+
+  while (offset < buffer.length) {
+    if (offset + 1 > buffer.length) break;
+    const sectionId = buffer[offset++];
+    if (offset + 1 > buffer.length) break;
+    const sectionSize = readLEB128Value(buffer, offset);
+    offset += countLEB128(buffer, offset);
+    const sectionEnd = offset + sectionSize;
 
     if (sectionId === 1) {
-      const [count, cLen] = decodeLEB128(bytes, pos);
-      pos += cLen;
+      const count = readLEB128Value(buffer, offset);
+      offset += countLEB128(buffer, offset);
       for (let i = 0; i < count; i++) {
-        if (bytes[pos++] !== 0x60) break;
-        const [paramCount, pcLen] = decodeLEB128(bytes, pos);
-        pos += pcLen;
-        const params: string[] = [];
-        for (let j = 0; j < paramCount; j++) {
-          params.push(VALTYPE_NAMES[bytes[pos++]] || 'unknown');
-        }
-        const [resultCount, rcLen] = decodeLEB128(bytes, pos);
-        pos += rcLen;
-        const results: string[] = [];
-        for (let j = 0; j < resultCount; j++) {
-          results.push(VALTYPE_NAMES[bytes[pos++]] || 'unknown');
-        }
-        funcTypes.push({ params, results });
+        if (buffer[offset++] !== 0x60) break;
+        const paramCount = readLEB128Value(buffer, offset);
+        offset += countLEB128(buffer, offset);
+        const { types: params, offset: newOffset1 } = readValTypes(buffer, offset, paramCount);
+        offset = newOffset1;
+        const resultCount = readLEB128Value(buffer, offset);
+        offset += countLEB128(buffer, offset);
+        const { types: results, offset: newOffset2 } = readValTypes(buffer, offset, resultCount);
+        offset = newOffset2;
+        typeSignatures.push({ params, results });
       }
     } else if (sectionId === 2) {
-      const [count, cLen] = decodeLEB128(bytes, pos);
-      pos += cLen;
+      const count = readLEB128Value(buffer, offset);
+      offset += countLEB128(buffer, offset);
       for (let i = 0; i < count; i++) {
-        const [modLen, mlLen] = decodeLEB128(bytes, pos);
-        pos += mlLen;
-        const module = new TextDecoder().decode(bytes.slice(pos, pos + modLen));
-        pos += modLen;
-        const [nameLen, nlLen] = decodeLEB128(bytes, pos);
-        pos += nlLen;
-        const name = new TextDecoder().decode(bytes.slice(pos, pos + nameLen));
-        pos += nameLen;
-        const kind = bytes[pos++];
+        const moduleLen = readLEB128Value(buffer, offset);
+        offset += countLEB128(buffer, offset);
+        const module = buffer.toString('utf-8', offset, offset + moduleLen);
+        offset += moduleLen;
+
+        const nameLen = readLEB128Value(buffer, offset);
+        offset += countLEB128(buffer, offset);
+        const name = buffer.toString('utf-8', offset, offset + nameLen);
+        offset += nameLen;
+
+        const kind = buffer[offset++];
+
         if (kind === 0) {
-          const [typeIdx, tiLen] = decodeLEB128(bytes, pos);
-          pos += tiLen;
-          const ft = funcTypes[typeIdx];
-          if (ft) {
-            result.push({ module, name, params: ft.params, results: ft.results });
+          const typeIdx = readLEB128Value(buffer, offset);
+          offset += countLEB128(buffer, offset);
+          const sig = typeSignatures[typeIdx];
+          if (sig) {
+            importFuncTypes.push({
+              module,
+              name,
+              params: sig.params,
+              results: sig.results,
+            });
           }
-        } else if (kind === 1 || kind === 2) {
-          pos += 2;
+          funcImportIdx++;
+        } else if (kind === 1) {
+          offset += countLEB128(buffer, offset);
+          offset += countLEB128(buffer, offset);
+        } else if (kind === 2) {
+          offset += countLEB128(buffer, offset);
         } else if (kind === 3) {
-          pos += 2;
+          offset += countLEB128(buffer, offset);
+          buffer[offset++];
         }
+
+        imports.push({ module, name, kind: decodeKind(kind) });
+      }
+    } else if (sectionId === 7) {
+      const count = readLEB128Value(buffer, offset);
+      offset += countLEB128(buffer, offset);
+      for (let i = 0; i < count; i++) {
+        const nameLen = readLEB128Value(buffer, offset);
+        offset += countLEB128(buffer, offset);
+        const name = buffer.toString('utf-8', offset, offset + nameLen);
+        offset += nameLen;
+
+        const kind = buffer[offset++];
+        offset += countLEB128(buffer, offset);
+
+        exports.push({ name, kind: decodeKind(kind) });
       }
     }
 
-    pos = sectionEnd;
+    offset = sectionEnd;
   }
 
-  return result;
+  return { fileName, buffer, imports, exports, importFuncTypes: importFuncTypes.length > 0 ? importFuncTypes : undefined };
+}
+
+export function mergeImportExportKinds(imports: WasmImport[], exports: WasmExport[], moduleMap: Map<string, WasmModuleInfo>): WasmImport[] {
+  return imports.map((imp) => {
+    if (imp.kind !== ('unknown' as WasmImport['kind'])) return imp;
+
+    for (const [, mod] of moduleMap) {
+      const matchingExport = mod.exports.find((e) => e.name === imp.name && e.kind !== ('unknown' as WasmExport['kind']));
+      if (matchingExport) {
+        return { ...imp, kind: matchingExport.kind };
+      }
+    }
+
+    return imp;
+  });
 }

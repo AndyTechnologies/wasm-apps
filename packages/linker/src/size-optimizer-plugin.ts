@@ -16,9 +16,7 @@ const sizeOptimizerPlugin: WasmPlugin = {
         const stripped = stripWasm(mod.buffer);
         if (stripped.length < originalSize) {
           mod.buffer = stripped;
-          const saved = originalSize > 0
-            ? ((1 - stripped.length / originalSize) * 100).toFixed(1)
-            : '0.0';
+          const saved = originalSize > 0 ? ((1 - stripped.length / originalSize) * 100).toFixed(1) : '0.0';
           logger.detail(`  Stripped: ${mod.fileName} (${originalSize} → ${stripped.length} bytes, ${saved}% ahorrado)`);
         }
       }

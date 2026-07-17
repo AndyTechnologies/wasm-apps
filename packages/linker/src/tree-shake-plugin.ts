@@ -1,6 +1,6 @@
 import type { PluginContext, WasmPlugin, PipelineContext } from '@wasm-apps/types';
 import { PipelinePhase } from '@wasm-apps/types';
-import { treeShakeWasm } from './tree-shake.js';
+import { treeShake } from './tree-shake.js';
 
 const plugin: WasmPlugin = {
   id: 'tree-shake',
@@ -14,7 +14,7 @@ const plugin: WasmPlugin = {
       for (const mod of pCtx.wasmModules) {
         const originalSize = mod.buffer.length;
         totalOriginalSize += originalSize;
-        const treeShaken = treeShakeWasm(new Uint8Array(mod.buffer));
+        const treeShaken = treeShake(Buffer.from(mod.buffer));
         if (treeShaken.length < originalSize) {
           const removed = originalSize - treeShaken.length;
           totalRemoved += removed;
