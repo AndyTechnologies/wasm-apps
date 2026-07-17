@@ -4,7 +4,18 @@ import os from 'node:os';
 import { glob } from 'glob';
 import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy } from '@wasm-apps/types';
 import { compileWasm, getCompileCacheInfo, clearCompileCache } from '@wasm-apps/compiler';
-import { createNativeApp, runSetup as linkerSetup, getCacheInfo, clearCache as linkerClearCache, checkSetupStatus, getBuildCacheInfo, clearBuildCache, loadPlugins, pipeline, PipelinePhase } from '@wasm-apps/linker';
+import {
+  createNativeApp,
+  runSetup as linkerSetup,
+  getCacheInfo,
+  clearCache as linkerClearCache,
+  checkSetupStatus,
+  getBuildCacheInfo,
+  clearBuildCache,
+  loadPlugins,
+  pipeline,
+  PipelinePhase,
+} from '@wasm-apps/linker';
 
 const CONFIG_FILE = 'wapp.json';
 
@@ -38,7 +49,8 @@ export function resolveConfig(rootDir: string, overrides?: Partial<WappConfig>):
     try {
       const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       config = {
-        ...config, ...raw,
+        ...config,
+        ...raw,
         compiler: { ...config.compiler, ...raw.compiler },
         plugins: raw.plugins ?? config.plugins,
         optimization: raw.optimization ?? config.optimization,
@@ -52,7 +64,8 @@ export function resolveConfig(rootDir: string, overrides?: Partial<WappConfig>):
     const cleaned = cleanUndefined(overrides);
     if (Object.keys(cleaned).length > 0) {
       config = {
-        ...config, ...cleaned,
+        ...config,
+        ...cleaned,
         compiler: { ...config.compiler, ...cleaned.compiler },
         plugins: cleaned.plugins ?? config.plugins,
         optimization: cleaned.optimization ?? config.optimization,
@@ -77,6 +90,83 @@ export function initProject(rootDir: string, overrides?: Partial<WappConfig>): W
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + os.EOL);
   logger.success(`${CONFIG_FILE} creado en ${rootDir}`);
   return config;
+}
+
+async function compileWasFiles(
+  wasmTsFiles: string[],
+  sourceDir: string,
+  outDir: string,
+  rootDir: string,
+  config: WappConfig,
+  pipelineContext: Record<string, any>,
+): Promise<string[]> {
+  const isDev = !config.compiler?.release;
+  const wasmFiles: string[] = [];
+
+  for (const file of wasmTsFiles) {
+    const sourceCode = fs.readFileSync(file, 'utf-8');
+    const relativeName = path.relative(rootDir, file);
+
+    logger.info(`  Compilando ${relativeName}...`);
+
+    const result = await compileWasm({
+      fileName: file,
+      sourceCode,
+      isDev,
+      runtime: config.compiler?.runtime || 'incremental',
+      sourceMap: isDev ? config.compiler?.sourceMap : false,
+      optimizeLevel: config.compiler?.optimizeLevel,
+      shrinkLevel: config.compiler?.shrinkLevel,
+    });
+
+    let baseName = path.basename(file, '.wasm.ts');
+    const wasmPath = path.join(outDir, `${baseName}.wasm`);
+    fs.writeFileSync(wasmPath, result.wasmBytes);
+
+    wasmFiles.push(wasmPath);
+  }
+
+  return wasmFiles;
+}
+
+function resolveOutputPath(
+  config: WappConfig,
+  rootDir: string,
+  outDir: string,
+  customEntry?: string,
+  customMatching?: ModuleMatchingStrategy,
+): { output: string; entry: string; moduleMatching: ModuleMatchingStrategy } {
+  const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+  const outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
+  const output =
+    (path.isAbsolute(outputName) ? outputName : outputName.includes(path.sep) ? path.resolve(rootDir, outputName) : path.join(outDir, outputName)) + exeSuffix;
+  const entry = customEntry || config.entry || '_start';
+  const moduleMatching = customMatching || config.moduleMatching || 'file-name';
+  return { output, entry, moduleMatching };
+}
+
+async function linkNativeApp(
+  wasmFiles: string[],
+  output: string,
+  entry: string,
+  moduleMatching: ModuleMatchingStrategy,
+  config: WappConfig,
+  target?: string,
+  wasi?: boolean,
+): Promise<void> {
+  logger.step('Linkeando ejecutable nativo...');
+
+  await createNativeApp({
+    inputPaths: wasmFiles,
+    output,
+    target: target || config.target,
+    entry,
+    wasi: wasi || config.wasi || false,
+    moduleMatching,
+    wasmtimePath: config.wasmtimePath,
+  });
+
+  logger.success(`Ejecutable creado: ${path.resolve(output)}`);
 }
 
 export async function buildProject(options: {
@@ -127,10 +217,7 @@ export async function buildProject(options: {
 
   logger.step(`Compilando ${wasmTsFiles.length} archivos AssemblyScript...`);
 
-  const isDev = !config.compiler?.release;
-  const wasmFiles: string[] = [];
-
-  const compileCtx = {
+  const pipelineContext = {
     sourceDir,
     outDir,
     options: {
@@ -145,58 +232,18 @@ export async function buildProject(options: {
     pluginConfigs: config.plugins,
   };
 
-  await pipeline.runPhase(PipelinePhase.BeforeModuleCompile, compileCtx);
-
-  for (const file of wasmTsFiles) {
-    const sourceCode = fs.readFileSync(file, 'utf-8');
-    const relativeName = path.relative(rootDir, file);
-
-    logger.info(`  Compilando ${relativeName}...`);
-
-    const result = await compileWasm({
-      fileName: file,
-      sourceCode,
-      isDev,
-      runtime: config.compiler?.runtime || 'incremental',
-      sourceMap: isDev ? config.compiler?.sourceMap : false,
-      optimizeLevel: config.compiler?.optimizeLevel,
-      shrinkLevel: config.compiler?.shrinkLevel,
-    });
-
-    let baseName = path.basename(file, '.wasm.ts');
-    const wasmPath = path.join(outDir, `${baseName}.wasm`);
-    fs.writeFileSync(wasmPath, result.wasmBytes);
-
-    wasmFiles.push(wasmPath);
-  }
-
-  await pipeline.runPhase(PipelinePhase.AfterModuleCompile, compileCtx);
+  let ctx = await pipeline.runPhase(PipelinePhase.BeforeModuleCompile, pipelineContext);
+  const wasmFiles = await compileWasFiles(wasmTsFiles, sourceDir, outDir, rootDir, config, ctx);
+  ctx = await pipeline.runPhase(PipelinePhase.AfterModuleCompile, ctx);
 
   logger.success(`Compilacion completada: ${wasmFiles.length} archivos .wasm generados en ${outDir}`);
 
-  const exeSuffix = process.platform === 'win32' ? '.exe' : '';
-  const outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
-  const output = (path.isAbsolute(outputName)
-    ? outputName
-    : outputName.includes(path.sep)
-      ? path.resolve(rootDir, outputName)
-      : path.join(outDir, outputName)) + exeSuffix;
-  const entry = options.entry || config.entry || '_start';
-  const moduleMatching = options.moduleMatching || config.moduleMatching || 'file-name';
+  ctx = await pipeline.runPhase(PipelinePhase.BeforeCodeGen, ctx);
 
-  logger.step('Linkeando ejecutable nativo...');
+  const { output, entry, moduleMatching } = resolveOutputPath(config, rootDir, outDir, options.entry, options.moduleMatching);
+  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, options.target, options.wasi);
 
-  await createNativeApp({
-    inputPaths: wasmFiles,
-    output,
-    target: options.target || config.target,
-    entry,
-    wasi: options.wasi || config.wasi || false,
-    moduleMatching,
-    wasmtimePath: config.wasmtimePath,
-  });
-
-  logger.success(`Ejecutable creado: ${path.resolve(output)}`);
+  await pipeline.runPhase(PipelinePhase.AfterCodeGen, ctx);
 }
 
 async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string, outDir: string, wasi: boolean): Promise<void> {
@@ -206,44 +253,9 @@ async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string,
     return;
   }
 
-  const isDev = !config.compiler?.release;
-  const wasmFiles: string[] = [];
-
-  for (const file of wasmTsFiles) {
-    const sourceCode = fs.readFileSync(file, 'utf-8');
-    const result = await compileWasm({
-      fileName: file,
-      sourceCode,
-      isDev,
-      runtime: config.compiler?.runtime || 'incremental',
-      sourceMap: isDev ? config.compiler?.sourceMap : false,
-      optimizeLevel: config.compiler?.optimizeLevel,
-      shrinkLevel: config.compiler?.shrinkLevel,
-    });
-
-    let baseName = path.basename(file, '.wasm.ts');
-    const wasmPath = path.join(outDir, `${baseName}.wasm`);
-    fs.writeFileSync(wasmPath, result.wasmBytes);
-    wasmFiles.push(wasmPath);
-  }
-
-  const exeSuffix = process.platform === 'win32' ? '.exe' : '';
-  const outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
-  const output = (path.isAbsolute(outputName)
-    ? outputName
-    : outputName.includes(path.sep)
-      ? path.resolve(rootDir, outputName)
-      : path.join(outDir, outputName)) + exeSuffix;
-
-  await createNativeApp({
-    inputPaths: wasmFiles,
-    output,
-    target: config.target,
-    entry: config.entry || '_start',
-    wasi,
-    moduleMatching: config.moduleMatching || 'file-name',
-    wasmtimePath: config.wasmtimePath,
-  });
+  const wasmFiles = await compileWasFiles(wasmTsFiles, sourceDir, outDir, rootDir, config, {});
+  const { output, entry, moduleMatching } = resolveOutputPath(config, rootDir, outDir, config.entry, config.moduleMatching);
+  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, config.target, wasi);
 }
 
 export async function devCommand(options: {
@@ -279,8 +291,14 @@ export async function devCommand(options: {
   await loadPlugins(config.plugins);
 
   if (process.platform !== 'win32') {
-    process.on('SIGINT', () => { logger.info('\nDeteniendo watch...'); process.exit(0); });
-    process.on('SIGTERM', () => { logger.info('\nDeteniendo watch...'); process.exit(0); });
+    process.on('SIGINT', () => {
+      logger.info('\nDeteniendo watch...');
+      process.exit(0);
+    });
+    process.on('SIGTERM', () => {
+      logger.info('\nDeteniendo watch...');
+      process.exit(0);
+    });
   }
 
   logger.step('Build inicial...');
@@ -294,7 +312,6 @@ export async function devCommand(options: {
   }
 
   let debounceTimer: ReturnType<typeof setTimeout>;
-  const buildKey = (fn: string) => options.entry || config.entry || fn.replace('.wasm.ts', '');
 
   fs.watch(sourceDir, { recursive: true }, (_eventType, filename) => {
     const normalizedName = filename ? path.normalize(filename) : null;
@@ -360,8 +377,9 @@ export async function cacheInfo(): Promise<void> {
 }
 
 export async function clearCache(options?: { build?: boolean; linker?: boolean; all?: boolean }): Promise<void> {
-  const clearBuild = options?.all || options?.build || (!options?.linker && !options?.all);
-  const clearLinker = options?.all || options?.linker;
+  const noFlags = !options?.build && !options?.linker && !options?.all;
+  const clearBuild = !!(options?.all || options?.build || noFlags);
+  const clearLinker = !!(options?.all || options?.linker);
 
   if (clearBuild) {
     logger.info('Limpiando cache de compilacion...');
