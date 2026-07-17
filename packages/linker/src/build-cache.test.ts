@@ -26,14 +26,19 @@ describe('build-cache', () => {
 
   describe('saveBuildManifest', () => {
     it('saves manifest to .wapp_build directory', () => {
-      saveBuildManifest([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
 
       const manifestPath = path.join(tmpDir, '.wapp_build', 'build-manifest.json');
       expect(fs.existsSync(manifestPath)).toBe(true);
@@ -48,85 +53,125 @@ describe('build-cache', () => {
 
   describe('isBuildUpToDate', () => {
     it('returns false when output does not exist', async () => {
-      const result = await isBuildUpToDate([wasmFile], '/nonexistent/output', {
-        entry: '_start',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      const result = await isBuildUpToDate(
+        [wasmFile],
+        '/nonexistent/output',
+        {
+          entry: '_start',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
       expect(result).toBe(false);
     });
 
     it('returns false when no manifest exists', async () => {
-      const result = await isBuildUpToDate([wasmFile], outputFile, {
-        entry: '_start',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      const result = await isBuildUpToDate(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
       expect(result).toBe(false);
     });
 
     it('returns true when cache is valid', async () => {
-      saveBuildManifest([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
 
-      const result = await isBuildUpToDate([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      const result = await isBuildUpToDate(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
       expect(result).toBe(true);
     });
 
     it('returns false when options differ', async () => {
-      saveBuildManifest([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
 
-      const result = await isBuildUpToDate([wasmFile], outputFile, {
-        entry: 'main',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      const result = await isBuildUpToDate(
+        [wasmFile],
+        outputFile,
+        {
+          entry: 'main',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
       expect(result).toBe(false);
     });
 
     it('returns false when wasm file changes', async () => {
-      saveBuildManifest([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
 
       fs.writeFileSync(wasmFile, Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x01]));
 
-      const result = await isBuildUpToDate([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      const result = await isBuildUpToDate(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
       expect(result).toBe(false);
     });
   });
@@ -138,14 +183,19 @@ describe('build-cache', () => {
     });
 
     it('returns exists=true after saving manifest', () => {
-      saveBuildManifest([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
 
       const info = getBuildCacheInfo(tmpDir);
       expect(info.exists).toBe(true);
@@ -155,14 +205,19 @@ describe('build-cache', () => {
 
   describe('clearBuildCache', () => {
     it('removes build directory', () => {
-      saveBuildManifest([wasmFile], outputFile, {
-        entry: '_start',
-        target: 'native',
-        wasi: false,
-        moduleMatching: 'file-name',
-        wasmtimePath: '',
-        wasmtimeVersion: '27.0.0',
-      }, tmpDir);
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+        },
+        tmpDir,
+      );
 
       clearBuildCache(tmpDir);
       expect(fs.existsSync(path.join(tmpDir, '.wapp_build'))).toBe(false);
