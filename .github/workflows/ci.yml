@@ -20,6 +20,9 @@ jobs:
       - run: pnpm run lint
         shell: bash
         continue-on-error: true
+      - run: pnpm vitest run --reporter=verbose
+        shell: bash
+        continue-on-error: true
 
   unit-tests:
     strategy:
@@ -57,5 +60,5 @@ jobs:
       - run: pnpm -r build
         shell: bash
       - name: Integration tests (requires wasmtime + cmake)
-        run: pnpm run test
+        run: pnpm run test:integration
         shell: bash

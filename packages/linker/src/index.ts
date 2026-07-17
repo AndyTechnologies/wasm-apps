@@ -2,6 +2,7 @@ import { logger, NativeAppOptions, LinkerError, PipelinePhase, type PipelineCont
 import { glob } from 'glob';
 import path from 'node:path';
 import fs from 'node:fs';
+import ora from 'ora';
 import { readWasmModules, parseImportFuncTypes } from './wasm-io.js';
 import { resolveDependencies } from './linker.js';
 import { generateCCode, validateEntryExport } from './codegen.js';
@@ -24,6 +25,7 @@ export { Pipeline, pipeline } from './pipeline.js';
 export { loadPlugins } from './plugin-loader.js';
 export type { PluginContext, WasmPlugin, PipelineContext, PipelineHook } from '@wasm-apps/types';
 export { PipelinePhase } from '@wasm-apps/types';
+export { treeShakeWasm } from './tree-shake.js';
 
 export async function createNativeApp(options: NativeAppOptions): Promise<void> {
   const exeSuffix = process.platform === 'win32' && !options.output.toLowerCase().endsWith('.exe') ? '.exe' : '';
@@ -51,6 +53,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
 
   logger.info(`Modulos encontrados: ${wasmFiles.map(f => path.basename(f)).join(', ')}`);
 
+  const spinner = ora({ color: 'cyan' }).start('Iniciando linkeo...');
   const wasmtimeVersion = WASMTIME_VERSION;
   const upToDate = await isBuildUpToDate(wasmFiles, output, {
     entry: options.entry,
@@ -62,7 +65,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
   });
 
   if (upToDate) {
-    logger.success(`Binario actualizado: ${path.resolve(output)} (saltando linker)`);
+    spinner.succeed(`Binario actualizado: ${path.resolve(output)} (saltando linker)`);
     return;
   }
 
@@ -74,10 +77,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
 
   const resolved = resolveDependencies(modules, options.moduleMatching);
 
-  logger.info('Dependencias resueltas. Orden de instanciacion:');
-  resolved.order.forEach((mod, idx) => {
-    logger.detail(`  ${idx}: ${path.basename(mod.module.fileName)} (exports: ${mod.module.exports.map(e => e.name).join(', ')})`);
-  });
+  spinner.text = `Resueltas ${resolved.order.length} dependencias`;
 
   validateEntryExport(resolved, options.entry);
 
@@ -97,6 +97,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     },
   };
 
+  spinner.text = 'Generando codigo C++...';
   ctx = await pipeline.runPhase(PipelinePhase.BeforeCodeGen, ctx);
 
   const cCode = generateCCode(resolved, options.entry, options.wasi, allImportTypes);
@@ -110,7 +111,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
   }
   const cFilePath = path.join(buildDir, 'wasm_bundle.cpp');
   fs.writeFileSync(cFilePath, cCode, 'utf-8');
-  logger.detail(`Codigo C++ generado en ${cFilePath}`);
+  spinner.text = `Codigo C++ generado en ${cFilePath}`;
 
   const wasmtimeLib = await wasmtimePromise;
 
@@ -148,6 +149,7 @@ export async function createNativeApp(options: NativeAppOptions): Promise<void> 
     wasmtimeVersion,
   });
 
+  spinner.succeed(`Ejecutable nativo creado: ${path.resolve(output)}`);
   await pipeline.runPhase(PipelinePhase.AfterBundle, ctx);
 }
 

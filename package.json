@@ -8,9 +8,10 @@
     "compiler": "node ./packages/compiler/dist/cli.js",
     "linker": "node ./packages/linker/dist/cli.js",
     "cli": "node ./packages/cli/dist/cli.js",
-    "test": "node scripts/test-examples.mjs",
+    "test": "pnpm test:unit",
     "lint": "pnpm -r build",
     "test:unit": "vitest run",
+    "test:integration": "node ./scripts/test-examples.mjs",
     "test:watch": "vitest"
   },
   "keywords": [],

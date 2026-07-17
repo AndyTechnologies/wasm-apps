@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import commandExists from 'command-exists';
 import cmake_js from 'cmake-js';
+import ora from 'ora';
 import { CMakeError, logger } from '@wasm-apps/types';
 
 const { CMake } = cmake_js;
@@ -307,10 +308,10 @@ function locateBuiltBinary(workDir: string, targetName: string, outputDir?: stri
 
 export async function compileWithCMake(opts: CompileOptions): Promise<void> {
   const triple = opts.target || 'native';
-  logger.detail(`Resolviendo toolchain para target: ${triple}`);
+  const spinner = ora({ text: `Resolviendo toolchain para target: ${triple}`, color: 'cyan' }).start();
 
   const entry = resolveToolchain(opts.target);
-  logger.detail(`Toolchain seleccionada: ${entry.description}`);
+  spinner.text = `Toolchain: ${entry.description}`;
 
   if (entry.installHint) {
     validateToolchain(entry);
@@ -325,7 +326,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
     const cmakeContent = generateCMakeLists(entry);
     fs.writeFileSync(cmakeListsPath, cmakeContent, 'utf-8');
 
-    logger.detail(`CMakeLists.txt generado: ${cmakeListsPath}\n`);
+    spinner.text = `Configurando cmake-js en ${tmpDir}`;
 
     const cmake = new CMake({
       directory: tmpDir,
@@ -340,20 +341,21 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
       },
     });
 
-    logger.detail(`Configurando cmake-js en ${tmpDir}`);
     try {
       await cmake.configure();
     } catch (err: unknown) {
+      spinner.fail('Error al configurar cmake');
       throw new CMakeError(`Error al configurar cmake`, {
         causeMessage: (err as Error).message,
         tmpDir,
       });
     }
 
-    logger.detail(`Compilando con cmake-js`);
+    spinner.text = `Compilando con cmake-js`;
     try {
       await cmake.build();
     } catch (err: unknown) {
+      spinner.fail('Error al compilar con cmake');
       throw new CMakeError(`Error al compilar con cmake`, {
         causeMessage: (err as Error).message,
         tmpDir,
@@ -367,6 +369,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
       if (found) {
         fs.copyFileSync(found, expectedBinary);
       } else {
+        spinner.fail('Binario compilado no encontrado');
         throw new CMakeError(
           `No se encontro el binario compilado. Se esperaba en: ${expectedBinary}`,
           { outputDir, targetName: outputBaseName, tmpDir },
@@ -379,7 +382,7 @@ export async function compileWithCMake(opts: CompileOptions): Promise<void> {
       fs.renameSync(expectedBinary, finalPath);
     }
 
-    logger.detail(`Binario generado: ${finalPath}`);
+    spinner.succeed(`Binario generado: ${path.basename(finalPath)}`);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
