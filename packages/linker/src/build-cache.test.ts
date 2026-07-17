@@ -4,10 +4,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { isBuildUpToDate, saveBuildManifest, getBuildCacheInfo, clearBuildCache } from './build-cache.js';
 
+function normalizeTestOutput(p: string): string {
+  if (process.platform === 'win32' && !p.toLowerCase().endsWith('.exe')) return p + '.exe';
+  return p;
+}
+
 describe('build-cache', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'build-cache-test-'));
   const wasmFile = path.join(tmpDir, 'test.wasm');
-  const outputFile = path.join(tmpDir, 'test-output-app');
+  const outputFile = normalizeTestOutput(path.join(tmpDir, 'test-output-app'));
 
   beforeEach(() => {
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });

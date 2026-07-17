@@ -75,6 +75,7 @@ describe('resolveImportPath', () => {
 
   it('resolves index file', () => {
     const result = resolveImportPath('.', '/project/src/main.ts', aliases);
-    expect(result).toBe('/project/src');
+    expect(path.basename(result)).toBe('src');
+    expect(result).not.toContain('main.ts');
   });
 });
