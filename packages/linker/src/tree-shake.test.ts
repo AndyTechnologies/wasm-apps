@@ -27,8 +27,8 @@ function typeSection(types: number[][]): { id: number; content: number[] } {
   content.push(...encodeU32(types.length));
   for (const t of types) {
     content.push(0x60);
-    content.push(...encodeU32(t[0])); // param count
-    content.push(...encodeU32(t[1])); // result count
+    content.push(...encodeU32(t[0]));
+    content.push(...encodeU32(t[1]));
   }
   return { id: 1, content };
 }
@@ -65,12 +65,32 @@ function codeSection(bodies: number[][]): { id: number; content: number[] } {
 }
 
 function simpleBody(calls: number[]): number[] {
-  const body: number[] = [0x00]; // 0 locals
+  const body: number[] = [0x00];
   for (const callee of calls) {
-    body.push(0x10); // call opcode
+    body.push(0x10);
     body.push(...encodeU32(callee));
   }
-  body.push(0x0b); // end
+  body.push(0x0b);
+  return body;
+}
+
+function bodyWithBlock(calls: number[]): number[] {
+  const body: number[] = [0x00];
+  body.push(0x02, 0x40); // block (empty result type)
+  for (const callee of calls) {
+    body.push(0x10);
+    body.push(...encodeU32(callee));
+  }
+  body.push(0x0b);
+  body.push(0x0b);
+  return body;
+}
+
+function largeBody(): number[] {
+  const body: number[] = [0x01, 0x01, 0x7f]; // 1 local i32
+  body.push(0x41, 0x2a); // i32.const 42
+  body.push(0x1a);       // drop
+  body.push(0x0b);
   return body;
 }
 
@@ -85,18 +105,19 @@ describe('treeShakeWasm', () => {
       codeSection([simpleBody([])]),
     ]);
     const result = treeShakeWasm(wasm);
-    expect(result.length).toBe(wasm.length);
+    expect(result).toBe(wasm);
   });
 
-  it('removes unreachable functions', () => {
+  it('replaces unreachable function bodies with minimal stubs', () => {
     const wasm = buildWasm([
       sharedTypes,
       funcSection([0, 0]),
       exportSection([{ name: 'main', kind: 0, index: 0 }]),
-      codeSection([simpleBody([]), simpleBody([])]),
+      codeSection([simpleBody([]), largeBody()]),
     ]);
     const result = treeShakeWasm(wasm);
     expect(result.length).toBeLessThan(wasm.length);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
   });
 
   it('keeps functions called from exports', () => {
@@ -104,11 +125,11 @@ describe('treeShakeWasm', () => {
       sharedTypes,
       funcSection([0, 0]),
       exportSection([{ name: 'main', kind: 0, index: 0 }]),
-      codeSection([simpleBody([1]), simpleBody([])]),
+      codeSection([simpleBody([1]), largeBody()]),
     ]);
     const result = treeShakeWasm(wasm);
-    // Keep both: main calls func1
-    expect(result.length).toBe(wasm.length);
+    expect(result).toBe(wasm);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
   });
 
   it('keeps functions called transitively', () => {
@@ -116,22 +137,23 @@ describe('treeShakeWasm', () => {
       sharedTypes,
       funcSection([0, 0, 0]),
       exportSection([{ name: 'main', kind: 0, index: 0 }]),
-      codeSection([simpleBody([1]), simpleBody([2]), simpleBody([])]),
+      codeSection([simpleBody([1]), simpleBody([2]), largeBody()]),
     ]);
     const result = treeShakeWasm(wasm);
-    expect(result.length).toBe(wasm.length);
+    expect(result).toBe(wasm);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
   });
 
-  it('removes only unreachable functions in complex graph', () => {
+  it('replaces only unreachable bodies in complex graph', () => {
     const wasm = buildWasm([
       sharedTypes,
       funcSection([0, 0, 0, 0]),
       exportSection([{ name: 'main', kind: 0, index: 0 }]),
-      codeSection([simpleBody([1]), simpleBody([]), simpleBody([]), simpleBody([])]),
+      codeSection([simpleBody([1]), largeBody(), largeBody(), largeBody()]),
     ]);
     const result = treeShakeWasm(wasm);
-    // Keep func0 and func1 (called by main). Remove func2 and func3.
     expect(result.length).toBeLessThan(wasm.length);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
   });
 
   it('handles wasm without export section', () => {
@@ -141,7 +163,7 @@ describe('treeShakeWasm', () => {
       codeSection([simpleBody([])]),
     ]);
     const result = treeShakeWasm(wasm);
-    expect(result).toEqual(wasm);
+    expect(result).toBe(wasm);
   });
 
   it('handles empty wasm', () => {
@@ -149,7 +171,7 @@ describe('treeShakeWasm', () => {
     expect(result).toEqual(new Uint8Array([]));
   });
 
-  it('produces valid WebAssembly module after tree-shaking', () => {
+  it('produces valid WebAssembly module when removing unreachable funcs', () => {
     const wasm = buildWasm([
       sharedTypes,
       funcSection([0, 0]),
@@ -171,30 +193,12 @@ describe('treeShakeWasm', () => {
     expect(() => new WebAssembly.Module(result)).not.toThrow();
   });
 
-  it('correctly remaps export indices after removal', () => {
+  it('handles block/if/loop structures without corrupting bytecode', () => {
     const wasm = buildWasm([
       sharedTypes,
-      funcSection([0, 0, 0]),
-      exportSection([
-        { name: 'main', kind: 0, index: 0 },
-        { name: 'unused', kind: 0, index: 2 },
-      ]),
-      codeSection([simpleBody([]), simpleBody([]), simpleBody([])]),
-    ]);
-    const result = treeShakeWasm(wasm);
-    const mod = new WebAssembly.Module(result);
-    const exports = WebAssembly.Module.exports(mod);
-    expect(exports).toHaveLength(2);
-    expect(exports[0].name).toBe('main');
-    expect(exports[1].name).toBe('unused');
-  });
-
-  it('rewrites call opcodes to correct indices', () => {
-    const wasm = buildWasm([
-      sharedTypes,
-      funcSection([0, 0, 0]),
+      funcSection([0, 0]),
       exportSection([{ name: 'main', kind: 0, index: 0 }]),
-      codeSection([simpleBody([2]), simpleBody([]), simpleBody([])]),
+      codeSection([bodyWithBlock([]), simpleBody([])]),
     ]);
     const result = treeShakeWasm(wasm);
     expect(() => new WebAssembly.Module(result)).not.toThrow();
@@ -210,5 +214,23 @@ describe('treeShakeWasm', () => {
     ]);
     const result = treeShakeWasm(wasm);
     expect(() => new WebAssembly.Module(result)).not.toThrow();
+  });
+
+  it('preserves all export indices', () => {
+    const wasm = buildWasm([
+      sharedTypes,
+      funcSection([0, 0, 0]),
+      exportSection([
+        { name: 'main', kind: 0, index: 0 },
+        { name: 'other', kind: 0, index: 2 },
+      ]),
+      codeSection([simpleBody([]), largeBody(), simpleBody([])]),
+    ]);
+    const result = treeShakeWasm(wasm);
+    const mod = new WebAssembly.Module(result);
+    const exports = WebAssembly.Module.exports(mod);
+    expect(exports).toHaveLength(2);
+    expect(exports[0].name).toBe('main');
+    expect(exports[1].name).toBe('other');
   });
 });
