@@ -1,5 +1,23 @@
 # @wasm-apps/linker
 
+## 1.3.0
+
+### Minor Changes
+
+- feat: test suite formal con vitest, tree-shaking WASM, CLI progress y wapp dev
+
+  - Tests: 15 suites, 129 tests con mocks para asc/wasmtime/cmake
+  - CLI progress: barras ora en compilación C++ y pipeline de linking
+  - Hot reload: nuevo comando `wapp dev` que recompila y relinkea al cambiar .wasm.ts
+  - Tree-shaking: DCE a nivel de funciones WASM vía call-graph desde exports
+  - Tree-shake plugin: built-in activo por defecto en PipelinePhase.BeforeCodeGen
+  - CI: separación test:unit / test:integration, scripts actualizados
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @wasm-apps/types@1.3.0
+
 ## 1.2.1
 
 ### Patch Changes
