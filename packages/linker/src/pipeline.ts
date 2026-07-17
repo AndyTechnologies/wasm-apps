@@ -7,23 +7,41 @@ interface HookEntry {
   phase: PipelinePhase;
 }
 
+function deepCloneContext(ctx: PipelineContext): PipelineContext {
+  return {
+    ...ctx,
+    wasmModules: ctx.wasmModules?.map((m) => ({ ...m, buffer: Buffer.from(m.buffer) })),
+    sourceFiles: ctx.sourceFiles?.map((f) => ({ ...f })),
+  };
+}
+
+/**
+ * Pipeline de fases del toolchain WASM.
+ *
+ * Permite que plugins se registren en fases específicas del pipeline
+ * (BeforeModuleCompile, AfterModuleCompile, BeforeCodeGen, etc.)
+ * y se ejecuten en orden durante el build.
+ */
 export class Pipeline {
   private hooks: HookEntry[] = [];
 
+  /** Registra un hook para una fase del pipeline. */
   register(phase: PipelinePhase, pluginId: string, hook: PipelineHook): void {
     this.hooks.push({ pluginId, hook, phase });
   }
 
+  /** Elimina todos los hooks de un plugin. */
   unregister(pluginId: string): void {
-    this.hooks = this.hooks.filter(h => h.pluginId !== pluginId);
+    this.hooks = this.hooks.filter((h) => h.pluginId !== pluginId);
   }
 
+  /** Ejecuta todos los hooks registrados para una fase específica. */
   async runPhase(phase: PipelinePhase, context: PipelineContext): Promise<PipelineContext> {
-    const phaseHooks = this.hooks.filter(h => h.phase === phase);
+    const phaseHooks = this.hooks.filter((h) => h.phase === phase);
     if (phaseHooks.length === 0) return context;
 
     logger.detail(`  Pipeline [${phase}]: ${phaseHooks.length} hook(s)`);
-    let currentContext = { ...context };
+    const currentContext = deepCloneContext(context);
     for (const entry of phaseHooks) {
       logger.detail(`    → ${entry.pluginId}`);
       await entry.hook(currentContext);
@@ -31,6 +49,7 @@ export class Pipeline {
     return currentContext;
   }
 
+  /** Ejecuta todos los hooks de todas las fases en orden. */
   async runAll(context: PipelineContext): Promise<PipelineContext> {
     const phases = Object.values(PipelinePhase);
     let currentContext = context;
@@ -40,9 +59,11 @@ export class Pipeline {
     return currentContext;
   }
 
+  /** Elimina todos los hooks registrados. */
   clear(): void {
     this.hooks = [];
   }
 }
 
+/** Instancia global singleton del pipeline usada en todo el toolchain. */
 export const pipeline = new Pipeline();

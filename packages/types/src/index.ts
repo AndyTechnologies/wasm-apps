@@ -4,17 +4,20 @@ import type { Logger as __Logger } from './logger.js';
 
 type Logger = __Logger;
 
+/** Una entrada de exportación WASM. */
 export interface WasmExport {
   name: string;
   kind: 'function' | 'memory' | 'table' | 'global';
 }
 
+/** Una entrada de importación WASM. */
 export interface WasmImport {
   module: string;
   name: string;
   kind: 'function' | 'memory' | 'table' | 'global';
 }
 
+/** Firma de tipos de una función importada. */
 export interface WasmImportFuncType {
   module: string;
   name: string;
@@ -22,26 +25,32 @@ export interface WasmImportFuncType {
   results: string[];
 }
 
+/** Metadatos de un módulo WASM parseado. */
 export interface WasmModuleInfo {
   fileName: string;
   buffer: Buffer;
   imports: WasmImport[];
   exports: WasmExport[];
+  importFuncTypes?: WasmImportFuncType[];
 }
 
+/** Estrategia para emparejar imports WASM con exports de otros módulos. */
 export type ModuleMatchingStrategy = 'name-only' | 'file-name';
 
+/** Un módulo en orden de dependencias resuelto con su índice de instancia. */
 export interface ResolvedModule {
   module: WasmModuleInfo;
   index: number;
   instanceName: string;
 }
 
+/** Resultado de la resolución de dependencias: orden de instanciación + mapa de exports. */
 export interface ResolvedLink {
   order: ResolvedModule[];
   exportMap: Map<string, { instance: string; name: string }>;
 }
 
+/** Definición de una función host a generar en C++. */
 export interface HostFuncDef {
   module: string;
   name: string;
@@ -50,14 +59,17 @@ export interface HostFuncDef {
   body: string;
 }
 
+/** Función generadora que produce el cuerpo C++ para una función host. */
 export type HostFunctionGenerator = (params: string[], results: string[]) => string;
 
+/** Una función host registrada con sus metadatos y generador de código. */
 export interface RegisteredHostFunction {
   module: string;
   name: string;
   generator: HostFunctionGenerator;
 }
 
+/** Opciones para crear un ejecutable nativo a partir de módulos WASM. */
 export interface NativeAppOptions {
   inputPaths: string[];
   output: string;
@@ -69,8 +81,10 @@ export interface NativeAppOptions {
   wasmtimePath?: string;
 }
 
+/** Variante del runtime de AssemblyScript. */
 export type AsRuntime = 'incremental' | 'minimal' | 'stub' | 'full';
 
+/** Opciones para compilar un archivo .wasm.ts. */
 export interface CompileOptions {
   fileName: string;
   sourceCode: string;
@@ -84,6 +98,7 @@ export interface CompileOptions {
   aliases?: ResolvedAlias[];
 }
 
+/** Resultado de una compilación exitosa. */
 export interface CompileResult {
   wasmBytes: Uint8Array;
   dtsContent: string;
@@ -93,16 +108,19 @@ export interface CompileResult {
   hash: string;
 }
 
+/** Un mapeo de alias para resolver rutas de importación. */
 export interface ResolvedAlias {
   find: string | RegExp;
   replacement: string;
 }
 
+/** Una declaración de exportación parseada de código AssemblyScript. */
 export interface ParsedExport {
   name: string;
   kind: 'function' | 'const' | 'class' | 'enum';
 }
 
+/** Configuración del compilador AssemblyScript (forma de asconfig.json). */
 export interface AsConfig {
   extends?: string;
   entries?: string[];
@@ -110,6 +128,7 @@ export interface AsConfig {
   targets?: Record<string, Record<string, any>>;
 }
 
+/** Configuración de alto nivel del proyecto (wapp.json). */
 export interface WappConfig {
   sourceDir?: string;
   outDir?: string;
@@ -134,6 +153,7 @@ export interface WappConfig {
   plugins?: PluginConfig[];
 }
 
+/** Especificación de un destino de compilación cruzada. */
 export interface CrossCompileTarget {
   name: string;
   triple: string;
@@ -142,6 +162,7 @@ export interface CrossCompileTarget {
   wasi?: boolean;
 }
 
+/** Fases del sistema de plugins del pipeline. */
 export enum PipelinePhase {
   BeforeModuleCompile = 'beforeModuleCompile',
   AfterModuleCompile = 'afterModuleCompile',
@@ -152,6 +173,7 @@ export enum PipelinePhase {
   AfterBundle = 'afterBundle',
 }
 
+/** Configuración para un plugin individual. */
 export interface PluginConfig {
   id: string;
   enabled: boolean;
@@ -159,6 +181,7 @@ export interface PluginConfig {
   config?: Record<string, unknown>;
 }
 
+/** Objeto de contexto que se pasa a través de las fases del pipeline. */
 export interface PipelineContext {
   sourceDir?: string;
   outDir?: string;
@@ -180,8 +203,10 @@ export interface PipelineContext {
   outputPath?: string;
 }
 
+/** Función hook del pipeline, síncrona o asíncrona. */
 export type PipelineHook = (context: PipelineContext) => Promise<void> | void;
 
+/** Contexto proporcionado a cada plugin al registrarse. */
 export interface PluginContext {
   hostFunctions: {
     register(module: string, name: string, generator: HostFunctionGenerator): void;
@@ -195,16 +220,19 @@ export interface PluginContext {
   logger: Logger;
 }
 
+/** Un plugin del toolchain WASM. */
 export interface WasmPlugin {
   id: string;
   register(ctx: PluginContext): void;
 }
 
+/** Un evento de vigilancia del sistema de archivos. */
 export interface WatchEvent {
   type: 'change' | 'add' | 'unlink';
   filePath: string;
 }
 
+/** Clase base para todos los errores del toolchain con un código legible por máquina. */
 export abstract class ToolchainError extends Error {
   constructor(
     message: string,
@@ -216,24 +244,28 @@ export abstract class ToolchainError extends Error {
   }
 }
 
+/** Error lanzado por el compilador AssemblyScript. */
 export class CompilerError extends ToolchainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'COMPILER_ERROR', details);
   }
 }
 
+/** Error lanzado por el linker (generación de binario nativo). */
 export class LinkerError extends ToolchainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'LINKER_ERROR', details);
   }
 }
 
+/** Error lanzado por el toolchain Zig (sin usar, reservado para uso futuro). */
 export class ZigError extends ToolchainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'ZIG_ERROR', details);
   }
 }
 
+/** Error lanzado durante operaciones de descarga HTTP. */
 export class DownloadError extends ToolchainError {
   constructor(
     message: string,
@@ -245,12 +277,14 @@ export class DownloadError extends ToolchainError {
   }
 }
 
+/** Error lanzado por CMake (compilación C++). */
 export class CMakeError extends ToolchainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'CMAKE_ERROR', details);
   }
 }
 
+/** Error lanzado al leer la configuración del CLI. */
 export class ConfigError extends ToolchainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'CONFIG_ERROR', details);

@@ -1,54 +1,60 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
-import type { ResolvedAlias, ParsedExport, AsConfig } from '@wasm-apps/types';
+import type { AsConfig, ResolvedAlias } from '@wasm-apps/types';
 
+/** Compara dos hashes SHA-256 para igualdad (comparación en tiempo constante). */
 export function compareHash(a: string, b: string): boolean {
-  return a === b;
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
-export function hashString(str: string): string {
-  return crypto.createHash('sha256').update(str).digest('hex');
+/** Calcula el resumen SHA-256 en hex de un string. */
+export function hashString(input: string): string {
+  return crypto.createHash('sha256').update(input, 'utf-8').digest('hex');
 }
 
-export function resolveImportPath(
-  importPath: string,
-  importer: string,
-  aliases: ResolvedAlias[],
-): string {
-  for (const alias of aliases) {
-    if (typeof alias.find === 'string' && importPath.startsWith(alias.find)) {
-      const rest = importPath.slice(alias.find.length);
-      return path.resolve(alias.replacement, rest);
-    }
-    if (alias.find instanceof RegExp && alias.find.test(importPath)) {
-      return importPath.replace(alias.find, alias.replacement);
+/**
+ * Resuelve la ruta de un import local, aplicando alias configurados.
+ * Si no encuentra alias, resuelve relativo al archivo fuente.
+ */
+export function resolveImportPath(importPath: string, sourceFile: string, aliases: ResolvedAlias[]): string {
+  if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
+    for (const alias of aliases) {
+      const pattern = typeof alias.find === 'string' ? alias.find : alias.find.source;
+      const resolvedAlias = importPath.replace(new RegExp(`^${pattern}`), alias.replacement);
+      if (resolvedAlias !== importPath) {
+        return resolvedAlias.endsWith('.ts') ? resolvedAlias : `${resolvedAlias}.ts`;
+      }
     }
   }
-
-  if (importPath.startsWith('.')) {
-    return path.resolve(path.dirname(importer), importPath);
-  }
-
-  return importPath;
+  const sourceDir = path.dirname(sourceFile);
+  const resolved = path.resolve(sourceDir, importPath);
+  return resolved.endsWith('.ts') ? resolved : `${resolved}.ts`;
 }
 
-export function mergeAsConfig(asConfig: AsConfig | null, target: 'debug' | 'release'): Record<string, any> {
-  if (!asConfig) return {};
-  const baseOptions = asConfig.options || {};
-  const targetOptions = asConfig.targets?.[target] || {};
-  return { ...baseOptions, ...targetOptions };
-}
-
-export function parseExports(dtsContent: string): ParsedExport[] {
-  const exports: ParsedExport[] = [];
-  const regex = /export\s+(?:declare\s+)?(?:function|const|let|var|class|enum|abstract\s+class)\s+(\w+)/g;
-  let match;
-  while ((match = regex.exec(dtsContent)) !== null) {
-    const name = match[1];
-    const kind = match[0].includes('function') ? 'function' :
-                 match[0].includes('class') ? 'class' :
-                 match[0].includes('enum') ? 'enum' : 'const';
-    exports.push({ name, kind });
+/** Extrae los nombres y tipos de las exportaciones de un source AssemblyScript. */
+export function parseExports(source: string): Array<{ name: string; kind: string }> {
+  const exports: Array<{ name: string; kind: string }> = [];
+  const exportRegex = /export\s+(function|class|const|enum)\s+(\w+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = exportRegex.exec(source)) !== null) {
+    exports.push({ name: match[2], kind: match[1] });
   }
   return exports;
+}
+
+/**
+ * Fusiona configuraciones de asconfig.json para un target específico.
+ * Aplica el orden: defaults → target override.
+ */
+export function mergeAsConfig(base: AsConfig, target: string): Record<string, any> {
+  const merged: Record<string, any> = {};
+  const defaults = base?.options || {};
+  const targetOpts = base?.targets?.[target as keyof typeof base.targets] || {};
+  Object.assign(merged, defaults, targetOpts);
+  return merged;
 }

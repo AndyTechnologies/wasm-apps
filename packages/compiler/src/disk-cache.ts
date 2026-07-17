@@ -1,170 +1,110 @@
-import crypto from 'node:crypto';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import type { CompileOptions, CompileResult } from '@wasm-apps/types';
+import { formatBytes } from '@wasm-apps/types';
 
-const CACHE_DIR_NAME = '.wapp_cache';
-const COMPILER_CACHE_NAME = 'compiler';
+const CACHE_DIR = path.join(process.cwd(), '.wapp_cache', 'compiler');
 
-function getCacheDirPath(rootDir?: string): string {
-  const base = rootDir || process.cwd();
-  return path.join(base, CACHE_DIR_NAME, COMPILER_CACHE_NAME);
-}
-
-function ensureCacheDir(rootDir?: string): string {
-  const dir = getCacheDirPath(rootDir);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
-
-function getCacheDir(rootDir?: string): string {
-  return getCacheDirPath(rootDir);
-}
-
-export function computeKey(sourceCode: string, options: CompileOptions): string {
-  const data = JSON.stringify({
-    s: sourceCode,
-    r: options.runtime,
-    d: options.isDev,
-    m: options.sourceMap,
-    o: options.optimizeLevel,
-    h: options.shrinkLevel,
+/**
+ * Calcula una clave de caché determinista a partir del código fuente + flags de compilación.
+ * La clave es un resumen SHA-256 en hex de la representación canónica.
+ */
+export function computeKey(
+  sourceCode: string,
+  opts: Partial<Pick<CompileOptions, 'isDev' | 'sourceMap' | 'optimizeLevel' | 'shrinkLevel' | 'runtime'>>,
+): string {
+  const canonical = JSON.stringify({
+    sourceCode,
+    isDev: opts.isDev ?? true,
+    sourceMap: opts.sourceMap ?? true,
+    optimizeLevel: opts.optimizeLevel ?? 3,
+    shrinkLevel: opts.shrinkLevel ?? 0,
+    runtime: opts.runtime ?? 'incremental',
   });
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
-interface CacheMetadata {
-  hash: string;
-  dependencies: string[];
-  hasSourceMap: boolean;
-  timestamp: number;
+interface CacheEntry {
+  result: CompileResult;
 }
 
-export function getCached(key: string, rootDir?: string): CompileResult | null {
-  const entryDir = path.join(getCacheDirPath(rootDir), key);
-  const metaPath = path.join(entryDir, 'result.json');
-  const wasmPath = path.join(entryDir, 'out.wasm');
-  const dtsPath = path.join(entryDir, 'out.d.ts');
-  const jsPath = path.join(entryDir, 'out.js');
+/** Carga un resultado de compilación de la caché de disco. Retorna null si no existe o está corrupto. */
+export function getCached(key: string): CompileResult | null {
+  const dirPath = path.join(CACHE_DIR, key);
+  const metaPath = path.join(dirPath, 'result.json');
+  const wasmPath = path.join(dirPath, 'out.wasm');
+  const dtsPath = path.join(dirPath, 'out.d.ts');
+  const bindingsPath = path.join(dirPath, 'out.js');
+  const mapPath = path.join(dirPath, 'out.wasm.map');
 
-  if (!fs.existsSync(metaPath) || !fs.existsSync(wasmPath) || !fs.existsSync(dtsPath) || !fs.existsSync(jsPath)) {
+  if (!fs.existsSync(metaPath) || !fs.existsSync(wasmPath) || !fs.existsSync(dtsPath) || !fs.existsSync(bindingsPath)) {
     return null;
   }
 
   try {
-    const meta: CacheMetadata = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    const meta: CacheEntry = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
     const wasmBytes = fs.readFileSync(wasmPath);
     const dtsContent = fs.readFileSync(dtsPath, 'utf-8');
-    const bindingsJs = fs.readFileSync(jsPath, 'utf-8');
-
-    let sourceMap: string | undefined;
-    if (meta.hasSourceMap) {
-      const mapPath = path.join(entryDir, 'out.wasm.map');
-      if (fs.existsSync(mapPath)) {
-        sourceMap = fs.readFileSync(mapPath, 'utf-8');
-      }
-    }
+    const bindingsJs = fs.readFileSync(bindingsPath, 'utf-8');
+    const sourceMap = fs.existsSync(mapPath) ? fs.readFileSync(mapPath, 'utf-8') : undefined;
 
     return {
+      ...meta.result,
       wasmBytes: new Uint8Array(wasmBytes),
       dtsContent,
       bindingsJs,
       sourceMap,
-      dependencies: meta.dependencies,
-      hash: meta.hash,
     };
   } catch {
     return null;
   }
 }
 
-export function saveToCache(key: string, result: CompileResult, rootDir?: string): void {
-  const entryDir = path.join(ensureCacheDir(rootDir), key);
-  if (!fs.existsSync(entryDir)) {
-    fs.mkdirSync(entryDir, { recursive: true });
-  }
+/** Persiste un resultado de compilación en la caché de disco. */
+export function saveToCache(key: string, result: CompileResult): void {
+  const dirPath = path.join(CACHE_DIR, key);
+  fs.mkdirSync(dirPath, { recursive: true });
 
-  const meta: CacheMetadata = {
-    hash: result.hash,
-    dependencies: result.dependencies,
-    hasSourceMap: !!result.sourceMap,
-    timestamp: Date.now(),
-  };
-
-  fs.writeFileSync(path.join(entryDir, 'result.json'), JSON.stringify(meta, null, 2), 'utf-8');
-  fs.writeFileSync(path.join(entryDir, 'out.wasm'), Buffer.from(result.wasmBytes));
-  fs.writeFileSync(path.join(entryDir, 'out.d.ts'), result.dtsContent, 'utf-8');
-  fs.writeFileSync(path.join(entryDir, 'out.js'), result.bindingsJs, 'utf-8');
-
+  const meta: CacheEntry = { result: { ...result, wasmBytes: undefined! } };
+  fs.writeFileSync(path.join(dirPath, 'result.json'), JSON.stringify(meta));
+  fs.writeFileSync(path.join(dirPath, 'out.wasm'), Buffer.from(result.wasmBytes));
+  fs.writeFileSync(path.join(dirPath, 'out.d.ts'), result.dtsContent);
+  fs.writeFileSync(path.join(dirPath, 'out.js'), result.bindingsJs);
   if (result.sourceMap) {
-    fs.writeFileSync(path.join(entryDir, 'out.wasm.map'), result.sourceMap, 'utf-8');
+    fs.writeFileSync(path.join(dirPath, 'out.wasm.map'), result.sourceMap);
   }
 }
 
-export function getCompileCacheInfo(rootDir?: string): { path: string; exists: boolean; size: number; humanSize: string; entries: number } {
-  const dir = getCacheDirPath(rootDir);
-  const exists = fs.existsSync(dir);
+interface CompileCacheInfo {
+  exists: boolean;
+  path: string;
+  size: number;
+  humanSize: string;
+  entries: number;
+}
 
-  if (!exists) {
-    return { path: dir, exists: false, size: 0, humanSize: '0 B', entries: 0 };
-  }
+/** Retorna estadísticas de uso de la caché: número de entradas y tamaño total en disco. */
+export function getCompileCacheInfo(): CompileCacheInfo {
+  if (!fs.existsSync(CACHE_DIR)) return { exists: false, path: CACHE_DIR, size: 0, humanSize: '0 B', entries: 0 };
 
-  let totalSize = 0;
-  let entryCount = 0;
-
-  try {
-    const entries = fs.readdirSync(dir);
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry);
-      if (fs.statSync(fullPath).isDirectory()) {
-        entryCount++;
-        totalSize += getDirSize(fullPath);
+  const entries = fs.readdirSync(CACHE_DIR);
+  let sizeBytes = 0;
+  for (const entry of entries) {
+    const entryPath = path.join(CACHE_DIR, entry);
+    if (fs.statSync(entryPath).isDirectory()) {
+      const files = fs.readdirSync(entryPath);
+      for (const file of files) {
+        sizeBytes += fs.statSync(path.join(entryPath, file)).size;
       }
     }
-  } catch {
-    // ignore
   }
-
-  return {
-    path: dir,
-    exists: true,
-    size: totalSize,
-    humanSize: formatBytes(totalSize),
-    entries: entryCount,
-  };
+  return { exists: true, path: CACHE_DIR, size: sizeBytes, humanSize: formatBytes(sizeBytes), entries: entries.length };
 }
 
-export function clearCompileCache(rootDir?: string): void {
-  const dir = getCacheDirPath(rootDir);
-  if (fs.existsSync(dir)) {
-    fs.rmSync(dir, { recursive: true, force: true });
+/** Elimina toda la caché de disco del compilador. */
+export function clearCompileCache(): void {
+  if (fs.existsSync(CACHE_DIR)) {
+    fs.rmSync(CACHE_DIR, { recursive: true, force: true });
   }
-}
-
-function getDirSize(dirPath: string): number {
-  let size = 0;
-  try {
-    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        size += getDirSize(fullPath);
-      } else if (entry.isFile()) {
-        size += fs.statSync(fullPath).size;
-      }
-    }
-  } catch {
-    // skip inaccessible
-  }
-  return size;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const val = bytes / Math.pow(1024, i);
-  return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
