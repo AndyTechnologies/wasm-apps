@@ -32,6 +32,7 @@ interface ParsedSection {
 
 interface ParsedCodeBody {
   localFuncIdx: number;
+  bsLen: number;
   bodyStart: number;
   bodyEnd: number;
   calledFuncs: Set<number>;
@@ -74,12 +75,12 @@ function parseCodeBodies(wasm: Uint8Array, sections: ParsedSection[], numLocalFu
 
   for (let i = 0; i < count && i < numLocalFuncs; i++) {
     const [bodySize, bsLen] = decodeLEB128(wasm, pos);
-    pos += bsLen;
-    const bodyStart = pos;
-    const bodyEnd = pos + bodySize;
+    const bodyStart = pos + bsLen;
+    const bodyEnd = bodyStart + bodySize;
 
-    const [localsCount] = decodeLEB128(wasm, pos);
-    let lPos = pos + decodeLEB128(wasm, pos)[1];
+    let lPos = bodyStart;
+    const [localsCount] = decodeLEB128(wasm, lPos);
+    lPos += decodeLEB128(wasm, lPos)[1];
     for (let l = 0; l < localsCount; l++) {
       const [declCount, dcLen] = decodeLEB128(wasm, lPos);
       lPos += dcLen + 1;
@@ -100,7 +101,7 @@ function parseCodeBodies(wasm: Uint8Array, sections: ParsedSection[], numLocalFu
       }
     }
 
-    bodies.push({ localFuncIdx: i, bodyStart, bodyEnd, calledFuncs });
+    bodies.push({ localFuncIdx: i, bsLen, bodyStart, bodyEnd, calledFuncs });
     pos = bodyEnd;
   }
 
@@ -186,9 +187,40 @@ function buildCallGraph(bodies: ParsedCodeBody[], importCount: number, exportedF
   return reachable;
 }
 
+function rewriteCallOpcodes(
+  wasm: Uint8Array,
+  bodyStart: number,
+  bodyEnd: number,
+  remapFuncIdx: (idx: number) => number,
+): number[] {
+  const result: number[] = [];
+  let ip = bodyStart;
+  while (ip < bodyEnd) {
+    const opcode = wasm[ip];
+    if (opcode === 0x10) {
+      const [oldIdx, len] = decodeLEB128(wasm, ip + 1);
+      const newIdx = remapFuncIdx(oldIdx);
+      result.push(opcode);
+      result.push(...encodeU32(newIdx >= 0 ? newIdx : 0));
+      ip += 1 + len;
+    } else if (opcode === 0x11) {
+      const [typeIdx, len] = decodeLEB128(wasm, ip + 1);
+      result.push(opcode);
+      result.push(...encodeU32(typeIdx));
+      ip += 1 + len;
+    } else {
+      result.push(opcode);
+      ip += 1;
+    }
+  }
+  return result;
+}
+
 /**
  * Tree-shakes a WASM module by removing unused functions.
- * Traces the call graph starting from exported functions.
+ * Traces the call graph starting from exported functions,
+ * then rewrites function, code, and export sections to
+ * only keep reachable functions.
  */
 export function treeShakeWasm(wasmBuffer: Uint8Array): Uint8Array {
   if (wasmBuffer.length < 8) return wasmBuffer;
@@ -224,6 +256,14 @@ export function treeShakeWasm(wasmBuffer: Uint8Array): Uint8Array {
     }
   }
 
+  function remapFuncIdx(absIdx: number): number {
+    if (absIdx < funcImportCount) return absIdx;
+    const localIdx = absIdx - funcImportCount;
+    const newLocal = oldToNewLocalIdx.get(localIdx);
+    if (newLocal === undefined) return -1;
+    return funcImportCount + newLocal;
+  }
+
   const result: number[] = [];
   result.push(...wasm.slice(0, 8));
 
@@ -234,24 +274,50 @@ export function treeShakeWasm(wasmBuffer: Uint8Array): Uint8Array {
       let pos = sec.contentStart + decodeLEB128(wasm, sec.contentStart)[1];
       for (let i = 0; i < localFuncCount; i++) {
         if (keptLocalFuncs.has(i)) {
-          const [typeIdx, tiLen] = decodeLEB128(wasm, pos);
+          const [typeIdx] = decodeLEB128(wasm, pos);
           content.push(...encodeU32(typeIdx));
         }
         pos += decodeLEB128(wasm, pos)[1];
       }
       const sizeBytes = encodeU32(content.length);
       result.push(3, ...sizeBytes, ...content);
+    } else if (sec.id === 7) {
+      const content: number[] = [];
+      let pos = sec.contentStart;
+      const [count] = decodeLEB128(wasm, pos);
+      content.push(...encodeU32(count));
+      pos += decodeLEB128(wasm, pos)[1];
+      for (let i = 0; i < count; i++) {
+        const [fieldLen] = decodeLEB128(wasm, pos);
+        const flLen = decodeLEB128(wasm, pos)[1];
+        pos += flLen;
+        content.push(...encodeU32(fieldLen));
+        content.push(...wasm.slice(pos, pos + fieldLen));
+        pos += fieldLen;
+        const kind = wasm[pos++];
+        content.push(kind);
+        if (kind === 0) {
+          const [oldIdx] = decodeLEB128(wasm, pos);
+          const newIdx = remapFuncIdx(oldIdx);
+          content.push(...encodeU32(newIdx >= 0 ? newIdx : 0));
+        } else {
+          const [idx] = decodeLEB128(wasm, pos);
+          content.push(...encodeU32(idx));
+        }
+        pos += decodeLEB128(wasm, pos)[1];
+      }
+      const sizeBytes = encodeU32(content.length);
+      result.push(7, ...sizeBytes, ...content);
     } else if (sec.id === 10) {
       const content: number[] = [];
       content.push(...encodeU32(oldToNewLocalIdx.size));
       for (let i = 0; i < localFuncCount; i++) {
         if (keptLocalFuncs.has(i)) {
-          const body = bodies.find(b => b.localFuncIdx === i);
-          if (body) {
-            const rawSize = body.bodyEnd - body.bodyStart;
-            const rawBytes = wasm.slice(body.bodyStart - 1, body.bodyEnd);
-            content.push(...rawBytes);
-          }
+          const body = bodies.find(b => b.localFuncIdx === i)!;
+          const rewrittenBody = rewriteCallOpcodes(wasm, body.bodyStart, body.bodyEnd, remapFuncIdx);
+          const bodySizeEncoded = encodeU32(rewrittenBody.length);
+          content.push(...bodySizeEncoded);
+          content.push(...rewrittenBody);
         }
       }
       const sizeBytes = encodeU32(content.length);

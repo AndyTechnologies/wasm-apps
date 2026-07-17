@@ -148,4 +148,55 @@ describe('treeShakeWasm', () => {
     const result = treeShakeWasm(new Uint8Array([]));
     expect(result).toEqual(new Uint8Array([]));
   });
+
+  it('produces valid WebAssembly module after tree-shaking', () => {
+    const wasm = buildWasm([
+      sharedTypes,
+      funcSection([0, 0]),
+      exportSection([{ name: 'main', kind: 0, index: 0 }]),
+      codeSection([simpleBody([]), simpleBody([])]),
+    ]);
+    const result = treeShakeWasm(wasm);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
+  });
+
+  it('preserves valid wasm for fully reachable graph', () => {
+    const wasm = buildWasm([
+      sharedTypes,
+      funcSection([0, 0]),
+      exportSection([{ name: 'main', kind: 0, index: 0 }]),
+      codeSection([simpleBody([1]), simpleBody([])]),
+    ]);
+    const result = treeShakeWasm(wasm);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
+  });
+
+  it('correctly remaps export indices after removal', () => {
+    const wasm = buildWasm([
+      sharedTypes,
+      funcSection([0, 0, 0]),
+      exportSection([
+        { name: 'main', kind: 0, index: 0 },
+        { name: 'unused', kind: 0, index: 2 },
+      ]),
+      codeSection([simpleBody([]), simpleBody([]), simpleBody([])]),
+    ]);
+    const result = treeShakeWasm(wasm);
+    const mod = new WebAssembly.Module(result);
+    const exports = WebAssembly.Module.exports(mod);
+    expect(exports).toHaveLength(2);
+    expect(exports[0].name).toBe('main');
+    expect(exports[1].name).toBe('unused');
+  });
+
+  it('rewrites call opcodes to correct indices', () => {
+    const wasm = buildWasm([
+      sharedTypes,
+      funcSection([0, 0, 0]),
+      exportSection([{ name: 'main', kind: 0, index: 0 }]),
+      codeSection([simpleBody([2]), simpleBody([]), simpleBody([])]),
+    ]);
+    const result = treeShakeWasm(wasm);
+    expect(() => new WebAssembly.Module(result)).not.toThrow();
+  });
 });
