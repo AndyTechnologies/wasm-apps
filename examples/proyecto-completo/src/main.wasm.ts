@@ -1,4 +1,4 @@
-import { add, multiply, fibonacci } from './math.wasm';
+import { add, multiply, fibonacci } from './math';
 
 function printMenu(): void {
   console.log('=== Calculadora WASM ===');
