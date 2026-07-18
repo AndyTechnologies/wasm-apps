@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.pnpm-store/
+.wapp_cache/
+.wapp_build/
+.wapp-cli/
+coverage/
+*.js.map
+*.tsbuildinfo
+CHANGELOG.md
+pnpm-lock.yaml

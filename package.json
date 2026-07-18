@@ -1,7 +1,7 @@
 {
   "name": "wasm-apps",
   "version": "1.0.0",
-  "description": "",
+  "description": "Toolchain que compila AssemblyScript a WebAssembly y lo enlaza en ejecutables nativos autocontenidos",
   "scripts": {
     "build": "pnpm -r build",
     "release": "pnpm build && pnpm test && pnpm -r publish",
@@ -9,21 +9,59 @@
     "linker": "node ./packages/linker/dist/cli.js",
     "cli": "node ./packages/cli/dist/cli.js",
     "test": "pnpm test:unit",
-    "lint": "pnpm -r build",
+    "lint": "pnpm -r build && prettier --check .",
+    "lint:fix": "pnpm -r build && prettier --write .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:tsc": "pnpm -r build",
     "test:unit": "vitest run",
     "test:integration": "node ./scripts/test-examples.mjs",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky",
+    "typecheck": "pnpm -r build",
+    "check": "pnpm lint && pnpm typecheck && pnpm test:unit"
   },
-  "keywords": [],
-  "author": "",
+  "lint-staged": {
+    "*.{ts,js,mjs}": [
+      "prettier --write"
+    ],
+    "*.{json,md,yaml,yml}": [
+      "prettier --write"
+    ]
+  },
+  "keywords": [
+    "wasm",
+    "webassembly",
+    "assemblyscript",
+    "native",
+    "toolchain"
+  ],
+  "author": "AndyTechnologies",
   "packageManager": "pnpm@11.10.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AndyTechnologies/wasm-apps.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AndyTechnologies/wasm-apps/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
+    "@typescript-eslint/parser": "^8.64.0",
+    "eslint": "^10.7.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.5.0",
+    "prettier": "^3.5.0",
     "typescript": "^7.0.2",
+    "typescript-eslint": "^8.64.0",
     "vitest": "^4.1.10"
   }
 }

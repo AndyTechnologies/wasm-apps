@@ -45,6 +45,12 @@ temp/
 # Coverage
 coverage/
 
+# Agent workspace
+.opencode/
+
+# Graphify knowledge graph
+graphify-out/
+
 # Scratch / notes
 *.todo
 todo.*
