@@ -89,12 +89,20 @@ export async function compileWasm(
   }
 
   const { error, stderr, stdout } = await asc.main(baseArgs, {
-    readFile: (name: string) => {
+    readFile: (name: string, baseDir: string) => {
       const normalizedReadName = path.resolve(name);
       const normalizedFileName = path.resolve(opts.fileName);
       if (normalizedReadName === normalizedFileName) return opts.sourceCode;
       if (name === 'asconfig.json') return null;
-      const resolved = resolveImportPath(name, opts.fileName, opts.aliases || []);
+      let resolved: string;
+      if (name.startsWith('.')) {
+        resolved = resolveImportPath(name, opts.fileName, opts.aliases || []);
+      } else {
+        resolved = path.isAbsolute(name) ? name : path.resolve(baseDir || path.dirname(opts.fileName), name);
+        if (!resolved.endsWith('.ts') && !resolved.endsWith('.wasm.ts')) {
+          resolved += '.ts';
+        }
+      }
       let content = readFileFromDisk(resolved);
       if (content === null && !resolved.endsWith('.wasm.ts')) {
         content = readFileFromDisk(resolved.replace(/\.ts$/, '.wasm.ts'));
