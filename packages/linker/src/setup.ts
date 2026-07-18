@@ -37,6 +37,8 @@ export async function setupWasmtime(wasmtimePath?: string, ignoreCache?: boolean
     cache.clear();
   }
 
+  fs.mkdirSync(cacheDir, { recursive: true });
+
   const { url, fileName } = getWasmtimeAsset(WASMTIME_VERSION);
   const archivePath = path.join(cacheDir, fileName);
 
