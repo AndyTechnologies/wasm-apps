@@ -7,8 +7,8 @@ function makeModule(name: string, exportsList: string[], importsList: Array<{ mo
   return {
     fileName: `/path/to/${name}.wasm`,
     buffer: Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]),
-    exports: exportsList.map(e => ({ name: e, kind: 'function' as const })),
-    imports: importsList.map(i => ({ module: i.module, name: i.name, kind: (i.kind || 'function') as any })),
+    exports: exportsList.map((e) => ({ name: e, kind: 'function' as const })),
+    imports: importsList.map((i) => ({ module: i.module, name: i.name, kind: (i.kind || 'function') as any })),
   };
 }
 
@@ -103,9 +103,7 @@ describe('generateCCode', () => {
   it('generates host function definitions for env imports', () => {
     const mod = makeModule('test', ['_start'], [{ module: 'env', name: 'abort' }]);
     const link = makeResolved([mod]);
-    const code = generateCCode(link, '_start', false, [
-      { module: 'env', name: 'abort', params: ['i32', 'i32', 'i32', 'i32'], results: [] },
-    ]);
+    const code = generateCCode(link, '_start', false, [{ module: 'env', name: 'abort', params: ['i32', 'i32', 'i32', 'i32'], results: [] }]);
     expect(code).toContain('env');
     expect(code).toContain('abort');
   });

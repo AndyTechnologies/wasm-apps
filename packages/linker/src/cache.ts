@@ -1,77 +1,84 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import fs from 'node:fs';
-import { logger } from '@wasm-apps/types';
+import { formatBytes } from '@wasm-apps/types';
 
-export function cacheRootDir(): string {
-  const newDir = path.join(os.homedir(), '.wasm-linker');
-  if (!fs.existsSync(newDir)) {
-    const oldDir = path.join(os.homedir(), '.wapp');
-    if (fs.existsSync(oldDir)) {
-      return oldDir;
-    }
-  }
-  return newDir;
+export interface CacheSummary {
+  sizeBytes: number;
+  fileCount: number;
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const val = bytes / Math.pow(1024, i);
-  return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function getDirSize(dir: string): number {
-  let size = 0;
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        size += getDirSize(fullPath);
-      } else if (entry.isFile()) {
-        size += fs.statSync(fullPath).size;
-      }
-    }
-  } catch {
-    // skip inaccessible
-  }
-  return size;
-}
-
-export async function getCacheInfo(): Promise<{
-  path: string;
+export interface CacheInfo {
   exists: boolean;
+  path: string;
   size: number;
   humanSize: string;
   entries: string[];
-}> {
-  const root = cacheRootDir();
-  const exists = fs.existsSync(root);
-
-  if (!exists) {
-    return { path: root, exists: false, size: 0, humanSize: '0 B', entries: [] };
-  }
-
-  const size = getDirSize(root);
-  const entries = fs.readdirSync(root).flatMap(entry => {
-    const full = path.join(root, entry);
-    if (fs.statSync(full).isDirectory()) {
-      return fs.readdirSync(full).map(sub => path.join(entry, sub));
-    }
-    return [entry];
-  });
-
-  return { path: root, exists: true, size, humanSize: formatBytes(size), entries };
 }
 
-export async function clearCache(): Promise<void> {
-  const root = cacheRootDir();
-  if (fs.existsSync(root)) {
-    fs.rmSync(root, { recursive: true, force: true });
-    logger.success(`Cache eliminado: ${root}`);
-  } else {
-    logger.info('No hay cache que eliminar.');
+/**
+ * Gestiona la caché global de descargas en ~/.wasm-linker/.
+ *
+ * Almacena los archivos descargados (Wasmtime C-API tar.xz/zip)
+ * y los directorios extraídos.
+ */
+export class CacheManager {
+  private cacheDir: string;
+
+  constructor(cacheDir: string) {
+    this.cacheDir = cacheDir;
   }
+
+  exists(): boolean {
+    return fs.existsSync(this.cacheDir);
+  }
+
+  summarize(): CacheSummary {
+    if (!this.exists()) return { sizeBytes: 0, fileCount: 0 };
+
+    let sizeBytes = 0;
+    let fileCount = 0;
+
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir)) {
+        const fullPath = path.join(dir, entry);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          walk(fullPath);
+        } else {
+          sizeBytes += stat.size;
+          fileCount++;
+        }
+      }
+    };
+
+    walk(this.cacheDir);
+    return { sizeBytes, fileCount };
+  }
+
+  clear(): void {
+    if (this.exists()) {
+      fs.rmSync(this.cacheDir, { recursive: true, force: true });
+    }
+  }
+}
+
+const cacheDir = path.join(os.homedir(), '.wasm-linker');
+const manager = new CacheManager(cacheDir);
+
+/** Retorna información detallada sobre la caché de descargas. */
+export async function getCacheInfo(): Promise<CacheInfo> {
+  const summary = manager.summarize();
+  return {
+    exists: manager.exists(),
+    path: cacheDir,
+    size: summary.sizeBytes,
+    humanSize: formatBytes(summary.sizeBytes),
+    entries: fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir) : [],
+  };
+}
+
+/** Limpia toda la caché de descargas. */
+export async function clearCache(): Promise<void> {
+  manager.clear();
 }

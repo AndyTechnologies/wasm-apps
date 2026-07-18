@@ -2,6 +2,17 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { formatBytes } from '@wasm-apps/types';
+
+function pathsEqual(a: string, b: string): boolean {
+  const resolvedA = path.resolve(a);
+  const resolvedB = path.resolve(b);
+  if (process.platform === 'win32') {
+    return resolvedA.toLowerCase() === resolvedB.toLowerCase();
+  }
+  return resolvedA === resolvedB;
+}
+
 function normalizeOutput(output: string): string {
   if (process.platform === 'win32' && !output.toLowerCase().endsWith('.exe')) {
     return output + '.exe';
@@ -66,6 +77,10 @@ function saveManifest(manifest: BuildManifest, rootDir?: string): void {
   fs.writeFileSync(getManifestPath(rootDir), JSON.stringify(manifest, null, 2) + os.EOL, 'utf-8');
 }
 
+/**
+ * Comprueba si el build está actualizado comparando los archivos WASM, salida y opciones
+ * contra el manifiesto de build almacenado.
+ */
 export async function isBuildUpToDate(
   wasmFiles: string[],
   output: string,
@@ -95,7 +110,7 @@ export async function isBuildUpToDate(
 
   if (manifest.wasmFiles.length !== wasmFiles.length) return false;
   for (let i = 0; i < wasmFiles.length; i++) {
-    if (path.resolve(manifest.wasmFiles[i].path) !== path.resolve(wasmFiles[i])) return false;
+    if (!pathsEqual(manifest.wasmFiles[i].path, wasmFiles[i])) return false;
     if (manifest.wasmFiles[i].contentHash !== fileHash(wasmFiles[i])) return false;
   }
 
@@ -105,6 +120,9 @@ export async function isBuildUpToDate(
   return true;
 }
 
+/**
+ * Guarda el manifiesto de build en disco para futuras comprobaciones de build incremental.
+ */
 export function saveBuildManifest(
   wasmFiles: string[],
   output: string,
@@ -119,7 +137,7 @@ export function saveBuildManifest(
   rootDir?: string,
 ): void {
   output = normalizeOutput(output);
-  const wasmEntries = wasmFiles.map(f => ({
+  const wasmEntries = wasmFiles.map((f) => ({
     path: path.resolve(f),
     contentHash: fileHash(f),
   }));
@@ -142,6 +160,7 @@ export function saveBuildManifest(
   saveManifest(manifest, rootDir);
 }
 
+/** Retorna información de la caché de build: ruta, tamaño y número de entradas. */
 export function getBuildCacheInfo(rootDir?: string): { path: string; exists: boolean; size: number; humanSize: string; entries: number } {
   const dir = getBuildDir(rootDir);
   if (!fs.existsSync(dir)) {
@@ -163,7 +182,7 @@ export function getBuildCacheInfo(rootDir?: string): { path: string; exists: boo
       }
     }
   } catch {
-    // ignore
+    // ignorar
   }
 
   return {
@@ -175,6 +194,7 @@ export function getBuildCacheInfo(rootDir?: string): { path: string; exists: boo
   };
 }
 
+/** Elimina el directorio de build y su contenido. */
 export function clearBuildCache(rootDir?: string): void {
   const dir = getBuildDir(rootDir);
   if (fs.existsSync(dir)) {
@@ -195,15 +215,7 @@ function dirSize(dirPath: string): number {
       }
     }
   } catch {
-    // skip inaccessible
+    // saltar inaccesibles
   }
   return size;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const val = bytes / Math.pow(1024, i);
-  return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }

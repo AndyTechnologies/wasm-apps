@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  ToolchainError,
-  CompilerError,
-  LinkerError,
-  DownloadError,
-  CMakeError,
-  ConfigError,
-} from './index.js';
+import { ToolchainError, CompilerError, LinkerError, DownloadError, CMakeError, ConfigError } from './index.js';
 
 describe('ToolchainError', () => {
   it('creates with message and code', () => {

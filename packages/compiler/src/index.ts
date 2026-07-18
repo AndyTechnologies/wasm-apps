@@ -62,13 +62,7 @@ export async function compileWasm(
   const target = opts.isDev ? 'debug' : 'release';
   const configOptions = mergeAsConfig({}, target);
 
-  const baseArgs = [
-    opts.fileName,
-    '--runtime', opts.runtime || 'incremental',
-    '--exportRuntime',
-    '--bindings', 'raw',
-    '--outFile', 'out.wasm',
-  ];
+  const baseArgs = [opts.fileName, '--runtime', opts.runtime || 'incremental', '--exportRuntime', '--bindings', 'raw', '--outFile', 'out.wasm'];
 
   if (opts.isDev) {
     baseArgs.push('--debug');
@@ -94,31 +88,40 @@ export async function compileWasm(
     }
   }
 
-  const { error, stderr, stdout } = await asc.main(
-    baseArgs,
-    {
-      readFile: (name: string) => {
-        const normalizedReadName = path.resolve(name);
-        const normalizedFileName = path.resolve(opts.fileName);
-        if (normalizedReadName === normalizedFileName) return opts.sourceCode;
-        if (name === 'asconfig.json') return null;
-        const resolved = resolveImportPath(name, opts.fileName, opts.aliases || []);
-        return readFileFromDisk(resolved);
-      },
-      writeFile: (name: string, contents: string | Uint8Array) => {
-        if (name === 'out.wasm') {
-          wasmBytes = contents as Uint8Array;
-        } else if (name === 'out.js') {
-          bindingsJs = contents as string;
-        } else if (name === 'out.d.ts') {
-          dtsContent = contents as string;
-        } else if (name === 'out.wasm.map') {
-          sourceMap = contents as string;
+  const { error, stderr, stdout } = await asc.main(baseArgs, {
+    readFile: (name: string, baseDir: string) => {
+      const normalizedReadName = path.resolve(name);
+      const normalizedFileName = path.resolve(opts.fileName);
+      if (normalizedReadName === normalizedFileName) return opts.sourceCode;
+      if (name === 'asconfig.json') return null;
+      let resolved: string;
+      if (name.startsWith('.')) {
+        resolved = resolveImportPath(name, opts.fileName, opts.aliases || []);
+      } else {
+        resolved = path.isAbsolute(name) ? name : path.resolve(baseDir || path.dirname(opts.fileName), name);
+        if (!resolved.endsWith('.ts') && !resolved.endsWith('.wasm.ts')) {
+          resolved += '.ts';
         }
-      },
-      listFiles: () => [],
+      }
+      let content = readFileFromDisk(resolved);
+      if (content === null && !resolved.endsWith('.wasm.ts')) {
+        content = readFileFromDisk(resolved.replace(/\.ts$/, '.wasm.ts'));
+      }
+      return content;
     },
-  );
+    writeFile: (name: string, contents: string | Uint8Array) => {
+      if (name === 'out.wasm') {
+        wasmBytes = contents as Uint8Array;
+      } else if (name === 'out.js') {
+        bindingsJs = contents as string;
+      } else if (name === 'out.d.ts') {
+        dtsContent = contents as string;
+      } else if (name === 'out.wasm.map') {
+        sourceMap = contents as string;
+      }
+    },
+    listFiles: () => [],
+  });
 
   const stderrStr = stderr?.toString() || '';
   const stdoutStr = stdout?.toString() || '';

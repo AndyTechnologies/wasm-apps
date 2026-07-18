@@ -1,11 +1,7 @@
 const WASM_MAGIC = 0x6d736100;
 const CUSTOM_SECTION_ID = 0;
 
-const STRIP_SECTIONS = new Set([
-  'name',
-  'producers',
-  'sourceMappingURL',
-]);
+const STRIP_SECTIONS = new Set(['name', 'producers', 'sourceMappingURL']);
 
 function decodeLEB128(bytes: Uint8Array, offset: number): [number, number] {
   let result = 0;

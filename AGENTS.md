@@ -69,6 +69,7 @@ pnpm run test                         # Build + ejecutar binario
 ## Caché incremental
 
 ### Compiler cache (`.wapp_cache/compiler/`)
+
 - **Ubicación**: proyecto-local, dentro de `.wapp_cache/compiler/`
 - **Clave**: SHA-256 de `{sourceCode, runtime, isDev, sourceMap, optimizeLevel, shrinkLevel}`
 - **Almacenamiento**: un directorio por clave con `result.json`, `out.wasm`, `out.d.ts`, `out.js`, `out.wasm.map`
@@ -77,6 +78,7 @@ pnpm run test                         # Build + ejecutar binario
 - **Archivo clave**: `packages/compiler/src/disk-cache.ts`
 
 ### Linker build cache (`.wapp_build/build-manifest.json`)
+
 - **Ubicación**: proyecto-local, dentro de `.wapp_build/build-manifest.json`
 - **Manifiesto**: contiene hashes de todos los `.wasm` de entrada + opciones (entry, target, wasi, moduleMatching, wasmtimePath, wasmtimeVersion) + hash del binario generado
 - **Invalidación**: cualquier cambio en `.wasm` o en opciones regenera el binario
@@ -84,6 +86,7 @@ pnpm run test                         # Build + ejecutar binario
 - **Archivo clave**: `packages/linker/src/build-cache.ts`
 
 ### Download cache (`~/.wasm-linker/`)
+
 - **Ubicación**: global en `~/.wasm-linker/`
 - **Contenido**: Wasmtime C-API descargada
 - **Gestión**: `wapp cache clear` la elimina; `wapp setup` la regenera
@@ -92,19 +95,23 @@ pnpm run test                         # Build + ejecutar binario
 ## Convenciones de código
 
 ### TypeScript
+
 - `"type": "module"` en todos los packages → usar `import`/`export` ESM
-- Extensiones `.js` en imports locales: `import { foo } from './bar.js'` (aunque el源码 sea `.ts`)
+- Extensiones `.js` en imports locales: `import { foo } from './bar.js'` (aunque el código fuente sea `.ts`)
 - Sin sintaxis `require()`; usar `import` siempre
 - `node:` prefix para módulos built-in: `import path from 'node:path'`
 
 ### Nombrado
+
 - `camelCase` para funciones y variables
 - `PascalCase` para tipos, interfaces, clases
 - Archivos: `kebab-case.ts`
 - CLI commands: `snake-case` (e.g., `--source-dir`, `--optimize-level`)
 
 ### Errores
+
 Usar las clases de error en `@wasm-apps/types`:
+
 - `CompilerError` — errores del compilador AS
 - `LinkerError` — errores del linker
 - `ConfigError` — errores de configuración
@@ -112,14 +119,16 @@ Usar las clases de error en `@wasm-apps/types`:
 - `DownloadError` — errores de descarga
 
 ### Logging
+
 Usar `logger` de `@wasm-apps/types`:
+
 ```ts
-logger.info(msg)      // cyan
-logger.success(msg)   // green
-logger.warn(msg)      // yellow
-logger.error(msg)     // red
-logger.step(msg)      // bold blue
-logger.detail(msg)    // dim
+logger.info(msg); // cyan
+logger.success(msg); // green
+logger.warn(msg); // yellow
+logger.error(msg); // red
+logger.step(msg); // bold blue
+logger.detail(msg); // dim
 ```
 
 ## Flujo de trabajo (Git / CI / Release)
@@ -133,6 +142,7 @@ logger.detail(msg)    // dim
 ### CI
 
 El workflow `ci.yml` se ejecuta en **push a `dev`** y en **PR hacia `main`**:
+
 - Matriz: `ubuntu-latest`, `windows-latest`, `macos-latest`
 - Node 24 con pnpm
 - Pasos: `lint` → `build` → `test`
@@ -164,6 +174,7 @@ main ──> Release workflow
 ```
 
 ### Testing
+
 ```bash
 pnpm run test    # Build + ejecuta binario compilado
 ```
@@ -183,6 +194,7 @@ Los 4 paquetes se versionan juntos (fixed group). Acceso público, OIDC/Trusted 
 ## Documentación
 
 Diátaxis en `docs/`:
+
 - `docs/tutorial/getting-started.md` — Primeros pasos
 - `docs/how-to/` — Guías (configurar, cross-compile, caché)
 - `docs/reference/` — CLI, config, host API
@@ -193,24 +205,28 @@ Diátaxis en `docs/`:
 Este proyecto debe funcionar en **Linux**, **macOS** y **Windows**.
 
 ### Rutas de archivo
+
 - Usar SIEMPRE `path.join()`, `path.resolve()`, `path.basename()`, `path.parse()`
 - NUNCA concatenar strings con `/` o `\`
 - NUNCA usar `split('/')` o `replace()` para manipular separadores de ruta
 - Normalizar con `path.normalize()` cuando se reciban paths de fuentes externas (callbacks de `fs.watch`, input de usuario)
 
 ### Ejecución de comandos
+
 - Usar `cross-spawn` para `spawn()` (import from `cross-spawn`)
 - Para exec sincrónico simple: `child_process.execFileSync()` (evita el shell)
 - Añadir `.exe` en Windows: `process.platform === 'win32' ? '.exe' : ''`
 - Envolver `process.on('SIGINT'/'SIGTERM')` con `if (process.platform !== 'win32')`
 
 ### Platform detection
+
 - Usar `process.platform` o `os.platform()` (devuelven `'win32'`, `'darwin'`, `'linux'`)
 - Para binarios: `process.platform === 'win32'` para decidir extensión
 - Para rutas de caché: `os.homedir()` para directorio home
 - Para temp: `os.tmpdir()` — NUNCA `/tmp`
 
 ### Linting implícito
+
 - `fs.mkdirSync` con `{ recursive: true }` para crear directorios
 - `fs.rmSync` con `{ recursive: true, force: true }` para eliminar directorios
 - Evitar `fs.chmod`/`fs.chown` (no portables)
@@ -221,6 +237,7 @@ Este proyecto debe funcionar en **Linux**, **macOS** y **Windows**.
 Formato: `tipo(scope): mensaje en español`
 
 Tipos:
+
 - `feat` — nueva funcionalidad
 - `fix` — corrección
 - `chore` — tareas de mantenimiento
@@ -230,6 +247,7 @@ Tipos:
 Scope: `compiler`, `linker`, `cli`, `root`, `types`
 
 Ejemplos:
+
 ```
 feat(compiler): caché de disco proyecto-local para compilación incremental
 fix(linker): usar path.parse() en vez de split('/') para rutas Windows
@@ -237,22 +255,23 @@ chore: ignorar .wapp_cache/ en gitignore
 ```
 
 Antes de cada commit:
+
 1. `pnpm -r build` debe pasar sin errores
 2. Verificar que el binario se ejecute (`pnpm run test` si aplica)
 
 ## Dependencias clave
 
-| Paquete | Propósito |
-|---------|-----------|
+| Paquete          | Propósito                                          |
+| ---------------- | -------------------------------------------------- |
 | `assemblyscript` | Compilador AS → WASM (usado como librería, no CLI) |
-| `commander` | CLI argument parsing |
-| `cmake-js` | Integración CMake con Node.js |
-| `cross-spawn` | Spawn multiplataforma |
-| `picocolors` | Colores en terminal |
-| `command-exists` | Detectar binarios en PATH |
-| `ora` | Spinners de terminal |
-| `glob` | Búsqueda de archivos con glob patterns |
-| `tar` | Extracción de archivos tar |
+| `commander`      | CLI argument parsing                               |
+| `cmake-js`       | Integración CMake con Node.js                      |
+| `cross-spawn`    | Spawn multiplataforma                              |
+| `picocolors`     | Colores en terminal                                |
+| `command-exists` | Detectar binarios en PATH                          |
+| `ora`            | Spinners de terminal                               |
+| `glob`           | Búsqueda de archivos con glob patterns             |
+| `tar`            | Extracción de archivos tar                         |
 
 ## Estructura del wapp.json
 
@@ -295,3 +314,17 @@ Antes de cada commit:
 
 **Q**: ¿Qué debo tener en cuenta para Windows?
 **A**: Ver sección "Reglas multiplataforma" arriba. Atención especial a: separadores de ruta, extensión `.exe`, comandos shell, y signals.
+
+## graphify
+
+Este proyecto tiene un grafo de conocimiento en graphify-out/ con nodos god, estructura de comunidades y relaciones entre archivos.
+
+Cuando el usuario escriba `/graphify`, usa la skill o instrucciones de graphify instaladas antes de hacer cualquier otra cosa.
+
+Reglas:
+
+- Para preguntas sobre el código, ejecuta primero `graphify query "<pregunta>"` cuando exista graphify-out/graph.json. Usa `graphify path "<A>" "<B>"` para relaciones y `graphify explain "<concepto>"` para conceptos específicos. Estos devuelven un subgrafo acotado, normalmente mucho más pequeño que GRAPH_REPORT.md o la salida cruda de grep.
+- Los archivos sucios en graphify-out/ son esperables tras hooks o actualizaciones incrementales; los archivos sucios no son razón para saltarse graphify. Solo salta graphify si la tarea trata sobre salida incorrecta o desactualizada del grafo, o si el usuario dice explícitamente que no lo uses.
+- Si existe graphify-out/wiki/index.md, úsalo para navegación general en vez de exploración directa del código fuente.
+- Lee graphify-out/GRAPH_REPORT.md solo para revisión general de arquitectura o cuando query/path/explain no proporcionen suficiente contexto.
+- Después de modificar código, ejecuta `graphify update .` para mantener el grafo actualizado (solo AST, sin costo de API).

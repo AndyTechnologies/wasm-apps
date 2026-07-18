@@ -6,14 +6,14 @@ El linker soporta compilación cruzada para diferentes arquitecturas y sistemas 
 
 Instala el toolchain cruzado necesario para tu destino:
 
-| Destino | Tripleta | Toolchain |
-|---|---|---|
-| Linux x86_64 | `x86_64-linux-gnu` | `gcc-x86-64-linux-gnu` |
-| Linux ARM64 | `aarch64-linux-gnu` | `gcc-aarch64-linux-gnu` |
-| macOS x86_64 | `x86_64-macos` | osxcross |
-| macOS ARM64 | `aarch64-macos` | osxcross |
-| Windows (MinGW) | `x86_64-windows` | `gcc-mingw-w64-x86-64` |
-| Windows (MSVC) | `x86_64-windows-msvc` | Clang + LLD |
+| Destino         | Tripleta              | Toolchain               |
+| --------------- | --------------------- | ----------------------- |
+| Linux x86_64    | `x86_64-linux-gnu`    | `gcc-x86-64-linux-gnu`  |
+| Linux ARM64     | `aarch64-linux-gnu`   | `gcc-aarch64-linux-gnu` |
+| macOS x86_64    | `x86_64-macos`        | osxcross                |
+| macOS ARM64     | `aarch64-macos`       | osxcross                |
+| Windows (MinGW) | `x86_64-windows`      | `gcc-mingw-w64-x86-64`  |
+| Windows (MSVC)  | `x86_64-windows-msvc` | Clang + LLD             |
 
 ## Compilación cruzada de x86_64 a ARM64
 

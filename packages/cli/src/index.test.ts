@@ -137,9 +137,7 @@ describe('buildProject', () => {
 
     expect(compileWasm).toHaveBeenCalledOnce();
     expect(createNativeApp).toHaveBeenCalledOnce();
-    expect(createNativeApp).toHaveBeenCalledWith(
-      expect.objectContaining({ entry: '_start', wasi: false }),
-    );
+    expect(createNativeApp).toHaveBeenCalledWith(expect.objectContaining({ entry: '_start', wasi: false }));
   });
 
   it('passes wasi flag to createNativeApp', async () => {
@@ -150,23 +148,25 @@ describe('buildProject', () => {
       rootDir: tmpDir,
     });
 
-    expect(createNativeApp).toHaveBeenCalledWith(
-      expect.objectContaining({ wasi: true }),
-    );
+    expect(createNativeApp).toHaveBeenCalledWith(expect.objectContaining({ wasi: true }));
   });
 
   it('throws when source dir does not exist', async () => {
     const badDir = path.join(tmpDir, 'nonexistent');
-    await expect(buildProject({
-      rootDir: tmpDir,
-      sourceDir: badDir,
-    })).rejects.toThrow('no existe');
+    await expect(
+      buildProject({
+        rootDir: tmpDir,
+        sourceDir: badDir,
+      }),
+    ).rejects.toThrow('no existe');
   });
 
   it('throws when no .wasm.ts files found', async () => {
     (glob as any).mockResolvedValue([]);
-    await expect(buildProject({
-      rootDir: tmpDir,
-    })).rejects.toThrow('No se encontraron archivos');
+    await expect(
+      buildProject({
+        rootDir: tmpDir,
+      }),
+    ).rejects.toThrow('No se encontraron archivos');
   });
 });

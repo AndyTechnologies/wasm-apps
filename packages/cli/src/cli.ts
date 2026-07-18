@@ -6,10 +6,7 @@ import path from 'node:path';
 
 const program = new Command();
 
-program
-  .name('wapp')
-  .description('Compila y linkea proyectos AssemblyScript en ejecutables nativos')
-  .version('1.0.0');
+program.name('wapp').description('Compila y linkea proyectos AssemblyScript en ejecutables nativos').version('1.0.0');
 
 program
   .command('init')
@@ -108,9 +105,7 @@ program
     }
   });
 
-const cacheCmd = program
-  .command('cache')
-  .description('Gestiona la cache de descargas y compilacion');
+const cacheCmd = program.command('cache').description('Gestiona la cache de descargas y compilacion');
 
 cacheCmd
   .command('info')

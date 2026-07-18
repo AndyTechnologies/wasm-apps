@@ -56,7 +56,7 @@ function factorial(n: number): number {
 }
 
 export function _start(): void {
-  console.log("¡Hola desde AssemblyScript!");
+  console.log('¡Hola desde AssemblyScript!');
   for (let i = 1; i <= 10; i++) {
     console.log(`factorial(${i}) = ${factorial(i)}`);
   }
@@ -65,19 +65,26 @@ export function _start(): void {
 
 `_start` es el punto de entrada — se ejecuta cuando arranca el ejecutable.
 
-## Paso 4 — Compila el ejecutable nativo
+## Paso 4 — Prepara las dependencias
+
+```bash
+wapp setup
+```
+
+Esto descarga la Wasmtime C-API (~15 MB) y la almacena en caché para su uso posterior.
+
+## Paso 5 — Compila el ejecutable nativo
 
 ```bash
 wapp build
 ```
 
 Qué sucede:
+
 1. El compilador encuentra `src/hello.wasm.ts` y lo compila a `wasm-out/hello.wasm`
 2. El linker lee el `.wasm`, genera funciones host en C++ y compila todo en un binario autocontenido
 
-En la primera compilación, el linker descarga la Wasmtime C-API (~15 MB) y la almacena en caché.
-
-## Paso 5 — Ejecútalo
+## Paso 6 — Ejecútalo
 
 ```bash
 ./hello
@@ -86,7 +93,7 @@ En la primera compilación, el linker descarga la Wasmtime C-API (~15 MB) y la a
 Deberías ver:
 
 ```
-Hello from AssemblyScript!
+¡Hola desde AssemblyScript!
 factorial(1) = 1
 factorial(2) = 2
 factorial(3) = 6

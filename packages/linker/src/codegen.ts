@@ -1,5 +1,5 @@
 import os from 'node:os';
-import type { ResolvedLink, WasmImportFuncType } from '@wasm-apps/types';
+import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo, WasmExport, WasmImport } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 
 const VALTYPE_TO_CPP: Record<string, string> = {
@@ -16,9 +16,28 @@ const VALTYPE_TO_SET: Record<string, string> = {
   f64: 'Val(double(',
 };
 
+const MATH_CONSTANTS: Record<string, string> = {
+  'Math.E': '2.718281828459045',
+  'Math.LN2': '0.6931471805599453',
+  'Math.LN10': '2.302585092994046',
+  'Math.LOG2E': '1.4426950408889634',
+  'Math.LOG10E': '0.4342944819032518',
+  'Math.PI': '3.141592653589793',
+  'Math.SQRT1_2': '0.7071067811865476',
+  'Math.SQRT2': '1.4142135623730951',
+};
+
+interface ModuleBuffer {
+  varName: string;
+  lenVar: string;
+  bytes: Buffer;
+  moduleVar: string;
+  instanceVar: string;
+}
+
 function funcTypeCpp(params: string[], results: string[]): string {
-  const p = params.map(t => VALTYPE_TO_CPP[t] || 'ValType::i32()').join(', ');
-  const r = results.map(t => VALTYPE_TO_CPP[t] || 'ValType::i32()').join(', ');
+  const p = params.map((t) => VALTYPE_TO_CPP[t] || 'ValType::i32()').join(', ');
+  const r = results.map((t) => VALTYPE_TO_CPP[t] || 'ValType::i32()').join(', ');
   return `FuncType::from_iters(std::vector<ValType>{${p}}, std::vector<ValType>{${r}})`;
 }
 
@@ -31,71 +50,36 @@ function sanitizeIdentifier(name: string): string {
   return name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^(\d)/, '_$1');
 }
 
-const MATH_CONSTANTS: Record<string, string> = {
-  'Math.E': '2.718281828459045',
-  'Math.LN2': '0.6931471805599453',
-  'Math.LN10': '2.302585092994046',
-  'Math.LOG2E': '1.4426950408889634',
-  'Math.LOG10E': '0.4342944819032518',
-  'Math.PI': '3.141592653589793',
-  'Math.SQRT1_2': '0.7071067811865476',
-  'Math.SQRT2': '1.4142135623730951',
-  'globalThis': '0',
-};
-
-export function findEntryModule(link: ResolvedLink, entryPoint: string): string {
-  for (const mod of link.order) {
-    const found = mod.module.exports.some(e => e.name === entryPoint && e.kind === 'function');
-    if (found) return `instance${mod.index}`;
-  }
-  throw new Error(`No se encontro la funcion de entrada '${entryPoint}' en ningun modulo.`);
-}
-
-export function validateEntryExport(link: ResolvedLink, entryPoint: string): void {
-  for (const mod of link.order) {
-    if (mod.module.exports.some(e => e.name === entryPoint)) return;
-  }
-  throw new Error(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
-}
-
-export function generateCCode(
-  link: ResolvedLink,
-  entryPoint: string,
-  wasi: boolean,
-  importFuncTypes?: WasmImportFuncType[],
-): string {
-  const modules = link.order;
-  const moduleBuffers = modules.map(m => ({
+function buildModuleBuffers(modules: ResolvedLink['order']): ModuleBuffer[] {
+  return modules.map((m) => ({
     varName: `wasm_bytes_${m.index}`,
     lenVar: `wasm_len_${m.index}`,
     bytes: m.module.buffer,
     moduleVar: `mod${m.index}`,
     instanceVar: `instance${m.index}`,
   }));
+}
 
+function buildNeededGlobals(modules: ResolvedLink['order']): Map<string, { module: string; name: string }> {
   const neededGlobals = new Map<string, { module: string; name: string }>();
-
   for (const mod of modules) {
     for (const imp of mod.module.imports) {
       if (imp.module === 'wasi_snapshot_preview1' || imp.module === 'wasi_unstable') continue;
-
       if (imp.kind === 'global') {
         const key = `${imp.module}.${imp.name}`;
         if (!neededGlobals.has(key)) {
           neededGlobals.set(key, { module: imp.module, name: imp.name });
         }
-        continue;
       }
     }
   }
+  return neededGlobals;
+}
 
-  const importTypeMap = new Map<string, WasmImportFuncType>();
-  if (importFuncTypes) {
-    for (const ft of importFuncTypes) {
-      importTypeMap.set(`${ft.module}.${ft.name}`, ft);
-    }
-  }
-
+function buildHostFunctionList(
+  modules: ResolvedLink['order'],
+  importTypeMap: Map<string, WasmImportFuncType>,
+): Array<{ name: string; module: string; params: string[]; results: string[] }> {
   const hostFuncs: Array<{ name: string; module: string; params: string[]; results: string[] }> = [];
   const seen = new Set<string>();
   for (const mod of modules) {
@@ -121,8 +105,11 @@ export function generateCCode(
       }
     }
   }
+  return hostFuncs;
+}
 
-  let cpp = [
+function generatePreamble(): string {
+  return [
     '#include <wasmtime.hh>',
     '#include <iostream>',
     '#include <cstdlib>',
@@ -161,6 +148,11 @@ export function generateCCode(
     'static std::mt19937 _wasm_rng(std::random_device{}());',
     'static std::unordered_map<std::string, std::chrono::steady_clock::time_point> _wasm_timers;',
     '',
+  ].join('\n');
+}
+
+function generateStringReader(): string {
+  return [
     'static std::string _readAsString(Caller& caller, int32_t ptr) {',
     '  if (ptr <= 0) return "";',
     '  auto mem = caller.get_export("memory");',
@@ -211,67 +203,73 @@ export function generateCCode(
     '}',
     '',
   ].join('\n');
+}
 
+function generateModuleBuffers(moduleBuffers: ModuleBuffer[]): string {
+  let result = '';
   for (const mb of moduleBuffers) {
     const byteStr = Array.from(mb.bytes).join(',');
-    cpp += `const unsigned char ${mb.varName}[] = { ${byteStr} };\n`;
-    cpp += `const size_t ${mb.lenVar} = ${mb.bytes.length};\n\n`;
+    result += `const unsigned char ${mb.varName}[] = { ${byteStr} };\n`;
+    result += `const size_t ${mb.lenVar} = ${mb.bytes.length};\n\n`;
   }
+  return result;
+}
 
-  cpp += 'static void define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {\n';
-  cpp += '  static std::unordered_set<std::string> _defined;\n';
+function generateDefineExports(modules: ResolvedLink['order']): string {
+  let code = 'static void define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {\n';
+  code += '  static std::unordered_set<std::string> _defined;\n';
   for (const mod of modules) {
     const exports = mod.module.exports;
     if (exports.length === 0) continue;
-    cpp += `  if (std::strcmp(instance_label, "instance${mod.index}") == 0) {\n`;
+    code += `  if (std::strcmp(instance_label, "instance${mod.index}") == 0) {\n`;
     for (const exp of exports) {
       const safeName = sanitizeIdentifier(exp.name);
-      cpp += `    if (_defined.find("${exp.name}") == _defined.end()) {\n`;
-      cpp += `      _defined.insert("${exp.name}");\n`;
-      cpp += `      auto exp = instance.get(ctx, "${exp.name}");\n`;
-      cpp += `      if (!exp) { std::cerr << "Error obteniendo export ${safeName}" << std::endl; std::exit(1); }\n`;
-      cpp += `      auto result = linker.define(ctx, "env", "${exp.name}", *exp);\n`;
-      cpp += `      if (!result) { std::cerr << "Error definiendo ${safeName}" << std::endl; std::exit(1); }\n`;
-      cpp += `    }\n`;
+      code += `    if (_defined.find("${exp.name}") == _defined.end()) {\n`;
+      code += `      _defined.insert("${exp.name}");\n`;
+      code += `      auto exp = instance.get(ctx, "${exp.name}");\n`;
+      code += `      if (!exp) { std::cerr << "Error obteniendo export ${safeName}" << std::endl; std::exit(1); }\n`;
+      code += `      auto result = linker.define(ctx, "env", "${exp.name}", *exp);\n`;
+      code += `      if (!result) { std::cerr << "Error definiendo ${safeName}" << std::endl; std::exit(1); }\n`;
+      code += `    }\n`;
     }
-    cpp += `    return;\n  }\n`;
+    code += `    return;\n  }\n`;
   }
-  cpp += `
-  std::cerr << "Unknown instance label " << instance_label << std::endl; std::exit(1);
-  }
+  code += `  std::cerr << "Unknown instance label " << instance_label << std::endl; std::exit(1);\n`;
+  code += '}\n\n';
+  return code;
+}
 
-  int main(int argc, char *argv[]) {
+function generateMainStart(wasi: boolean): string {
+  let code = `int main(int argc, char *argv[]) {
     Engine engine;
     Store store(engine);
     auto ctx = store.context();
     Linker linker(engine);
-    
-`;
-
+    \n`;
   if (wasi) {
-    cpp += `
-    WasiConfig wasi_config;
+    code += `    WasiConfig wasi_config;
     wasi_config.inherit_argv();
     wasi_config.inherit_stdin();
     wasi_config.inherit_stdout();
     wasi_config.inherit_stderr();
     ctx.set_wasi(std::move(wasi_config)).unwrap();
     linker.define_wasi().unwrap();
-    
-`;
+    \n`;
   }
+  return code;
+}
 
+function generateHostFunctionDefs(hostFuncs: Array<{ name: string; module: string; params: string[]; results: string[] }>): string {
+  let code = '';
   for (const func of hostFuncs) {
     let generator = hostFunctionRegistry.get(func.module, func.name);
     if (!generator) {
       const byName = hostFunctionRegistry.getByName(func.name);
       if (byName) generator = byName.generator;
     }
-    const body = generator
-      ? generator(func.params, func.results)
-      : defaultResultCode(func.results);
+    const body = generator ? generator(func.params, func.results) : defaultResultCode(func.results);
     const funcType = funcTypeCpp(func.params, func.results);
-    cpp += `
+    code += `
   {
     auto ty = ${funcType};
     linker.define(ctx, "${func.module}", "${func.name}",
@@ -282,51 +280,103 @@ ${body}
   }
 `;
   }
+  return code;
+}
 
+function generateGlobalDefs(neededGlobals: Map<string, { module: string; name: string }>): string {
+  let code = '';
   for (const [, gl] of neededGlobals) {
-    const importName = `${gl.module}.${gl.name}`;
     const mathConst = MATH_CONSTANTS[gl.name];
     let valStr: string;
     if (mathConst !== undefined) {
       valStr = `Val(double(${mathConst}))`;
-    } else if (gl.name === 'process.argv') {
-      valStr = 'Val(int32_t(0))';
-    } else if (gl.name.startsWith('document.')) {
-      valStr = 'Val(int32_t(0))';
     } else {
       valStr = 'Val(int32_t(0))';
     }
-    cpp += `  linker.define(ctx, "${gl.module}", "${gl.name}", Global::wrap(ctx, ${valStr})).unwrap();\n`;
+    code += `  linker.define(ctx, "${gl.module}", "${gl.name}", Global::wrap(ctx, ${valStr})).unwrap();\n`;
   }
+  return code;
+}
 
+function generateModuleCompilation(moduleBuffers: ModuleBuffer[]): string {
+  let code = '';
   for (const mb of moduleBuffers) {
-    cpp += `\n  auto ${mb.moduleVar} = Module::compile(engine, Span<uint8_t>(const_cast<uint8_t*>(${mb.varName}), ${mb.lenVar}));\n`;
-    cpp += `  if (!${mb.moduleVar}) { std::cerr << "Error compilando modulo: " << ${mb.moduleVar}.err().message() << std::endl; return 1; }\n`;
+    code += `\n  auto ${mb.moduleVar} = Module::compile(engine, Span<uint8_t>(const_cast<uint8_t*>(${mb.varName}), ${mb.lenVar}));\n`;
+    code += `  if (!${mb.moduleVar}) { std::cerr << "Error compilando modulo: " << ${mb.moduleVar}.err().message() << std::endl; return 1; }\n`;
   }
+  return code;
+}
 
+function generateModuleInstantiation(modules: ResolvedLink['order']): string {
+  let code = '';
   for (const mod of modules) {
     const iv = `instance${mod.index}`;
     const mv = `mod${mod.index}`;
-    cpp += `\n  auto ${iv} = linker.instantiate(ctx, ${mv}.unwrap());\n`;
-    cpp += `  if (!${iv}) {\n`;
-    cpp += `    std::cerr << "Error instanciando modulo ${mod.index}" << std::endl;\n`;
-    cpp += `    return 1;\n  }\n`;
-    cpp += `  define_exports(linker, ctx, ${iv}.unwrap(), "${iv}");\n`;
+    code += `\n  auto ${iv} = linker.instantiate(ctx, ${mv}.unwrap());\n`;
+    code += `  if (!${iv}) {\n`;
+    code += `    std::cerr << "Error instanciando modulo ${mod.index}" << std::endl;\n`;
+    code += `    return 1;\n  }\n`;
+    code += `  define_exports(linker, ctx, ${iv}.unwrap(), "${iv}");\n`;
+  }
+  return code;
+}
+
+function generateEntryCall(entryModule: string, entryPoint: string): string {
+  return `\n  auto entry_exp = ${entryModule}.unwrap().get(ctx, "${entryPoint}");
+  if (!entry_exp) { std::cerr << "Entry point ${entryPoint} no encontrado" << std::endl; return 1; }
+  if (!std::get_if<Func>(&*entry_exp)) { std::cerr << "${entryPoint} no es una funcion" << std::endl; return 1; }
+  auto entry_func = std::get<Func>(*entry_exp);
+  auto result = entry_func.call(ctx, {});
+  if (!result) {
+    std::cerr << "Error llamando a ${entryPoint}" << std::endl;
+    return 1;
   }
 
-  const entryIdx = findEntryModule(link, entryPoint);
+  return 0;
+}
+`;
+}
 
-  cpp += `\n  auto entry_exp = ${entryIdx}.unwrap().get(ctx, "${entryPoint}");\n`;
-  cpp += `  if (!entry_exp) { std::cerr << "Entry point ${entryPoint} no encontrado" << std::endl; return 1; }\n`;
-  cpp += '  if (!std::get_if<Func>(&*entry_exp)) { std::cerr << "' + entryPoint + ' no es una funcion" << std::endl; return 1; }\n';
-  cpp += '  auto entry_func = std::get<Func>(*entry_exp);\n';
-  cpp += '  auto result = entry_func.call(ctx, {});\n';
-  cpp += '  if (!result) {\n';
-  cpp += `    std::cerr << "Error llamando a ${entryPoint}" << std::endl;\n`;
-  cpp += '    return 1;\n  }\n\n';
+export function findEntryModule(link: ResolvedLink, entryPoint: string): string {
+  for (const mod of link.order) {
+    const found = mod.module.exports.some((e) => e.name === entryPoint && e.kind === 'function');
+    if (found) return `instance${mod.index}`;
+  }
+  throw new Error(`No se encontro la funcion de entrada '${entryPoint}' en ningun modulo.`);
+}
 
-  cpp += '  return 0;\n';
-  cpp += '}\n';
+export function validateEntryExport(link: ResolvedLink, entryPoint: string): void {
+  for (const mod of link.order) {
+    if (mod.module.exports.some((e) => e.name === entryPoint)) return;
+  }
+  throw new Error(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
+}
+
+export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string {
+  const modules = link.order;
+  const moduleBuffers = buildModuleBuffers(modules);
+  const neededGlobals = buildNeededGlobals(modules);
+
+  const importTypeMap = new Map<string, WasmImportFuncType>();
+  if (importFuncTypes) {
+    for (const ft of importFuncTypes) {
+      importTypeMap.set(`${ft.module}.${ft.name}`, ft);
+    }
+  }
+
+  const hostFuncs = buildHostFunctionList(modules, importTypeMap);
+  const entryModule = findEntryModule(link, entryPoint);
+
+  let cpp = generatePreamble();
+  cpp += generateStringReader();
+  cpp += generateModuleBuffers(moduleBuffers);
+  cpp += generateDefineExports(modules);
+  cpp += generateMainStart(wasi);
+  cpp += generateHostFunctionDefs(hostFuncs);
+  cpp += generateGlobalDefs(neededGlobals);
+  cpp += generateModuleCompilation(moduleBuffers);
+  cpp += generateModuleInstantiation(modules);
+  cpp += generateEntryCall(entryModule, entryPoint);
 
   return cpp;
 }

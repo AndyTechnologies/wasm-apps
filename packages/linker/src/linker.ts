@@ -1,98 +1,141 @@
-import path from 'node:path';
-import {
-  WasmModuleInfo,
-  WasmExport,
-  ResolvedModule,
-  ResolvedLink,
-  ModuleMatchingStrategy,
-  LinkerError
-} from '@wasm-apps/types';
-import { hostFunctionRegistry } from './host-function-registry.js';
+import type { WasmModuleInfo, ResolvedLink, ResolvedModule, ModuleMatchingStrategy } from '@wasm-apps/types';
+import { LinkerError } from '@wasm-apps/types';
 
-export function resolveDependencies(
+interface Edge {
+  from: string;
+  to: string;
+}
+
+/**
+ * Construye el grafo de dependencias entre módulos WASM usando imports/exports.
+ * Un módulo A depende de B si A importa funciones del módulo B.
+ */
+function buildDependencyGraph(
   modules: WasmModuleInfo[],
-  strategy: ModuleMatchingStrategy,
-): ResolvedLink {
-  const availableExports = new Map<string, { module: WasmModuleInfo; export: WasmExport }>();
-
+  matching: ModuleMatchingStrategy,
+): { graph: Map<string, Set<string>>; nameToModule: Map<string, WasmModuleInfo> } {
+  const nameToModule = new Map<string, WasmModuleInfo>();
   for (const mod of modules) {
-    const fileBase = path.parse(mod.fileName).name;
-    for (const exp of mod.exports) {
-      const key = strategy === 'name-only' ? exp.name : `${fileBase}:${exp.name}`;
-      if (availableExports.has(key)) {
-        throw new LinkerError(`Conflicto: la exportacion '${key}' esta definida en varios modulos.`);
-      }
-      availableExports.set(key, { module: mod, export: exp });
-    }
+    const name = matching === 'file-name' ? mod.fileName.replace(/\.wasm$/i, '').replace(/.*[/\\]/, '') : mod.fileName;
+    nameToModule.set(name, mod);
   }
 
-  const dependencies = new Map<WasmModuleInfo, WasmModuleInfo[]>();
+  const graph = new Map<string, Set<string>>();
+  for (const [name] of nameToModule) {
+    graph.set(name, new Set());
+  }
+
   for (const mod of modules) {
-    const deps: WasmModuleInfo[] = [];
+    const modName = matching === 'file-name' ? mod.fileName.replace(/\.wasm$/i, '').replace(/.*[/\\]/, '') : mod.fileName;
+
     for (const imp of mod.imports) {
-      if (imp.module === 'wasi_snapshot_preview1' || imp.module === 'wasi_unstable') {
-        continue;
-      }
-      if (hostFunctionRegistry.has(imp.module, imp.name)) {
-        continue;
-      }
-      const lookupKey = strategy === 'name-only' ? imp.name : `${imp.module}:${imp.name}`;
-      const expInfo = availableExports.get(lookupKey);
-      if (!expInfo) {
-        if (imp.module === 'env' || hostFunctionRegistry.has('env', imp.name)) continue;
-        throw new LinkerError(`Importacion no resuelta: '${imp.module}.${imp.name}' requerida por ${mod.fileName}`);
-      }
-      if (expInfo.module !== mod) {
-        deps.push(expInfo.module);
+      const depName = imp.module;
+      if (nameToModule.has(depName) && depName !== modName) {
+        graph.get(modName)!.add(depName);
       }
     }
-    dependencies.set(mod, deps);
   }
 
-  const inDegree = new Map<WasmModuleInfo, number>();
-  for (const mod of modules) inDegree.set(mod, 0);
-  for (const [mod, deps] of dependencies.entries()) {
-    inDegree.set(mod, deps.length);
+  return { graph, nameToModule };
+}
+
+/**
+ * Orden topológico (algoritmo de Kahn) en el grafo de dependencias.
+ * Lanza LinkerError al detectar un ciclo.
+ */
+function topologicalSort(graph: Map<string, Set<string>>, nameToModule: Map<string, WasmModuleInfo>, matching: ModuleMatchingStrategy): ResolvedModule[] {
+  const inDegree = new Map<string, number>();
+  const reverseDeps = new Map<string, Set<string>>();
+
+  for (const [name] of graph) {
+    inDegree.set(name, 0);
+    reverseDeps.set(name, new Set());
   }
 
-  const queue: WasmModuleInfo[] = [];
-  for (const [mod, deg] of inDegree.entries()) {
-    if (deg === 0) queue.push(mod);
+  for (const [name, deps] of graph) {
+    for (const dep of deps) {
+      if (dep !== name) {
+        inDegree.set(name, (inDegree.get(name) || 0) + 1);
+        reverseDeps.get(dep)?.add(name);
+      }
+    }
   }
 
-  const order: WasmModuleInfo[] = [];
+  const queue: string[] = [];
+  for (const [name, degree] of inDegree) {
+    if (degree === 0) queue.push(name);
+  }
+
+  const sorted: ResolvedModule[] = [];
+  let index = 0;
+
   while (queue.length > 0) {
-    const mod = queue.shift()!;
-    order.push(mod);
-    for (const [other, deps] of dependencies.entries()) {
-      if (deps.includes(mod)) {
-        const newDeg = (inDegree.get(other) || 0) - 1;
-        inDegree.set(other, newDeg);
-        if (newDeg === 0) queue.push(other);
-      }
+    const name = queue.shift()!;
+    const module = nameToModule.get(name)!;
+
+    sorted.push({
+      module,
+      index: index++,
+      instanceName: name,
+    });
+
+    for (const dependent of reverseDeps.get(name) || []) {
+      const newDegree = (inDegree.get(dependent) || 1) - 1;
+      inDegree.set(dependent, newDegree);
+      if (newDegree === 0) queue.push(dependent);
     }
   }
 
-  if (order.length !== modules.length) {
-    throw new LinkerError('Dependencia circular detectada entre los modulos .wasm.');
+  if (sorted.length !== nameToModule.size) {
+    throw new LinkerError('Dependency cycle detected between WASM modules', {
+      resolved: sorted.length,
+      total: nameToModule.size,
+    });
   }
 
-  const resolvedOrder: ResolvedModule[] = order.map((mod, idx) => ({
-    module: mod,
-    index: idx,
-    instanceName: `instance${idx}`,
-  }));
+  return sorted;
+}
 
+/**
+ * Construye el mapa de exports desde nombre de módulo a entradas de exportación.
+ * También registra el orden de los módulos para la instanciación.
+ * Solo se incluyen exports de función; los exports de memoria/tabla/global se omiten
+ * del mapa de exports porque no se instancian mediante wasmtime_linker.
+ */
+function buildExportMap(sortedModules: ResolvedModule[]): Map<string, { instance: string; name: string }> {
   const exportMap = new Map<string, { instance: string; name: string }>();
-  for (const resMod of resolvedOrder) {
-    for (const exp of resMod.module.exports) {
-      const fileBase = path.parse(resMod.module.fileName).name;
-      const key = strategy === 'name-only' ? exp.name : `${fileBase}:${exp.name}`;
-      if (!exportMap.has(key)) {
-        exportMap.set(key, { instance: resMod.instanceName, name: exp.name });
+
+  for (const mod of sortedModules) {
+    for (const exp of mod.module.exports) {
+      if (exp.kind === 'function') {
+        exportMap.set(`${mod.instanceName}.${exp.name}`, {
+          instance: mod.instanceName,
+          name: exp.name,
+        });
       }
     }
   }
 
-  return { order: resolvedOrder, exportMap };
+  return exportMap;
+}
+
+/**
+ * Resuelve dependencias entre módulos WASM usando topological sort.
+ *
+ * Estrategias de matching:
+ * - `name-only`: los imports deben coincidir exactamente con el nombre del módulo
+ * - `file-name`: se usa el nombre del archivo (sin extensión) como identificador
+ *
+ * @returns Orden de instanciación y mapa de exports disponibles.
+ */
+export function resolveDependencies(modules: WasmModuleInfo[], matching: ModuleMatchingStrategy = 'name-only'): ResolvedLink {
+  if (modules.length === 0) {
+    throw new LinkerError('No modules provided for dependency resolution');
+  }
+
+  const { graph, nameToModule } = buildDependencyGraph(modules, matching);
+  const order = topologicalSort(graph, nameToModule, matching);
+  const exportMap = buildExportMap(order);
+
+  return { order, exportMap };
 }

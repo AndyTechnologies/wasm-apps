@@ -1,93 +1,58 @@
 import os from 'node:os';
 import path from 'node:path';
-import fs from 'node:fs';
-import { downloadFileWithResume } from './downloader.js';
-import type { DownloadOptions } from './downloader.js';
-import { logger } from '@wasm-apps/types';
-import { extract } from './extract.js';
 
-export const WASMTIME_VERSION = process.env.WASMTIME_VERSION || '46.0.1';
-const WASMTIME_BASE_URL = `https://github.com/bytecodealliance/wasmtime/releases/download/v${WASMTIME_VERSION}`;
+export { downloadFile } from './downloader.js';
+export { extractArchive } from './extract.js';
 
-function getPlatformSuffix(): string {
-  const plat = os.platform();
-  const arch = os.arch();
-  if (plat === 'linux' && arch === 'x64') return 'x86_64-linux';
-  if (plat === 'linux' && arch === 'arm64') return 'aarch64-linux';
-  if (plat === 'darwin' && arch === 'x64') return 'x86_64-macos';
-  if (plat === 'darwin' && arch === 'arm64') return 'aarch64-macos';
-  if (plat === 'win32' && arch === 'x64') return 'x86_64-windows';
-  throw new Error(`Plataforma no soportada para Wasmtime: ${plat}-${arch}`);
+interface WasmtimeAsset {
+  url: string;
+  fileName: string;
 }
 
-function wasmtimeCacheDir(): string {
-  const newDir = path.join(os.homedir(), '.wasm-linker', 'wasmtime', WASMTIME_VERSION);
-  const oldDir = path.join(os.homedir(), '.wapp', 'wasmtime', WASMTIME_VERSION);
-  if (!fs.existsSync(newDir) && fs.existsSync(oldDir)) {
-    return oldDir;
-  }
-  return newDir;
+/**
+ * Determina la URL de descarga de Wasmtime C-API según plataforma y arquitectura.
+ *
+ * Mapea process.platform + process.arch a los assets de GitHub releases.
+ * Lanza error si la combinación no está soportada.
+ */
+export function getWasmtimeAsset(version: string, platform?: string, arch?: string): WasmtimeAsset {
+  const plat = platform || os.platform();
+  const a = arch || os.arch();
+
+  let target: string;
+
+  if (plat === 'linux' && a === 'x64') target = 'x86_64-linux';
+  else if (plat === 'linux' && a === 'arm64') target = 'aarch64-linux';
+  else if (plat === 'darwin' && a === 'x64') target = 'x86_64-macos';
+  else if (plat === 'darwin' && a === 'arm64') target = 'aarch64-macos';
+  else if (plat === 'win32' && a === 'x64') target = 'x86_64-windows';
+  else if (plat === 'win32' && a === 'arm64') target = 'aarch64-windows';
+  else throw new Error(`Unsupported platform: ${plat}-${a}`);
+
+  const ext = plat === 'win32' ? 'zip' : 'tar.xz';
+  const fileName = `wasmtime-v${version}-${target}-c-api.${ext}`;
+  const url = `https://github.com/bytecodealliance/wasmtime/releases/download/v${version}/${fileName}`;
+
+  return { url, fileName };
 }
 
-export interface WasmtimePaths {
-  includeDir: string;
-  libPath: string;
+/** Retorna el directorio de caché para las descargas de Wasmtime dentro del home del usuario. */
+export function getWasmtimeCacheDir(): string {
+  return path.join(os.homedir(), '.wasm-linker');
 }
 
-export function wasmtimeDownloadInfo(): { version: string; url: string; fileName: string } {
-  const suffix = getPlatformSuffix();
-  const ext = os.platform() === 'win32' ? 'zip' : 'tar.xz';
-  const fileName = `wasmtime-v${WASMTIME_VERSION}-${suffix}-c-api.${ext}`;
-  const url = `${WASMTIME_BASE_URL}/${fileName}`;
-  return { version: WASMTIME_VERSION, url, fileName };
-}
+/** Retorna la ruta esperada para el directorio de includes/headers de Wasmtime C-API extraído. */
+export function getWasmtimeIncludeDir(cacheDir: string, version: string, platform?: string, arch?: string): string {
+  const plat = platform || os.platform();
+  const a = arch || os.arch();
+  let target: string;
+  if (plat === 'linux' && a === 'x64') target = 'x86_64-linux';
+  else if (plat === 'linux' && a === 'arm64') target = 'aarch64-linux';
+  else if (plat === 'darwin' && a === 'x64') target = 'x86_64-macos';
+  else if (plat === 'darwin' && a === 'arm64') target = 'aarch64-macos';
+  else if (plat === 'win32' && a === 'x64') target = 'x86_64-windows';
+  else if (plat === 'win32' && a === 'arm64') target = 'aarch64-windows';
+  else throw new Error(`Unsupported platform: ${plat}-${a}`);
 
-export function getWasmtimeCachedPaths(): WasmtimePaths | null {
-  const cacheDir = wasmtimeCacheDir();
-  const includeDir = path.join(cacheDir, 'include');
-  const libDir = path.join(cacheDir, 'lib');
-  const libName = os.platform() === 'win32' ? 'wasmtime.lib' : 'libwasmtime.a';
-  const libPath = path.join(libDir, libName);
-
-  if (fs.existsSync(includeDir)) {
-    if (fs.existsSync(libPath)) {
-      return { includeDir, libPath };
-    }
-    if (fs.existsSync(libDir)) {
-      const found = fs.readdirSync(libDir).filter(f => f.endsWith('.a') || f.endsWith('.lib'));
-      if (found.length > 0) {
-        return { includeDir, libPath: path.join(libDir, found[0]) };
-      }
-    }
-  }
-
-  return null;
-}
-
-export async function ensureWasmtimeAvailable(dlOpts?: DownloadOptions): Promise<WasmtimePaths> {
-  const cached = getWasmtimeCachedPaths();
-  if (cached && !dlOpts?.ignoreCache) {
-    return cached;
-  }
-
-  const info = wasmtimeDownloadInfo();
-  const cacheDir = wasmtimeCacheDir();
-
-  if (!fs.existsSync(cacheDir)) {
-    fs.mkdirSync(cacheDir, { recursive: true });
-  }
-
-  const archivePath = path.join(cacheDir, info.fileName);
-  await downloadFileWithResume(info.url, archivePath, dlOpts);
-
-  logger.step('Extrayendo...');
-  await extract(archivePath, cacheDir, 1);
-  fs.unlinkSync(archivePath);
-
-  const result = getWasmtimeCachedPaths();
-  if (!result) {
-    throw new Error('No se pudo encontrar la libreria Wasmtime tras la extraccion.');
-  }
-
-  return result;
+  return path.join(cacheDir, `wasmtime-v${version}-${target}-c-api`, 'include');
 }

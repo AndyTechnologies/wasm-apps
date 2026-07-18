@@ -84,15 +84,15 @@ interface PipelineContext {
 BeforeModuleCompile → AfterModuleCompile → BeforeCodeGen → AfterCodeGen → BeforeLink → AfterLink → AfterBundle
 ```
 
-| Fase | Contexto disponible | Uso típico |
-|------|--------------------|------------|
-| `BeforeModuleCompile` | `sourceFiles` | Pre-procesar código fuente AS antes de compilar |
-| `AfterModuleCompile` | `sourceFiles`, `outDir` | Inspeccionar/modificar WASM compilado |
-| `BeforeCodeGen` | `wasmModules`, `options` | Optimizar WASM antes de generar C++, cambiar flags |
-| `AfterCodeGen` | `cppCode` | Transformar el código C++ generado |
-| `BeforeLink` | `cppCode`, `outputPath` | Agregar bibliotecas, modificar objetos |
-| `AfterLink` | `outputPath` | Post-procesar binario nativo (stripping, firma) |
-| `AfterBundle` | `outputPath` | Hook final (empaquetar, ofuscar) |
+| Fase                  | Contexto disponible      | Uso típico                                         |
+| --------------------- | ------------------------ | -------------------------------------------------- |
+| `BeforeModuleCompile` | `sourceFiles`            | Pre-procesar código fuente AS antes de compilar    |
+| `AfterModuleCompile`  | `sourceFiles`, `outDir`  | Inspeccionar/modificar WASM compilado              |
+| `BeforeCodeGen`       | `wasmModules`, `options` | Optimizar WASM antes de generar C++, cambiar flags |
+| `AfterCodeGen`        | `cppCode`                | Transformar el código C++ generado                 |
+| `BeforeLink`          | `cppCode`, `outputPath`  | Agregar bibliotecas, modificar objetos             |
+| `AfterLink`           | `outputPath`             | Post-procesar binario nativo (stripping, firma)    |
+| `AfterBundle`         | `outputPath`             | Hook final (empaquetar, ofuscar)                   |
 
 ## Ejemplo completo: Plugin en TypeScript
 
@@ -197,12 +197,12 @@ Pipeline de build:
 
 Los generadores de funciones host producen código C++ que se inserta en lambdas de Wasmtime. Los helpers disponibles son:
 
-| Helper | Propósito |
-|--------|-----------|
-| `_readAsString(caller, ptr)` | Lee string UCS-2 desde memoria WASM |
-| `_readAsStringNT(caller, ptr)` | Lee string null-terminated |
-| `_wasm_rng` | `std::mt19937` global para random |
-| `_wasm_timers` | `std::unordered_map` para console.time/console.timeEnd |
-| `_wasm_clz32(x)` | Count leading zeros (MSVC/gcc) |
+| Helper                         | Propósito                                              |
+| ------------------------------ | ------------------------------------------------------ |
+| `_readAsString(caller, ptr)`   | Lee string UCS-2 desde memoria WASM                    |
+| `_readAsStringNT(caller, ptr)` | Lee string null-terminated                             |
+| `_wasm_rng`                    | `std::mt19937` global para random                      |
+| `_wasm_timers`                 | `std::unordered_map` para console.time/console.timeEnd |
+| `_wasm_clz32(x)`               | Count leading zeros (MSVC/gcc)                         |
 
 Headers incluidos: `wasmtime.hh`, `iostream`, `cstdlib`, `cstring`, `chrono`, `unordered_map`, `random`, `string`, `cmath`, `limits`.

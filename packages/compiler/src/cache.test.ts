@@ -2,43 +2,73 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { LRUCache, MAX_MEMORY_CACHE_SIZE } from './cache.js';
 
 describe('LRUCache', () => {
-  let cache: LRUCache<string>;
+  let cache: LRUCache<string, number>;
 
   beforeEach(() => {
-    cache = new LRUCache<string>(3);
+    cache = new LRUCache(3);
   });
 
-  it('stores and retrieves values', () => {
-    cache.set('a', '1');
-    expect(cache.get('a')).toBe('1');
+  it('almacena y recupera valores', () => {
+    cache.set('a', 1);
+    expect(cache.get('a')).toBe(1);
   });
 
-  it('returns undefined for missing key', () => {
-    expect(cache.get('nonexistent')).toBeUndefined();
+  it('retorna undefined para claves inexistentes', () => {
+    expect(cache.get('no-existe')).toBeUndefined();
   });
 
-  it('evicts least recently used when full', () => {
-    cache.set('a', '1');
-    cache.set('b', '2');
-    cache.set('c', '3');
-    cache.set('d', '4');
-    expect(cache.get('a')).toBeUndefined();
-    expect(cache.get('b')).toBe('2');
-    expect(cache.get('c')).toBe('3');
-    expect(cache.get('d')).toBe('4');
+  it('informa si una clave existe', () => {
+    cache.set('a', 1);
+    expect(cache.has('a')).toBe(true);
+    expect(cache.has('b')).toBe(false);
   });
 
-  it('promotes accessed keys to most recent', () => {
-    cache.set('a', '1');
-    cache.set('b', '2');
-    cache.set('c', '3');
-    cache.get('a');
-    cache.set('d', '4');
-    expect(cache.get('a')).toBe('1');
-    expect(cache.get('b')).toBeUndefined();
+  it('elimina la entrada LRU cuando excede el tamaño máximo', () => {
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('c', 3);
+    cache.set('d', 4);
+    expect(cache.has('a')).toBe(false);
+    expect(cache.has('b')).toBe(true);
+    expect(cache.has('c')).toBe(true);
+    expect(cache.has('d')).toBe(true);
   });
 
-  it('has correct max size', () => {
-    expect(MAX_MEMORY_CACHE_SIZE).toBe(50);
+  it('promueve una clave al accederla (MRU)', () => {
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('c', 3);
+    cache.get('a'); // promueve 'a'
+    cache.set('d', 4);
+    expect(cache.has('a')).toBe(true); // 'a' fue promovida
+    expect(cache.has('b')).toBe(false); // 'b' fue la LRU
+  });
+
+  it('actualiza el valor si la clave ya existe', () => {
+    cache.set('a', 1);
+    cache.set('a', 2);
+    expect(cache.get('a')).toBe(2);
+    expect(cache.size).toBe(1);
+  });
+
+  it('elimina una clave específica', () => {
+    cache.set('a', 1);
+    cache.set('b', 2);
+    expect(cache.delete('a')).toBe(true);
+    expect(cache.has('a')).toBe(false);
+    expect(cache.size).toBe(1);
+  });
+
+  it('limpia toda la caché', () => {
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.clear();
+    expect(cache.size).toBe(0);
+  });
+
+  it('usa MAX_MEMORY_CACHE_SIZE por defecto', () => {
+    expect(MAX_MEMORY_CACHE_SIZE).toBe(100);
+    const bigCache = new LRUCache<string, number>();
+    expect(bigCache['maxSize']).toBe(100);
   });
 });

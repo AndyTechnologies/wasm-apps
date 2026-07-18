@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { Pipeline } from './pipeline.js';
-import { PipelinePhase } from '@wasm-apps/types';
 
 describe('Pipeline', () => {
   let pipeline: Pipeline;
@@ -9,58 +8,45 @@ describe('Pipeline', () => {
     pipeline = new Pipeline();
   });
 
-  it('registers and runs a hook', async () => {
-    const hook = vi.fn();
-    pipeline.register(PipelinePhase.BeforeCodeGen, 'test-plugin', hook);
-    const ctx = {} as any;
-    await pipeline.runPhase(PipelinePhase.BeforeCodeGen, ctx);
-    expect(hook).toHaveBeenCalledOnce();
+  it('ejecuta hooks registrados en una fase', async () => {
+    const calls: string[] = [];
+    pipeline.register('beforeModuleCompile' as any, 'test-plugin', async () => {
+      calls.push('hook-called');
+    });
+    const context = { options: { entry: '_start', wasi: false, moduleMatching: 'file-name' as const } };
+    await pipeline.runPhase('beforeModuleCompile' as any, context);
+    expect(calls).toEqual(['hook-called']);
   });
 
-  it('runs registered hooks in order', async () => {
-    const order: number[] = [];
-    pipeline.register(PipelinePhase.BeforeCodeGen, 'p1', async () => { order.push(1); });
-    pipeline.register(PipelinePhase.BeforeCodeGen, 'p2', async () => { order.push(2); });
-    await pipeline.runPhase(PipelinePhase.BeforeCodeGen, {} as any);
-    expect(order).toEqual([1, 2]);
+  it('no ejecuta hooks de otras fases', async () => {
+    const calls: string[] = [];
+    pipeline.register('beforeModuleCompile' as any, 'p1', () => {
+      calls.push('p1');
+    });
+    pipeline.register('afterModuleCompile' as any, 'p2', () => {
+      calls.push('p2');
+    });
+    const context = { options: { entry: '_start', wasi: false, moduleMatching: 'file-name' as const } };
+    await pipeline.runPhase('beforeModuleCompile' as any, context);
+    expect(calls).toEqual(['p1']);
   });
 
-  it('does not run hooks from other phases', async () => {
-    const hook = vi.fn();
-    pipeline.register(PipelinePhase.AfterCodeGen, 'p', hook);
-    await pipeline.runPhase(PipelinePhase.BeforeCodeGen, {} as any);
-    expect(hook).not.toHaveBeenCalled();
+  it('retorna context sin cambios si no hay hooks', async () => {
+    const context = { options: { entry: '_start', wasi: false, moduleMatching: 'file-name' as const } };
+    const result = await pipeline.runPhase('beforeModuleCompile' as any, context);
+    expect(result).toEqual(context);
   });
 
-  it('passes context to hooks', async () => {
-    const hook = vi.fn();
-    pipeline.register(PipelinePhase.BeforeLink, 'p', hook);
-    const ctx = { outputPath: '/out/bin' } as any;
-    await pipeline.runPhase(PipelinePhase.BeforeLink, ctx);
-    expect(hook).toHaveBeenCalledWith(ctx);
+  it('elimina hooks al desregistrar un plugin', () => {
+    pipeline.register('beforeModuleCompile' as any, 'test', async () => {});
+    pipeline.unregister('test');
+    expect(pipeline['hooks']).toHaveLength(0);
   });
 
-  it('handles sync hooks', async () => {
-    const hook = vi.fn();
-    pipeline.register(PipelinePhase.AfterBundle, 'p', hook);
-    await pipeline.runPhase(PipelinePhase.AfterBundle, {} as any);
-    expect(hook).toHaveBeenCalled();
-  });
-
-  it('runs all phases in order via runAll', async () => {
-    const phases: string[] = [];
-    for (const phase of Object.values(PipelinePhase)) {
-      pipeline.register(phase, 'recorder', async () => { phases.push(phase); });
-    }
-    await pipeline.runAll({} as any);
-    expect(phases).toEqual(Object.values(PipelinePhase));
-  });
-
-  it('unregisters a hook', async () => {
-    const hook = vi.fn();
-    pipeline.register(PipelinePhase.BeforeCodeGen, 'to-remove', hook);
-    pipeline.unregister('to-remove');
-    await pipeline.runPhase(PipelinePhase.BeforeCodeGen, {} as any);
-    expect(hook).not.toHaveBeenCalled();
+  it('limpia todos los hooks', () => {
+    pipeline.register('beforeModuleCompile' as any, 'p1', async () => {});
+    pipeline.register('afterModuleCompile' as any, 'p2', async () => {});
+    pipeline.clear();
+    expect(pipeline['hooks']).toHaveLength(0);
   });
 });

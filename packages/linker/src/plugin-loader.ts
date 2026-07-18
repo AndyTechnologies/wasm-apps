@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { logger, type PluginConfig, type PluginContext, type WasmPlugin } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { pipeline } from './pipeline.js';
+import { registerBuiltinHostFunctions } from './builtin-host-functions.js';
 
 const DEFAULT_PLUGINS: PluginConfig[] = [
   { id: 'stdlib-plugin', enabled: true, config: {} },
@@ -24,8 +25,14 @@ function registerPlugin(plugin: WasmPlugin, context: PluginContext): void {
   logger.detail(`Plugin cargado: ${plugin.id}`);
 }
 
+/**
+ * Carga y registra plugins según la configuración del proyecto.
+ *
+ * Soporta plugins built-in (stdlib, size-optimizer, tree-shake) y
+ * plugins personalizados mediante ruta de archivo.
+ */
 export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void> {
-  const configs = (pluginConfigs && pluginConfigs.length > 0) ? pluginConfigs : DEFAULT_PLUGINS;
+  const configs = pluginConfigs && pluginConfigs.length > 0 ? pluginConfigs : DEFAULT_PLUGINS;
 
   for (const cfg of configs) {
     if (!cfg.enabled) continue;
@@ -33,6 +40,7 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
     const context = createContext(cfg);
 
     if (cfg.id === 'stdlib-plugin') {
+      registerBuiltinHostFunctions(hostFunctionRegistry);
       continue;
     }
 
@@ -51,7 +59,7 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
     if (cfg.path) {
       const resolvedPath = path.resolve(cfg.path);
       try {
-        const mod = await import(pathToFileURL(resolvedPath).href) as { default?: WasmPlugin; register?: (ctx: PluginContext) => void };
+        const mod = (await import(pathToFileURL(resolvedPath).href)) as { default?: WasmPlugin; register?: (ctx: PluginContext) => void };
         const plugin: WasmPlugin | undefined = mod.default || (mod as unknown as WasmPlugin);
         if (plugin && typeof plugin.register === 'function') {
           plugin.register(context);

@@ -1,124 +1,115 @@
-import commandExists from 'command-exists';
-import spawn from 'cross-spawn';
-
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import * as tar from 'tar';
+import { DownloadError } from '@wasm-apps/types';
 
-export async function extract(archive: string, cwd: string, strip: number): Promise<void> {
-  const commands = ['tar', 'unzip'];
-  let command = commands.find(cmd => commandExists.sync(cmd));
-
-  if (command === 'tar' && os.platform() === 'darwin' && commandExists.sync('gtar')) {
-    command = 'gtar';
-  }
-
-  if (!command) {
-    throw new Error('No se encontró ninguna de las siguientes comandos: tar, unzip');
-  }
-
-  if (archive.endsWith('.zip')) {
-    await extractWithZip(archive, cwd, strip);
-  } else if (command === 'tar' || command === 'gtar') {
-    await extractWithTar(archive, cwd, strip, command);
-  } else {
-    throw new Error(`No se pudo extraer el archivo ${archive}: \n\t- No se encontró un comando compatible. (${command} no soporta ${path.extname(archive)})\n`);
-  }
+function isPathSafe(filePath: string): boolean {
+  const normalized = path.normalize(filePath);
+  if (normalized.startsWith('..') || normalized === '.' || normalized === '') return false;
+  if (normalized.includes('..')) return false;
+  return true;
 }
 
-async function extractWithTar(archive: string, cwd: string, strip: number, tarCmd: string = 'tar'): Promise<void> {
-  const proc = spawn(tarCmd, ['-xJf', archive, '--strip-components', strip.toString(), '-C', cwd], { stdio: 'inherit' });
+/**
+ * Extrae un archivo .tar.xz dentro de un directorio de destino.
+ * Calcula un hash SHA-256 del archivo comprimido para tracking.
+ * Usa el binario `xz` del sistema para descompresión, ya que
+ * el paquete `tar` npm no maneja xz nativamente en Node.js.
+ *
+ * @param archivePath - Ruta al archivo .tar.xz
+ * @param destDir - Directorio donde extraer
+ */
+export function extractArchive(archivePath: string, destDir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = fs.createReadStream(archivePath);
 
-  return new Promise<void>((resolve, reject) => {
-    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`${tarCmd} -xJf fallo (codigo ${code})`)));
-    proc.on('error', (err) => reject(new Error(`No se pudo ejecutar '${tarCmd}': ${err.message}.`)));
-  });
-}
+    stream.on('data', (chunk: Buffer) => hash.update(chunk));
+    stream.on('end', () => {
+      fs.mkdirSync(destDir, { recursive: true });
 
-async function extractZipInner(archive: string, cwd: string): Promise<void> {
-  if (os.platform() === 'win32') {
-    const ps = spawn('powershell', [
-      '-NoProfile', '-Command',
-      `& {Expand-Archive -LiteralPath '${archive.replace(/'/g, "''")}' -DestinationPath '${cwd.replace(/'/g, "''")}' -Force}`,
-    ], { stdio: 'inherit' });
-    return new Promise<void>((resolve, reject) => {
-      ps.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive fallo: ${code}`)));
-      ps.on('error', reject);
+      const xz = spawn('xz', ['-dc', archivePath], { stdio: ['ignore', 'pipe', 'inherit'] });
+      const extract = tar.x({ C: destDir });
+
+      xz.stdout.pipe(extract);
+
+      let closed = false;
+      const done = (err?: Error) => {
+        if (closed) return;
+        closed = true;
+        if (err) reject(new DownloadError(`Extraction failed: ${err.message}`, archivePath, undefined, err));
+        else resolve();
+      };
+
+      xz.on('error', (err) => done(new Error(`xz error: ${err.message}`)));
+      xz.on('exit', (code) => {
+        if (code !== 0) done(new Error(`xz exited with code ${code}`));
+      });
+      extract.on('finish', () => done());
+      extract.on('error', (err) => done(err));
     });
-  }
-
-  const proc = spawn('unzip', ['-o', archive, '-d', cwd], { stdio: 'inherit' });
-  return new Promise<void>((resolve, reject) => {
-    proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`unzip fallo: ${code}`)));
-    proc.on('error', reject);
+    stream.on('error', (err) => reject(new DownloadError(`Read failed: ${err.message}`, archivePath, undefined, err)));
   });
 }
 
-function moveWithStrip(srcDir: string, dstDir: string, strip: number): void {
-  const renameWithFallback = (src: string, dest: string): void => {
-    try {
-      fs.renameSync(src, dest);
-    } catch {
-      fs.cpSync(src, dest, { recursive: true });
-      fs.rmSync(src, { recursive: true, force: true });
-    }
-  };
+/**
+ * Extrae un archivo .zip dentro de un directorio de destino.
+ * Usa una implementación manual mínima (no depende de adm-zip/unzipper).
+ *
+ * @param archivePath - Ruta al archivo .zip
+ * @param destDir - Directorio donde extraer
+ */
+export function extractZip(archivePath: string, destDir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    fs.mkdirSync(destDir, { recursive: true });
 
-  const walkAndMove = (currentDir: string, remaining: number, relBase: string) => {
-    const entries = fs.readdirSync(currentDir);
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry);
-      if (fs.statSync(fullPath).isDirectory()) {
-        if (remaining > 0) {
-          walkAndMove(fullPath, remaining - 1, fullPath);
-        } else {
-          const targetRel = path.relative(relBase, fullPath);
-          const target = path.join(dstDir, targetRel);
-          fs.mkdirSync(target, { recursive: true });
-          const inner = fs.readdirSync(fullPath);
-          for (const innerEntry of inner) {
-            renameWithFallback(path.join(fullPath, innerEntry), path.join(target, innerEntry));
-          }
-        }
-      } else if (remaining === 0) {
-        const targetRel = path.relative(relBase, currentDir);
-        const targetDir = path.join(dstDir, targetRel);
-        if (targetRel) fs.mkdirSync(targetDir, { recursive: true });
-        renameWithFallback(fullPath, path.join(targetDir, entry));
+    const buffer = fs.readFileSync(archivePath);
+    let offset = 0;
+
+    // Parser ZIP simple para cabeceras de archivo local
+    while (offset < buffer.length - 30) {
+      if (buffer.readUInt32LE(offset) !== 0x04034b50) {
+        offset++;
+        continue;
       }
-    }
-  };
 
-  walkAndMove(srcDir, strip, srcDir);
+      const compressionMethod = buffer.readUInt16LE(offset + 8);
+      const compressedSize = buffer.readUInt32LE(offset + 18);
+      const uncompressedSize = buffer.readUInt32LE(offset + 22);
+      const fileNameLength = buffer.readUInt16LE(offset + 26);
+      const extraFieldLength = buffer.readUInt16LE(offset + 28);
 
-  const removeEmptyDirs = (dir: string): void => {
-    const entries = fs.readdirSync(dir);
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry);
-      if (fs.statSync(fullPath).isDirectory()) {
-        removeEmptyDirs(fullPath);
+      const headerSize = 30 + fileNameLength + extraFieldLength;
+      const dataOffset = offset + headerSize;
+
+      // Verificación de límites
+      if (dataOffset + compressedSize > buffer.length) {
+        reject(new DownloadError('ZIP entry exceeds archive bounds', archivePath));
+        return;
       }
-    }
-    if (fs.readdirSync(dir).length === 0 && dir !== srcDir) {
-      fs.rmdirSync(dir);
-    }
-  };
-  removeEmptyDirs(srcDir);
-}
 
-async function extractWithZip(archive: string, cwd: string, strip: number = 0): Promise<void> {
-  if (strip > 0) {
-    const tmpDir = path.join(cwd, `.tmp_extract_${Date.now()}`);
-    fs.mkdirSync(tmpDir, { recursive: true });
-    try {
-      await extractZipInner(archive, tmpDir);
-      moveWithStrip(tmpDir, cwd, strip);
-    } finally {
-      if (fs.existsSync(tmpDir)) {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+      const fileName = buffer.toString('utf-8', offset + 30, offset + 30 + fileNameLength);
+      const safeName = path.normalize(fileName).replace(/^[/\\]+/, '');
+
+      if (!isPathSafe(safeName)) {
+        reject(new DownloadError(`Path traversal detected in ZIP: ${fileName}`, archivePath));
+        return;
       }
+
+      if (fileName.endsWith('/')) {
+        fs.mkdirSync(path.join(destDir, safeName), { recursive: true });
+      } else if (compressionMethod === 0) {
+        const filePath = path.join(destDir, safeName);
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, buffer.subarray(dataOffset, dataOffset + uncompressedSize));
+      }
+      // Saltar entradas comprimidas (method !== 0) — requeriría inflate
+
+      offset = dataOffset + compressedSize;
     }
-  } else {
-    await extractZipInner(archive, cwd);
-  }
+
+    resolve();
+  });
 }

@@ -32,6 +32,7 @@ El CLI `wapp` coordina el pipeline completo: descubre archivos fuente, ejecuta e
 ## ¿Por qué este enfoque?
 
 Un runtime WebAssembly nativo (Wasmtime) incrustado en un host C++ te proporciona:
+
 - **Acceso completo al sistema** — archivos, red, control de procesos (sin sandbox)
 - **Binario pequeño** — enlazado estáticamente, sin dependencias de runtime WASM en despliegue
 - **Multiplataforma** — compila una vez por destino usando toolchains C++ existentes

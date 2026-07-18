@@ -1,158 +1,104 @@
-import { logger, NativeAppOptions, LinkerError, PipelinePhase, type PipelineContext, type ModuleMatchingStrategy } from '@wasm-apps/types';
-import { glob } from 'glob';
 import path from 'node:path';
 import fs from 'node:fs';
-import ora from 'ora';
-import { readWasmModules, parseImportFuncTypes } from './wasm-io.js';
+import os from 'node:os';
+import { saveBuildManifest, isBuildUpToDate } from './build-cache.js';
 import { resolveDependencies } from './linker.js';
-import { generateCCode, validateEntryExport } from './codegen.js';
-import { ensureWasmtimeAvailable, WASMTIME_VERSION } from './wasmtime-dl.js';
-import { compileWithCMake } from './compiler.js';
-import { isBuildUpToDate, saveBuildManifest } from './build-cache.js';
-import { hostFunctionRegistry } from './host-function-registry.js';
-import { registerBuiltinHostFunctions } from './builtin-host-functions.js';
-import { pipeline } from './pipeline.js';
+import { generateCCode } from './codegen.js';
+import { compileCpp } from './compiler.js';
+import type { NativeAppOptions, WasmModuleInfo, WasmImport, WasmExport, WasmImportFuncType, ModuleMatchingStrategy } from '@wasm-apps/types';
+import { LinkerError, logger } from '@wasm-apps/types';
 
-registerBuiltinHostFunctions(hostFunctionRegistry);
-
-export { runSetup, checkSetupStatus } from './setup.js';
-export { getCacheInfo, clearCache, cacheRootDir } from './cache.js';
+export { isBuildUpToDate, saveBuildManifest };
 export { getBuildCacheInfo, clearBuildCache } from './build-cache.js';
-export type { SetupOptions, SetupStatus } from './setup.js';
-export { HostFunctionRegistry, hostFunctionRegistry } from './host-function-registry.js';
-export type { RegisteredHostFunction, HostFunctionGenerator } from '@wasm-apps/types';
-export { Pipeline, pipeline } from './pipeline.js';
+export { parseWasmModule, mergeImportExportKinds } from './wasm-io.js';
+export { setupWasmtime, runSetup, checkWasmtimeSetup, checkSetupStatus } from './setup.js';
+export { getCacheInfo, clearCache } from './cache.js';
+export { treeShake } from './tree-shake.js';
+export { pipeline, Pipeline } from './pipeline.js';
 export { loadPlugins } from './plugin-loader.js';
-export type { PluginContext, WasmPlugin, PipelineContext, PipelineHook } from '@wasm-apps/types';
 export { PipelinePhase } from '@wasm-apps/types';
 export { treeShakeWasm } from './tree-shake.js';
 
-export async function createNativeApp(options: NativeAppOptions): Promise<void> {
-  const exeSuffix = process.platform === 'win32' && !options.output.toLowerCase().endsWith('.exe') ? '.exe' : '';
-  const output = options.output + exeSuffix;
-  let wasmFiles: string[] = [];
-  for (const p of options.inputPaths) {
-    if (fs.existsSync(p)) {
-      const stat = fs.statSync(p);
-      if (stat.isDirectory()) {
-        const files = await glob('**/*.wasm', { cwd: p, absolute: true, nodir: true });
-        wasmFiles.push(...files);
-      } else if (stat.isFile() && p.endsWith('.wasm')) {
-        wasmFiles.push(path.resolve(p));
-      } else {
-        throw new LinkerError(`La ruta '${p}' no es un archivo .wasm ni una carpeta.`);
-      }
-    } else {
-      throw new LinkerError(`La ruta '${p}' no existe.`);
-    }
-  }
-
-  if (wasmFiles.length === 0) {
-    throw new LinkerError('No se encontraron archivos .wasm.');
-  }
-
-  logger.info(`Modulos encontrados: ${wasmFiles.map(f => path.basename(f)).join(', ')}`);
-
-  const spinner = ora({ color: 'cyan' }).start('Iniciando linkeo...');
-  const wasmtimeVersion = WASMTIME_VERSION;
-  const upToDate = await isBuildUpToDate(wasmFiles, output, {
-    entry: options.entry,
-    target: options.target,
-    wasi: options.wasi,
-    moduleMatching: options.moduleMatching,
-    wasmtimePath: options.wasmtimePath,
-    wasmtimeVersion,
-  });
-
-  if (upToDate) {
-    spinner.succeed(`Binario actualizado: ${path.resolve(output)} (saltando linker)`);
-    return;
-  }
-
-  const wasmtimePromise = options.wasmtimePath
-    ? Promise.resolve({ includeDir: path.join(options.wasmtimePath, 'include'), libPath: path.join(options.wasmtimePath, 'lib', getLibName()) })
-    : ensureWasmtimeAvailable();
-
-  const modules = await readWasmModules(wasmFiles);
-
-  const resolved = resolveDependencies(modules, options.moduleMatching);
-
-  spinner.text = `Resueltas ${resolved.order.length} dependencias`;
-
-  validateEntryExport(resolved, options.entry);
-
-  const allImportTypes = resolved.order.flatMap(mod => parseImportFuncTypes(mod.module.buffer));
-
-  let ctx: PipelineContext = {
-    wasmModules: modules,
-    resolvedLink: resolved,
-    importFuncTypes: allImportTypes,
-    cppCode: undefined,
-    outputPath: path.resolve(output),
-    options: {
-      entry: options.entry,
-      wasi: options.wasi,
-      moduleMatching: options.moduleMatching as ModuleMatchingStrategy,
-      target: options.target,
-    },
-  };
-
-  spinner.text = 'Generando codigo C++...';
-  ctx = await pipeline.runPhase(PipelinePhase.BeforeCodeGen, ctx);
-
-  const cCode = generateCCode(resolved, options.entry, options.wasi, allImportTypes);
-  ctx.cppCode = cCode;
-
-  ctx = await pipeline.runPhase(PipelinePhase.AfterCodeGen, ctx);
-
-  const buildDir = path.join(process.cwd(), '.wapp_build');
-  if (!fs.existsSync(buildDir)) {
-    fs.mkdirSync(buildDir, { recursive: true });
-  }
-  const cFilePath = path.join(buildDir, 'wasm_bundle.cpp');
-  fs.writeFileSync(cFilePath, cCode, 'utf-8');
-  spinner.text = `Codigo C++ generado en ${cFilePath}`;
-
-  const wasmtimeLib = await wasmtimePromise;
-
-  ctx = await pipeline.runPhase(PipelinePhase.BeforeLink, ctx);
-
-  await compileWithCMake({
-    source: cFilePath,
-    includeDir: wasmtimeLib.includeDir,
-    libPath: wasmtimeLib.libPath,
-    output,
-    target: options.target,
-    wasi: options.wasi,
-    verbose: false,
-  });
-
-  ctx = await pipeline.runPhase(PipelinePhase.AfterLink, ctx);
-
-  if (process.platform === 'win32') {
-    const wasmtimeCacheDir = path.dirname(path.dirname(wasmtimeLib.libPath));
-    const dllSource = path.join(wasmtimeCacheDir, 'bin', 'wasmtime.dll');
-    if (fs.existsSync(dllSource)) {
-      const outputDir = path.dirname(path.resolve(output));
-      const dllDest = path.join(outputDir, 'wasmtime.dll');
-      fs.copyFileSync(dllSource, dllDest);
-      logger.detail(`wasmtime.dll copiado a ${dllDest}`);
-    }
-  }
-
-  saveBuildManifest(wasmFiles, output, {
-    entry: options.entry,
-    target: options.target,
-    wasi: options.wasi,
-    moduleMatching: options.moduleMatching,
-    wasmtimePath: options.wasmtimePath,
-    wasmtimeVersion,
-  });
-
-  spinner.succeed(`Ejecutable nativo creado: ${path.resolve(output)}`);
-  await pipeline.runPhase(PipelinePhase.AfterBundle, ctx);
+/**
+ * Crea un ejecutable nativo a partir de módulos WASM.
+ *
+ * Pipeline:
+ * 1. Lee y parsea los módulos .wasm
+ * 2. Resuelve dependencias (orden topológico)
+ * 3. Genera código C++ con la API de Wasmtime C++
+ * 4. Compila con cmake-js
+ *
+ * Soporta builds incrementales comparando hashes en el manifiesto de build.
+ */
+function resolveWasmtimePath(wasmtimePath?: string): string | undefined {
+  if (wasmtimePath) return wasmtimePath;
+  const cacheDir = path.join(os.homedir(), '.wasm-linker');
+  if (!fs.existsSync(cacheDir)) return undefined;
+  const entries = fs.readdirSync(cacheDir).filter((e) => e.startsWith('wasmtime-v') && e.endsWith('-c-api'));
+  if (entries.length === 0) return undefined;
+  entries.sort().reverse();
+  return path.join(cacheDir, entries[0]);
 }
 
-function getLibName(): string {
-  return process.platform === 'win32' ? 'wasmtime.lib' : 'libwasmtime.a';
+export async function createNativeApp(options: NativeAppOptions, quiet = false): Promise<string> {
+  const { inputPaths, output, entry, wasi, moduleMatching } = options;
+
+  const outputPath = path.resolve(output);
+  const { parseWasmModule } = await import('./wasm-io.js');
+
+  const wasmtimeVersion = '46.0.1';
+  const resolvedWasmtimePath = resolveWasmtimePath(options.wasmtimePath);
+  if (!resolvedWasmtimePath) {
+    throw new LinkerError('Wasmtime C-API no encontrado. Ejecuta "wapp setup" primero.', { cacheDir: path.join(os.homedir(), '.wasm-linker') });
+  }
+
+  if (!quiet) {
+    const cacheOk = await isBuildUpToDate(inputPaths, outputPath, {
+      entry,
+      target: options.target,
+      wasi,
+      moduleMatching,
+      wasmtimePath: resolvedWasmtimePath,
+      wasmtimeVersion,
+    });
+    if (cacheOk) {
+      logger.success(`Build up-to-date: ${outputPath}`);
+      return outputPath;
+    }
+  }
+
+  const modules: WasmModuleInfo[] = [];
+  const allImportFuncTypes: WasmImportFuncType[] = [];
+  for (const inputPath of inputPaths) {
+    const module = parseWasmModule(inputPath);
+    modules.push(module);
+    if (module.importFuncTypes) {
+      allImportFuncTypes.push(...module.importFuncTypes);
+    }
+  }
+
+  if (!quiet) {
+    for (const mod of modules) {
+      const funcExports = mod.exports.filter((e: WasmExport) => e.kind === 'function').map((e: WasmExport) => e.name);
+      const funcImports = mod.imports.filter((i: WasmImport) => i.kind === 'function').map((i: WasmImport) => `${i.module}.${i.name}`);
+      logger.detail(`  ${mod.fileName}: ${funcExports.length} exports, ${funcImports.length} imports`);
+    }
+  }
+
+  if (!quiet) logger.step('Resolving dependencies...');
+
+  const resolved = resolveDependencies(modules, moduleMatching);
+
+  if (!quiet) logger.step('Generating C++ source...');
+
+  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined);
+
+  if (!quiet) logger.step('Compiling native binary...');
+
+  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath });
+
+  saveBuildManifest(inputPaths, outputPath, { entry, target: options.target, wasi, moduleMatching, wasmtimePath: resolvedWasmtimePath, wasmtimeVersion });
+
+  if (!quiet) logger.success(`Built: ${outputPath}`);
+  return outputPath;
 }
