@@ -17,12 +17,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --no-frozen-lockfile
         shell: bash
-      - run: pnpm run lint
+      - name: Prettier (formato)
+        run: pnpm format:check
         shell: bash
-        continue-on-error: true
-      - run: pnpm vitest run --reporter=verbose
+      - name: TypeScript build (typecheck + lint)
+        run: pnpm -r build
         shell: bash
-        continue-on-error: true
 
   unit-tests:
     strategy:
