@@ -6,7 +6,7 @@ import { extractArchive } from './extract.js';
 import { logger } from '@wasm-apps/types';
 import { CacheManager, getCacheInfo } from './cache.js';
 
-const WASMTIME_VERSION = '30.0.2';
+const WASMTIME_VERSION = '46.0.1';
 
 /**
  * Instala/actualiza Wasmtime C-API en el caché global.
