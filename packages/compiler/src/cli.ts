@@ -189,7 +189,7 @@ async function watchCommand(
     try {
       fileMtimes.set(f, fs.statSync(f).mtimeMs);
     } catch {
-      // ignore
+      // ignorar
     }
   }
 
@@ -222,7 +222,7 @@ async function watchCommand(
     try {
       fileMtimes.set(changedFile, fs.statSync(changedFile).mtimeMs);
     } catch {
-      // ignore
+      // ignorar
     }
     logger.detail('\nEsperando cambios... (Ctrl+C para salir)\n');
   }, 300);

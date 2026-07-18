@@ -93,7 +93,7 @@ Qué sucede:
 Deberías ver:
 
 ```
-Hello from AssemblyScript!
+¡Hola desde AssemblyScript!
 factorial(1) = 1
 factorial(2) = 2
 factorial(3) = 6

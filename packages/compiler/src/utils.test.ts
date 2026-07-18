@@ -86,7 +86,7 @@ describe('mergeAsConfig', () => {
     const result = mergeAsConfig(config as any, 'release');
     expect(result.optimize).toBe(true);
     expect(result.noAssert).toBe(true);
-    expect(result.debug).toBe(true); // from defaults
+    expect(result.debug).toBe(true); // por defecto
   });
 
   it('target override reemplaza defaults', () => {

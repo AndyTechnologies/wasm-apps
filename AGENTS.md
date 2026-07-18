@@ -97,7 +97,7 @@ pnpm run test                         # Build + ejecutar binario
 ### TypeScript
 
 - `"type": "module"` en todos los packages → usar `import`/`export` ESM
-- Extensiones `.js` en imports locales: `import { foo } from './bar.js'` (aunque el源码 sea `.ts`)
+- Extensiones `.js` en imports locales: `import { foo } from './bar.js'` (aunque el código fuente sea `.ts`)
 - Sin sintaxis `require()`; usar `import` siempre
 - `node:` prefix para módulos built-in: `import path from 'node:path'`
 
@@ -317,14 +317,14 @@ Antes de cada commit:
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+Este proyecto tiene un grafo de conocimiento en graphify-out/ con nodos god, estructura de comunidades y relaciones entre archivos.
 
-When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+Cuando el usuario escriba `/graphify`, usa la skill o instrucciones de graphify instaladas antes de hacer cualquier otra cosa.
 
-Rules:
+Reglas:
 
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- Para preguntas sobre el código, ejecuta primero `graphify query "<pregunta>"` cuando exista graphify-out/graph.json. Usa `graphify path "<A>" "<B>"` para relaciones y `graphify explain "<concepto>"` para conceptos específicos. Estos devuelven un subgrafo acotado, normalmente mucho más pequeño que GRAPH_REPORT.md o la salida cruda de grep.
+- Los archivos sucios en graphify-out/ son esperables tras hooks o actualizaciones incrementales; los archivos sucios no son razón para saltarse graphify. Solo salta graphify si la tarea trata sobre salida incorrecta o desactualizada del grafo, o si el usuario dice explícitamente que no lo uses.
+- Si existe graphify-out/wiki/index.md, úsalo para navegación general en vez de exploración directa del código fuente.
+- Lee graphify-out/GRAPH_REPORT.md solo para revisión general de arquitectura o cuando query/path/explain no proporcionen suficiente contexto.
+- Después de modificar código, ejecuta `graphify update .` para mantener el grafo actualizado (solo AST, sin costo de API).

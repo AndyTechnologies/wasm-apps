@@ -271,7 +271,7 @@ pnpm run linker cache info       # Información de caché
 pnpm run linker cache clear      # Limpiar caché
 ```
 
-## Cross‑compilation
+## Compilación cruzada
 
 El linker soporta compilación cruzada especificando el target con `-t`:
 

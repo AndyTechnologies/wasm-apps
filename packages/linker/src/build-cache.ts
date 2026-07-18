@@ -182,7 +182,7 @@ export function getBuildCacheInfo(rootDir?: string): { path: string; exists: boo
       }
     }
   } catch {
-    // ignore
+    // ignorar
   }
 
   return {
@@ -215,7 +215,7 @@ function dirSize(dirPath: string): number {
       }
     }
   } catch {
-    // skip inaccessible
+    // saltar inaccesibles
   }
   return size;
 }
