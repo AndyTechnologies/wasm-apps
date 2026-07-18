@@ -2,8 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import type { NativeAppOptions } from '@wasm-apps/types';
 import { CMakeError, LinkerError } from '@wasm-apps/types';
+
+const require = createRequire(import.meta.url);
+const CMAKE_JS_BIN = require.resolve('cmake-js/bin/cmake-js');
 
 /**
  * Compila el código C++ generado a un binario nativo usando cmake-js y CMake.
@@ -27,7 +31,7 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
   fs.writeFileSync(path.join(buildDir, 'CMakeLists.txt'), cmakeContent);
 
   try {
-    execFileSync('cmake-js', ['compile', '--directory', buildDir, '--out', buildDir], {
+    execFileSync(CMAKE_JS_BIN, ['compile', '--directory', buildDir, '--out', buildDir], {
       stdio: 'pipe',
       timeout: 120000,
     });

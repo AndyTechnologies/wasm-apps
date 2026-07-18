@@ -15,18 +15,22 @@ import { DownloadError } from '@wasm-apps/types';
  * @param onProgress - Callback con bytes descargados y total (si se conoce)
  * @param expectedHash - Hash SHA-256 esperado para verificación de integridad
  */
-export function downloadFile(url: string, destPath: string, onProgress?: (downloaded: number, total?: number) => void, expectedHash?: string): Promise<void> {
+function doDownload(
+  url: string,
+  destPath: string,
+  onProgress?: (downloaded: number, total?: number) => void,
+  expectedHash?: string,
+  startByte?: number,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const get = parsedUrl.protocol === 'https:' ? httpsGet : httpGet;
-
-    const startByte = fs.existsSync(destPath) ? fs.statSync(destPath).size : 0;
 
     const options = {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port,
       path: parsedUrl.pathname + parsedUrl.search,
-      headers: startByte > 0 ? { Range: `bytes=${startByte}-` } : {},
+      headers: startByte && startByte > 0 ? { Range: `bytes=${startByte}-` } : {},
     };
 
     const hash = crypto.createHash('sha256');
@@ -41,14 +45,19 @@ export function downloadFile(url: string, destPath: string, onProgress?: (downlo
     get(options, (response) => {
       const statusCode = response.statusCode || 0;
 
+      if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
+        const redirectUrl = new URL(response.headers.location, url).toString();
+        resolve(doDownload(redirectUrl, destPath, onProgress, expectedHash, undefined));
+        return;
+      }
+
       if (statusCode >= 400) {
         reject(new DownloadError(`HTTP ${statusCode}`, url, statusCode));
         return;
       }
 
-      // Si el servidor no soporta Range (200 en vez de 206), descarta los datos parciales
-      const useRange = startByte > 0 && statusCode === 206;
-      const stream = openStream(useRange);
+      const useRange = startByte && startByte > 0 && statusCode === 206;
+      const stream = openStream(!!useRange);
 
       const totalSize = parseInt(response.headers['content-length'] || '0', 10);
       let downloaded = useRange ? startByte : 0;
@@ -77,4 +86,9 @@ export function downloadFile(url: string, destPath: string, onProgress?: (downlo
       reject(new DownloadError(`Download failed: ${err.message}`, url, undefined, err));
     });
   });
+}
+
+export function downloadFile(url: string, destPath: string, onProgress?: (downloaded: number, total?: number) => void, expectedHash?: string): Promise<void> {
+  const startByte = fs.existsSync(destPath) ? fs.statSync(destPath).size : 0;
+  return doDownload(url, destPath, onProgress, expectedHash, startByte);
 }
