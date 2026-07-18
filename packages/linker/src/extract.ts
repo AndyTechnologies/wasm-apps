@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import * as tar from 'tar';
 import { DownloadError } from '@wasm-apps/types';
@@ -14,6 +15,8 @@ function isPathSafe(filePath: string): boolean {
 /**
  * Extrae un archivo .tar.xz dentro de un directorio de destino.
  * Calcula un hash SHA-256 del archivo comprimido para tracking.
+ * Usa el binario `xz` del sistema para descompresión, ya que
+ * el paquete `tar` npm no maneja xz nativamente en Node.js.
  *
  * @param archivePath - Ruta al archivo .tar.xz
  * @param destDir - Directorio donde extraer
@@ -27,10 +30,25 @@ export function extractArchive(archivePath: string, destDir: string): Promise<vo
     stream.on('end', () => {
       fs.mkdirSync(destDir, { recursive: true });
 
-      fs.createReadStream(archivePath)
-        .pipe(tar.x({ C: destDir }))
-        .on('finish', () => resolve())
-        .on('error', (err) => reject(new DownloadError(`Extraction failed: ${err.message}`, archivePath, undefined, err)));
+      const xz = spawn('xz', ['-dc', archivePath], { stdio: ['ignore', 'pipe', 'inherit'] });
+      const extract = tar.x({ C: destDir });
+
+      xz.stdout.pipe(extract);
+
+      let closed = false;
+      const done = (err?: Error) => {
+        if (closed) return;
+        closed = true;
+        if (err) reject(new DownloadError(`Extraction failed: ${err.message}`, archivePath, undefined, err));
+        else resolve();
+      };
+
+      xz.on('error', (err) => done(new Error(`xz error: ${err.message}`)));
+      xz.on('exit', (code) => {
+        if (code !== 0) done(new Error(`xz exited with code ${code}`));
+      });
+      extract.on('finish', () => done());
+      extract.on('error', (err) => done(err));
     });
     stream.on('error', (err) => reject(new DownloadError(`Read failed: ${err.message}`, archivePath, undefined, err)));
   });
