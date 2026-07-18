@@ -85,15 +85,18 @@ async function compileSingleFile(file: string, options: CompileFileOptions): Pro
   }
 }
 
-async function buildCommand(files: string[], options: {
-  outDir: string;
-  release: boolean;
-  runtime: string;
-  optimizeLevel: string;
-  shrinkLevel: string;
-  sourcemap: boolean;
-  parallel?: boolean;
-}): Promise<void> {
+async function buildCommand(
+  files: string[],
+  options: {
+    outDir: string;
+    release: boolean;
+    runtime: string;
+    optimizeLevel: string;
+    shrinkLevel: string;
+    sourcemap: boolean;
+    parallel?: boolean;
+  },
+): Promise<void> {
   const outDir = path.resolve(options.outDir);
   const isDev = !options.release;
   const sourceMap = options.sourcemap;
@@ -118,9 +121,9 @@ async function buildCommand(files: string[], options: {
   let results: { file: string; success: boolean; output?: string; error?: string }[];
 
   if (options.parallel !== false && inputFiles.length > 1) {
-    const promises = inputFiles.map(file => compileSingleFile(file, compileOpts));
+    const promises = inputFiles.map((file) => compileSingleFile(file, compileOpts));
     const settled = await Promise.allSettled(promises);
-    results = settled.map(r => r.status === 'fulfilled' ? r.value : { file: 'unknown', success: false, error: r.reason?.message });
+    results = settled.map((r) => (r.status === 'fulfilled' ? r.value : { file: 'unknown', success: false, error: r.reason?.message }));
   } else {
     results = [];
     for (const file of inputFiles) {
@@ -142,25 +145,34 @@ async function buildCommand(files: string[], options: {
     }
   }
 
-  const ok = results.filter(r => r.success).length;
-  const fail = results.filter(r => !r.success).length;
+  const ok = results.filter((r) => r.success).length;
+  const fail = results.filter((r) => !r.success).length;
 
   logger.info(`\nResumen: ${ok} compilados, ${fail} fallos`);
 
   process.exit(fail > 0 ? 1 : 0);
 }
 
-async function watchCommand(files: string[], options: {
-  outDir: string;
-  release: boolean;
-  runtime: string;
-  optimizeLevel: string;
-  shrinkLevel: string;
-  sourcemap: boolean;
-}): Promise<void> {
+async function watchCommand(
+  files: string[],
+  options: {
+    outDir: string;
+    release: boolean;
+    runtime: string;
+    optimizeLevel: string;
+    shrinkLevel: string;
+    sourcemap: boolean;
+  },
+): Promise<void> {
   if (process.platform !== 'win32') {
-    process.on('SIGINT', () => { logger.info('\nDeteniendo...'); process.exit(0); });
-    process.on('SIGTERM', () => { logger.info('\nDeteniendo...'); process.exit(0); });
+    process.on('SIGINT', () => {
+      logger.info('\nDeteniendo...');
+      process.exit(0);
+    });
+    process.on('SIGTERM', () => {
+      logger.info('\nDeteniendo...');
+      process.exit(0);
+    });
   }
 
   const outDir = path.resolve(options.outDir);
@@ -192,7 +204,13 @@ async function watchCommand(files: string[], options: {
   const debouncedCompile = debounce(async (changedFile: string) => {
     logger.step(`\nCambio detectado en ${path.relative(process.cwd(), changedFile)}, recompilando...\n`);
     try {
-      const result = await compileSingleFile(changedFile, { outDir, isDev, sourceMap: options.sourcemap, runtime: options.runtime as AsRuntime, optimizeLevel: parseInt(options.optimizeLevel, 10) });
+      const result = await compileSingleFile(changedFile, {
+        outDir,
+        isDev,
+        sourceMap: options.sourcemap,
+        runtime: options.runtime as AsRuntime,
+        optimizeLevel: parseInt(options.optimizeLevel, 10),
+      });
       if (result.success) {
         logger.success(`OK: ${result.file} -> ${result.output}`);
       } else {
@@ -215,11 +233,14 @@ async function watchCommand(files: string[], options: {
   for (const dir of watchedDirs) {
     fs.watch(dir, { recursive: true }, (_eventType, filename) => {
       const normalizedName = filename ? path.normalize(filename) : null;
-      if (normalizedName && (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.asm.ts') || normalizedName.endsWith('.ts') || normalizedName.endsWith('.asm'))) {
+      if (
+        normalizedName &&
+        (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.asm.ts') || normalizedName.endsWith('.ts') || normalizedName.endsWith('.asm'))
+      ) {
         const fullPath = path.join(dir, normalizedName);
         let targetFile = inputFiles.includes(fullPath) ? fullPath : undefined;
         if (!targetFile) {
-          targetFile = inputFiles.find(f => path.basename(f) === filename);
+          targetFile = inputFiles.find((f) => path.basename(f) === filename);
         }
         if (targetFile) {
           debouncedCompile(targetFile);
@@ -241,10 +262,7 @@ function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): T {
 
 const program = new Command();
 
-program
-  .name('compiler')
-  .description('Compila archivos AssemblyScript (.wasm.ts, .ts, .asm) a WebAssembly')
-  .version('1.0.0');
+program.name('compiler').description('Compila archivos AssemblyScript (.wasm.ts, .ts, .asm) a WebAssembly').version('1.0.0');
 
 program
   .command('build')
