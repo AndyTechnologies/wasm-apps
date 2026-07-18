@@ -40,9 +40,9 @@ Los plugins se declaran en la sección `plugins` de tu `wapp.json`:
 
 ## Plugins oficiales
 
-| id | Descripción |
-|----|-------------|
-| `stdlib-plugin` | Registra las funciones host estándar (console.log, Math.*, Date.now, etc.). Se carga automáticamente. |
+| id                      | Descripción                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `stdlib-plugin`         | Registra las funciones host estándar (console.log, Math.*, Date.now, etc.). Se carga automáticamente.          |
 | `size-optimizer-plugin` | Ejecuta `wasm-opt` (Binaryen) en los módulos WASM antes de embeberlos, reduciendo el tamaño del binario final. |
 
 ### size-optimizer-plugin
@@ -69,13 +69,13 @@ Requiere [Binaryen](https://github.com/WebAssembly/binaryen) instalado en el PAT
 
 Niveles de optimización:
 
-| level | Flags de wasm-opt |
-|-------|-------------------|
-| `z` | `-Oz --strip-debug --strip-producers --converge` (tamaño extremo) |
-| `s` | `-Os --strip-debug --strip-producers --converge` (tamaño) |
-| `0` | `-O0` (sin optimización) |
-| `1` | `-O1` (rápido) |
-| `2` | `-O2` (balanceado) |
+| level | Flags de wasm-opt                                                 |
+| ----- | ----------------------------------------------------------------- |
+| `z`   | `-Oz --strip-debug --strip-producers --converge` (tamaño extremo) |
+| `s`   | `-Os --strip-debug --strip-producers --converge` (tamaño)         |
+| `0`   | `-O0` (sin optimización)                                          |
+| `1`   | `-O1` (rápido)                                                    |
+| `2`   | `-O2` (balanceado)                                                |
 
 ## Cómo sobrescribir una HostFunction
 

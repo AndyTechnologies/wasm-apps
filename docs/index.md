@@ -4,20 +4,20 @@ Compila AssemblyScript (`.wasm.ts`) a WebAssembly y lo enlaza en ejecutables nat
 
 ## Secciones
 
-| Sección | Qué encontrarás |
-|---|---|
-| [Tutorial](tutorial/getting-started.md) | Crea tu primera app nativa WebAssembly desde cero |
-| [Guías prácticas](how-to/) | Soluciones paso a paso para tareas comunes |
-| [Referencia](reference/) | Flags de CLI, opciones de configuración, firmas de API |
-| [Explicación](explanation/) | Arquitectura, decisiones de diseño, cómo funciona |
+| Sección                                 | Qué encontrarás                                        |
+| --------------------------------------- | ------------------------------------------------------ |
+| [Tutorial](tutorial/getting-started.md) | Crea tu primera app nativa WebAssembly desde cero      |
+| [Guías prácticas](how-to/)              | Soluciones paso a paso para tareas comunes             |
+| [Referencia](reference/)                | Flags de CLI, opciones de configuración, firmas de API |
+| [Explicación](explanation/)             | Arquitectura, decisiones de diseño, cómo funciona      |
 
 ## Ejemplos
 
-| Ejemplo | Descripción |
-|---|---|
-| [Plugin básico](../examples/plugin-basico/README.md) | Plugin simple que valida código fuente antes de compilar |
-| [Plugin avanzado](../examples/plugin-avanzado/README.md) | Plugin con función host personalizada y múltiples hooks |
-| [Proyecto completo](../examples/proyecto-completo/README.md) | Proyecto multi-módulo con plugin de métricas |
+| Ejemplo                                                      | Descripción                                              |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| [Plugin básico](../examples/plugin-basico/README.md)         | Plugin simple que valida código fuente antes de compilar |
+| [Plugin avanzado](../examples/plugin-avanzado/README.md)     | Plugin con función host personalizada y múltiples hooks  |
+| [Proyecto completo](../examples/proyecto-completo/README.md) | Proyecto multi-módulo con plugin de métricas             |
 
 ## Enlaces rápidos
 

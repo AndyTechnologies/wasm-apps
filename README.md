@@ -79,9 +79,9 @@ export function mathTest(): void {
 }
 
 export function _start(): void {
-  console.log("Hola desde AssemblyScript!");
-  console.warn("Esto es un warning");
-  console.error("Esto es un error");
+  console.log('Hola desde AssemblyScript!');
+  console.warn('Esto es un warning');
+  console.error('Esto es un error');
   mathTest();
   console.log(`5 + 3 = ${add(5, 3)}`);
   console.log(`Factorial de 5 = ${factorial(5)}`);
@@ -91,7 +91,6 @@ export function factorial(n: number): number {
   if (n <= 1) return 1;
   return n * factorial(n - 1);
 }
-
 ```
 
 La función `_start` es el punto de entrada por defecto.
@@ -196,18 +195,18 @@ wapp build [options]
 
 Compila todos los `.wasm.ts` del `sourceDir` y linkea un único ejecutable nativo.
 
-| Opción | Descripción | Defecto |
-|--------|-------------|---------|
-| `-o, --output <file>` | Ruta del ejecutable de salida | Inferido del nombre del directorio raíz |
-| `-t, --target <triple>` | Target de cross‑compilación | Nativo |
-| `-e, --entry <name>` | Función de entrada | `_start` |
-| `-m, --module-matching <strategy>` | Estrategia: `name-only` o `file-name` | De `wapp.json` o `file-name` |
-| `--source-dir <dir>` | Directorio con archivos `.wasm.ts` | De `wapp.json` o `src` |
-| `--out-dir <dir>` | Directorio para `.wasm` intermedios | De `wapp.json` o `wasm-out` |
-| `--release` | Modo release (optimizado, sin sourcemaps) | `false` |
-| `--optimize-level <n>` | Nivel de optimización 0‑3 | De `wapp.json` o `3` |
-| `--shrink-level <n>` | Nivel de reducción 0‑2 | De `wapp.json` |
-| `--wasi` | Habilitar interfaz WASI | `false` |
+| Opción                             | Descripción                               | Defecto                                 |
+| ---------------------------------- | ----------------------------------------- | --------------------------------------- |
+| `-o, --output <file>`              | Ruta del ejecutable de salida             | Inferido del nombre del directorio raíz |
+| `-t, --target <triple>`            | Target de cross‑compilación               | Nativo                                  |
+| `-e, --entry <name>`               | Función de entrada                        | `_start`                                |
+| `-m, --module-matching <strategy>` | Estrategia: `name-only` o `file-name`     | De `wapp.json` o `file-name`            |
+| `--source-dir <dir>`               | Directorio con archivos `.wasm.ts`        | De `wapp.json` o `src`                  |
+| `--out-dir <dir>`                  | Directorio para `.wasm` intermedios       | De `wapp.json` o `wasm-out`             |
+| `--release`                        | Modo release (optimizado, sin sourcemaps) | `false`                                 |
+| `--optimize-level <n>`             | Nivel de optimización 0‑3                 | De `wapp.json` o `3`                    |
+| `--shrink-level <n>`               | Nivel de reducción 0‑2                    | De `wapp.json`                          |
+| `--wasi`                           | Habilitar interfaz WASI                   | `false`                                 |
 
 #### `setup`
 
@@ -276,15 +275,15 @@ pnpm run linker cache clear      # Limpiar caché
 
 El linker soporta compilación cruzada especificando el target con `-t`:
 
-| Target | Triple | Toolchain requerida |
-|--------|--------|-------------------|
-| Nativo | *(omitir)* | La del sistema |
-| Linux x86_64 | `x86_64-linux-gnu` | `gcc-x86-64-linux-gnu` |
-| Linux ARM64 | `aarch64-linux-gnu` | `gcc-aarch64-linux-gnu` |
-| macOS x86_64 | `x86_64-macos` | osxcross |
-| macOS ARM64 | `aarch64-macos` | osxcross |
-| Windows (MinGW) | `x86_64-windows` | `gcc-mingw-w64-x86-64` |
-| Windows (MSVC) | `x86_64-windows-msvc` | Clang + LLD |
+| Target          | Triple                | Toolchain requerida     |
+| --------------- | --------------------- | ----------------------- |
+| Nativo          | _(omitir)_            | La del sistema          |
+| Linux x86_64    | `x86_64-linux-gnu`    | `gcc-x86-64-linux-gnu`  |
+| Linux ARM64     | `aarch64-linux-gnu`   | `gcc-aarch64-linux-gnu` |
+| macOS x86_64    | `x86_64-macos`        | osxcross                |
+| macOS ARM64     | `aarch64-macos`       | osxcross                |
+| Windows (MinGW) | `x86_64-windows`      | `gcc-mingw-w64-x86-64`  |
+| Windows (MSVC)  | `x86_64-windows-msvc` | Clang + LLD             |
 
 Ejemplo de cross‑compilación a ARM64 desde x86_64:
 
@@ -296,14 +295,14 @@ pnpm run linker build wasm-out/app.wasm -o out/app-arm64 -t aarch64-linux-gnu
 
 La mayoría de las funciones del módulo `env` de la stdlib de AssemblyScript están implementadas como **host functions** nativas en C++:
 
-| Categoría | Funciones |
-|-----------|-----------|
-| **console** | `log`, `debug`, `info`, `warn`, `error`, `time`, `timeLog`, `timeEnd`, `assert` |
-| **Math** | `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atan2`, `atanh`, `cbrt`, `ceil`, `clz32`, `cos`, `cosh`, `exp`, `expm1`, `floor`, `fround`, `hypot`, `imul`, `log`, `log10`, `log1p`, `log2`, `max`, `min`, `pow`, `random`, `round`, `sign`, `sin`, `sinh`, `sqrt`, `tan`, `tanh`, `trunc` |
-| **Date** | `now` |
-| **Performance** | `now` |
-| **Process** | `exit` |
-| **seed** | generación de seed aleatoria |
+| Categoría       | Funciones                                                                                                                                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **console**     | `log`, `debug`, `info`, `warn`, `error`, `time`, `timeLog`, `timeEnd`, `assert`                                                                                                                                                                                                               |
+| **Math**        | `abs`, `acos`, `acosh`, `asin`, `asinh`, `atan`, `atan2`, `atanh`, `cbrt`, `ceil`, `clz32`, `cos`, `cosh`, `exp`, `expm1`, `floor`, `fround`, `hypot`, `imul`, `log`, `log10`, `log1p`, `log2`, `max`, `min`, `pow`, `random`, `round`, `sign`, `sin`, `sinh`, `sqrt`, `tan`, `tanh`, `trunc` |
+| **Date**        | `now`                                                                                                                                                                                                                                                                                         |
+| **Performance** | `now`                                                                                                                                                                                                                                                                                         |
+| **Process**     | `exit`                                                                                                                                                                                                                                                                                        |
+| **seed**        | generación de seed aleatoria                                                                                                                                                                                                                                                                  |
 
 Constantes de `Math` (PI, E, LN2, etc.) y `process.argv` se definen como imports globales.
 
@@ -352,6 +351,10 @@ wasm-apps/
    - Instancia los módulos en orden de dependencia
    - Llama a la función de entrada (`_start`)
 4. **Compilación** — cmake-js + toolchain C++ producen el ejecutable nativo enlazado estáticamente con Wasmtime
+
+## Contribuir
+
+Ver [CONTRIBUTING.md](./CONTRIBUTING.md) para instrucciones de desarrollo, convenciones de código y proceso de PRs.
 
 ## Licencia
 

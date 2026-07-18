@@ -23,22 +23,22 @@ Edita `wapp.json` para personalizar el comportamiento:
     "release": false,
     "runtime": "incremental",
     "optimizeLevel": 3,
-    "shrinkLevel": 0,
+    "shrinkLevel": 2,
     "sourceMap": true
   }
 }
 ```
 
-| Campo | Propósito |
-|---|---|
-| `sourceDir` | Directorio que contiene archivos `.wasm.ts` |
-| `outDir` | Directorio de salida para archivos `.wasm` intermedios |
-| `output` | Nombre del ejecutable nativo final |
-| `entry` | Nombre del export a llamar al iniciar (por defecto `_start`) |
-| `moduleMatching` | Cómo emparejar imports con archivos fuente |
-| `wasi` | Habilitar interfaz WASI |
-| `target` | Tripleta de destino para compilación cruzada |
-| `compiler` | Flags del compilador AssemblyScript |
+| Campo            | Propósito                                                    |
+| ---------------- | ------------------------------------------------------------ |
+| `sourceDir`      | Directorio que contiene archivos `.wasm.ts`                  |
+| `outDir`         | Directorio de salida para archivos `.wasm` intermedios       |
+| `output`         | Nombre del ejecutable nativo final                           |
+| `entry`          | Nombre del export a llamar al iniciar (por defecto `_start`) |
+| `moduleMatching` | Cómo emparejar imports con archivos fuente                   |
+| `wasi`           | Habilitar interfaz WASI                                      |
+| `target`         | Tripleta de destino para compilación cruzada                 |
+| `compiler`       | Flags del compilador AssemblyScript                          |
 
 ## Sobrescrituras desde CLI
 

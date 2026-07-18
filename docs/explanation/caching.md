@@ -26,7 +26,7 @@ El archivo de Wasmtime C-API (~15 MB) se descarga una vez y se almacena en cach�
 
 ## Gestión de caché
 
-| Comando | Efecto |
-|---|---|
-| `wapp cache info` | Muestra las tres cachés con tamaño y cantidad de elementos |
-| `wapp cache clear` | Elimina las tres cachés por completo |
+| Comando            | Efecto                                                     |
+| ------------------ | ---------------------------------------------------------- |
+| `wapp cache info`  | Muestra las tres cachés con tamaño y cantidad de elementos |
+| `wapp cache clear` | Elimina las tres cachés por completo                       |
