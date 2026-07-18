@@ -78,6 +78,7 @@ ${wasmtimePath ? 'target_link_libraries(wasm-linker wasmtime)' : 'target_link_li
 function findBuiltBinary(buildDir: string): string | null {
   const exe = process.platform === 'win32' ? '.exe' : '';
   const candidates = [
+    path.join(buildDir, `wasm-linker${exe}`),
     path.join(buildDir, 'build', `wasm-linker${exe}`),
     path.join(buildDir, 'build', 'Release', `wasm-linker${exe}`),
     path.join(buildDir, 'build', 'Debug', `wasm-linker${exe}`),

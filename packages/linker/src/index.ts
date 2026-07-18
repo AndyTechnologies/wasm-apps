@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { saveBuildManifest, isBuildUpToDate } from './build-cache.js';
 import { resolveDependencies } from './linker.js';
 import { generateCCode } from './codegen.js';
@@ -29,6 +30,16 @@ export { treeShakeWasm } from './tree-shake.js';
  *
  * Soporta builds incrementales comparando hashes en el manifiesto de build.
  */
+function resolveWasmtimePath(wasmtimePath?: string): string | undefined {
+  if (wasmtimePath) return wasmtimePath;
+  const cacheDir = path.join(os.homedir(), '.wasm-linker');
+  if (!fs.existsSync(cacheDir)) return undefined;
+  const entries = fs.readdirSync(cacheDir).filter((e) => e.startsWith('wasmtime-v') && e.endsWith('-c-api'));
+  if (entries.length === 0) return undefined;
+  entries.sort().reverse();
+  return path.join(cacheDir, entries[0]);
+}
+
 export async function createNativeApp(options: NativeAppOptions, quiet = false): Promise<string> {
   const { inputPaths, output, entry, wasi, moduleMatching } = options;
 
@@ -36,6 +47,10 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
   const { parseWasmModule } = await import('./wasm-io.js');
 
   const wasmtimeVersion = '46.0.1';
+  const resolvedWasmtimePath = resolveWasmtimePath(options.wasmtimePath);
+  if (!resolvedWasmtimePath) {
+    throw new LinkerError('Wasmtime C-API no encontrado. Ejecuta "wapp setup" primero.', { cacheDir: path.join(os.homedir(), '.wasm-linker') });
+  }
 
   if (!quiet) {
     const cacheOk = await isBuildUpToDate(inputPaths, outputPath, {
@@ -43,7 +58,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
       target: options.target,
       wasi,
       moduleMatching,
-      wasmtimePath: options.wasmtimePath,
+      wasmtimePath: resolvedWasmtimePath,
       wasmtimeVersion,
     });
     if (cacheOk) {
@@ -80,9 +95,9 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Compiling native binary...');
 
-  await compileCpp(cpp, outputPath, options);
+  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath });
 
-  saveBuildManifest(inputPaths, outputPath, { entry, target: options.target, wasi, moduleMatching, wasmtimePath: options.wasmtimePath, wasmtimeVersion });
+  saveBuildManifest(inputPaths, outputPath, { entry, target: options.target, wasi, moduleMatching, wasmtimePath: resolvedWasmtimePath, wasmtimeVersion });
 
   if (!quiet) logger.success(`Built: ${outputPath}`);
   return outputPath;
