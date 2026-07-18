@@ -35,7 +35,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
   const outputPath = path.resolve(output);
   const { parseWasmModule } = await import('./wasm-io.js');
 
-  const wasmtimeVersion = '30.0.2';
+  const wasmtimeVersion = '46.0.1';
 
   if (!quiet) {
     const cacheOk = await isBuildUpToDate(inputPaths, outputPath, {

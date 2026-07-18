@@ -8,10 +8,11 @@ vi.mock('assemblyscript/asc', () => ({
 }));
 
 vi.mock('./disk-cache.js', async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = (await importOriginal()) as any;
   return {
     ...actual,
     getCached: () => null,
+    saveToCache: () => {},
   };
 });
 
@@ -124,10 +125,12 @@ describe('compileWasm', () => {
       stdout: '',
     });
 
-    await expect(compileWasm({
-      fileName: `${wasmFile}-err`,
-      sourceCode: 'invalid as source',
-    })).rejects.toThrow('Error compilando');
+    await expect(
+      compileWasm({
+        fileName: `${wasmFile}-err`,
+        sourceCode: 'invalid as source',
+      }),
+    ).rejects.toThrow('Error compilando');
   });
 
   it('throws when required output files are missing', async () => {
@@ -136,10 +139,12 @@ describe('compileWasm', () => {
       return { error: null, stderr: '', stdout: '' };
     });
 
-    await expect(compileWasm({
-      fileName: `${wasmFile}-missing`,
-      sourceCode: 'export function _start(): void {}',
-    })).rejects.toThrow('No se generaron');
+    await expect(
+      compileWasm({
+        fileName: `${wasmFile}-missing`,
+        sourceCode: 'export function _start(): void {}',
+      }),
+    ).rejects.toThrow('No se generaron');
   });
 
   it('passes correct args for dev mode', async () => {

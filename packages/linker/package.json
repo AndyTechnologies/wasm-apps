@@ -33,8 +33,14 @@
   "engines": {
     "node": ">=22"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "wasm",
+    "webassembly",
+    "linker",
+    "native",
+    "wasmtime"
+  ],
+  "author": "AndyTechnologies",
   "license": "MIT",
   "type": "module",
   "dependencies": {

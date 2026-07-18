@@ -40,7 +40,7 @@
     "cli",
     "native"
   ],
-  "author": "",
+  "author": "AndyTechnologies",
   "license": "MIT",
   "type": "module",
   "dependencies": {
