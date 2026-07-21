@@ -4,6 +4,7 @@ import { logger, type PluginConfig, type PluginContext, type WasmPlugin } from '
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { pipeline } from './pipeline.js';
 import { registerBuiltinHostFunctions } from './builtin-host-functions.js';
+import { pluginManager } from './plugin-manager.js';
 
 const DEFAULT_PLUGINS: PluginConfig[] = [
   { id: 'stdlib-plugin', enabled: true, config: {} },
@@ -22,6 +23,7 @@ function createContext(cfg: PluginConfig): PluginContext {
 
 function registerPlugin(plugin: WasmPlugin, context: PluginContext): void {
   plugin.register(context);
+  pluginManager.registerWasmPlugin(plugin);
   logger.detail(`Plugin cargado: ${plugin.id}`);
 }
 
@@ -58,6 +60,10 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
 
     if (cfg.path) {
       const resolvedPath = path.resolve(cfg.path);
+      if (!resolvedPath.startsWith(process.cwd())) {
+        logger.warn(`Plugin ${cfg.id}: la ruta ${resolvedPath} esta fuera del directorio del proyecto. Se omite por seguridad.`);
+        continue;
+      }
       try {
         const mod = (await import(pathToFileURL(resolvedPath).href)) as { default?: WasmPlugin; register?: (ctx: PluginContext) => void };
         const plugin: WasmPlugin | undefined = mod.default || (mod as unknown as WasmPlugin);

@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { logger, type ModuleMatchingStrategy } from '@wasm-apps/types';
-import { initProject, buildProject, devCommand, runSetup, cacheInfo, clearCache } from './index.js';
-import path from 'node:path';
+import { createRequire } from 'node:module';
+import { logger } from '@wasm-apps/types';
+import { getCommand } from './commands/index.js';
+import { BuildCommand } from './commands/build-command.js';
+import { DevCommand } from './commands/dev-command.js';
+import { InitCommand } from './commands/init-command.js';
+import { SetupCommand } from './commands/setup-command.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 
 const program = new Command();
-
-program.name('wapp').description('Compila y linkea proyectos AssemblyScript en ejecutables nativos').version('1.0.0');
+program.name('wapp').description('Compila y linkea proyectos AssemblyScript en ejecutables nativos').version(version);
 
 program
   .command('init')
@@ -14,8 +20,8 @@ program
   .argument('[dir]', 'Directorio donde crear la configuracion', '.')
   .action(async (dir: string) => {
     try {
-      const rootDir = path.resolve(dir);
-      initProject(rootDir);
+      const cmd = getCommand('init') || new InitCommand();
+      await cmd.execute({ dir });
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);
       process.exit(1);
@@ -37,25 +43,8 @@ program
   .option('--wasi', 'Habilitar interfaz WASI', false)
   .action(async (options) => {
     try {
-      if (options.moduleMatching) {
-        if (options.moduleMatching !== 'name-only' && options.moduleMatching !== 'file-name') {
-          throw new Error(`module-matching debe ser 'name-only' o 'file-name', se recibio '${options.moduleMatching}'`);
-        }
-      }
-
-      await buildProject({
-        rootDir: process.cwd(),
-        output: options.output,
-        target: options.target,
-        entry: options.entry,
-        moduleMatching: options.moduleMatching as ModuleMatchingStrategy | undefined,
-        wasi: options.wasi,
-        release: options.release,
-        optimizeLevel: options.optimizeLevel !== undefined ? parseInt(options.optimizeLevel, 10) : undefined,
-        shrinkLevel: options.shrinkLevel !== undefined ? parseInt(options.shrinkLevel, 10) : undefined,
-        sourceDir: options.sourceDir,
-        outDir: options.outDir,
-      });
+      const cmd = getCommand('build') || new BuildCommand();
+      await cmd.execute(options);
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);
       if (err.details) {
@@ -77,16 +66,8 @@ program
   .option('--out-dir <dir>', 'Directorio para archivos .wasm intermedios')
   .action(async (options) => {
     try {
-      await devCommand({
-        rootDir: process.cwd(),
-        output: options.output,
-        target: options.target,
-        entry: options.entry,
-        wasi: options.wasi,
-        release: options.release,
-        sourceDir: options.sourceDir,
-        outDir: options.outDir,
-      });
+      const cmd = getCommand('dev') || new DevCommand();
+      await cmd.execute(options);
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);
       process.exit(1);
@@ -98,7 +79,8 @@ program
   .description('Descarga las dependencias necesarias (Wasmtime C-API)')
   .action(async () => {
     try {
-      await runSetup();
+      const cmd = getCommand('setup') || new SetupCommand();
+      await cmd.execute({});
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);
       process.exit(1);
@@ -112,7 +94,12 @@ cacheCmd
   .description('Muestra informacion de la cache')
   .action(async () => {
     try {
-      await cacheInfo();
+      const cmd = getCommand('cache-info');
+      if (!cmd) {
+        logger.error('Comando cache-info no disponible');
+        process.exit(1);
+      }
+      await cmd.execute({});
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);
       process.exit(1);
@@ -127,11 +114,12 @@ cacheCmd
   .option('--all', 'Elimina toda la cache (build + descargas)', false)
   .action(async (options) => {
     try {
-      await clearCache({
-        build: options.build || undefined,
-        linker: options.linker || undefined,
-        all: options.all || undefined,
-      });
+      const cmd = getCommand('cache-clear');
+      if (!cmd) {
+        logger.error('Comando cache-clear no disponible');
+        process.exit(1);
+      }
+      await cmd.execute(options);
     } catch (err: any) {
       logger.error(`\nError: ${err.message}`);
       process.exit(1);

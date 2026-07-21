@@ -250,7 +250,7 @@ export function registerBuiltinHostFunctions(registry: HostFunctionRegistry): vo
   registry.register(
     'env',
     'Math.imul',
-    (_params, _results) => `results[0] = Val(double((double)((uint32_t)args[0].f64() * (uint32_t)args[1].f64()))); return std::monostate{};`,
+    (_params, _results) => `results[0] = Val(double((double)((int32_t)((uint32_t)args[0].f64() * (uint32_t)args[1].f64())))); return std::monostate{};`,
   );
   registry.register('env', 'Math.log', (_params, _results) => `results[0] = Val(double(std::log(args[0].f64()))); return std::monostate{};`);
   registry.register('env', 'Math.log10', (_params, _results) => `results[0] = Val(double(std::log10(args[0].f64()))); return std::monostate{};`);

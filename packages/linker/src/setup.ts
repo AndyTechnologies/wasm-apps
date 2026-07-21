@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { getWasmtimeAsset, getWasmtimeCacheDir, getWasmtimeIncludeDir } from './wasmtime-dl.js';
 import { downloadFile } from './downloader.js';
-import { extractArchive } from './extract.js';
+import { extractArchive, extractZip } from './extract.js';
 import { logger } from '@wasm-apps/types';
 import { CacheManager, getCacheInfo } from './cache.js';
 
@@ -59,7 +59,11 @@ export async function setupWasmtime(wasmtimePath?: string, ignoreCache?: boolean
   });
 
   logger.step('Extracting Wasmtime C-API...');
-  await extractArchive(archivePath, cacheDir);
+  if (fileName.endsWith('.zip')) {
+    await extractZip(archivePath, cacheDir);
+  } else {
+    await extractArchive(archivePath, cacheDir);
+  }
 
   logger.success('Wasmtime C-API setup complete');
 }

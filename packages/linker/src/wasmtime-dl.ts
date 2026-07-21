@@ -9,6 +9,16 @@ interface WasmtimeAsset {
   fileName: string;
 }
 
+function getWasmtimeTarget(platform: string, arch: string): string {
+  if (platform === 'linux' && arch === 'x64') return 'x86_64-linux';
+  if (platform === 'linux' && arch === 'arm64') return 'aarch64-linux';
+  if (platform === 'darwin' && arch === 'x64') return 'x86_64-macos';
+  if (platform === 'darwin' && arch === 'arm64') return 'aarch64-macos';
+  if (platform === 'win32' && arch === 'x64') return 'x86_64-windows';
+  if (platform === 'win32' && arch === 'arm64') return 'aarch64-windows';
+  throw new Error(`Unsupported platform: ${platform}-${arch}`);
+}
+
 /**
  * Determina la URL de descarga de Wasmtime C-API según plataforma y arquitectura.
  *
@@ -18,16 +28,7 @@ interface WasmtimeAsset {
 export function getWasmtimeAsset(version: string, platform?: string, arch?: string): WasmtimeAsset {
   const plat = platform || os.platform();
   const a = arch || os.arch();
-
-  let target: string;
-
-  if (plat === 'linux' && a === 'x64') target = 'x86_64-linux';
-  else if (plat === 'linux' && a === 'arm64') target = 'aarch64-linux';
-  else if (plat === 'darwin' && a === 'x64') target = 'x86_64-macos';
-  else if (plat === 'darwin' && a === 'arm64') target = 'aarch64-macos';
-  else if (plat === 'win32' && a === 'x64') target = 'x86_64-windows';
-  else if (plat === 'win32' && a === 'arm64') target = 'aarch64-windows';
-  else throw new Error(`Unsupported platform: ${plat}-${a}`);
+  const target = getWasmtimeTarget(plat, a);
 
   const ext = plat === 'win32' ? 'zip' : 'tar.xz';
   const fileName = `wasmtime-v${version}-${target}-c-api.${ext}`;
@@ -45,14 +46,7 @@ export function getWasmtimeCacheDir(): string {
 export function getWasmtimeIncludeDir(cacheDir: string, version: string, platform?: string, arch?: string): string {
   const plat = platform || os.platform();
   const a = arch || os.arch();
-  let target: string;
-  if (plat === 'linux' && a === 'x64') target = 'x86_64-linux';
-  else if (plat === 'linux' && a === 'arm64') target = 'aarch64-linux';
-  else if (plat === 'darwin' && a === 'x64') target = 'x86_64-macos';
-  else if (plat === 'darwin' && a === 'arm64') target = 'aarch64-macos';
-  else if (plat === 'win32' && a === 'x64') target = 'x86_64-windows';
-  else if (plat === 'win32' && a === 'arm64') target = 'aarch64-windows';
-  else throw new Error(`Unsupported platform: ${plat}-${a}`);
+  const target = getWasmtimeTarget(plat, a);
 
   return path.join(cacheDir, `wasmtime-v${version}-${target}-c-api`, 'include');
 }

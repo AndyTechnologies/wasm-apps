@@ -1,0 +1,57 @@
+name: Auto Release PR
+on:
+  push:
+    branches: [dev]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  auto-pr:
+    if: github.event.head_commit != null
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check commit message
+        id: check
+        shell: bash
+        run: |
+          MSG=$(jq -r '.head_commit.message // ""' "$GITHUB_EVENT_PATH")
+          if [[ "$MSG" =~ ^Release\ v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "match=true" >> "$GITHUB_OUTPUT"
+            VERSION="${MSG#Release v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "match=false" >> "$GITHUB_OUTPUT"
+            echo "Commit message does not match Release vX.Y.Z pattern, skipping"
+          fi
+
+      - name: Check for existing PR
+        if: steps.check.outputs.match == 'true'
+        id: dupe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          COUNT=$(gh pr list --base main --head dev --json number --jq 'length')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "PR from dev to main already exists, skipping"
+          fi
+
+      - name: Create Release PR
+        if: steps.check.outputs.match == 'true' && steps.dupe.outputs.count == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.check.outputs.version }}"
+          gh pr create \
+            --base main \
+            --head dev \
+            --title "Release v${VERSION}" \
+            --body "Automated release PR for v${VERSION}. Merge when CI passes."

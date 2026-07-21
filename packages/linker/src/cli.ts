@@ -100,9 +100,13 @@ program
     logger.detail('Esperando cambios... (Ctrl+C para salir)\n');
 
     let debounceTimer: ReturnType<typeof setTimeout>;
+    const watchOptions: fs.WatchOptions = process.platform === 'linux' ? { recursive: false } : { recursive: true };
+    if (process.platform === 'linux') {
+      logger.detail('Nota: en Linux se usa watch no-recursivo. Las subcarpetas nuevas no se detectan.');
+    }
     for (const dir of watchedDirs) {
-      fs.watch(dir, { recursive: true }, (_eventType, filename) => {
-        const normalizedName = filename ? path.normalize(filename) : null;
+      fs.watch(dir, watchOptions, (_eventType, filename) => {
+        const normalizedName = typeof filename === 'string' ? path.normalize(filename) : null;
         if (normalizedName && normalizedName.endsWith('.wasm')) {
           clearTimeout(debounceTimer);
           debounceTimer = setTimeout(doBuild, 500);
@@ -143,10 +147,7 @@ cacheCmd
     }
     logger.info(`Ruta: ${info.path}`);
     logger.info(`Tamano: ${info.humanSize} (${info.size} bytes)`);
-    logger.info('Contenido:');
-    for (const entry of info.entries) {
-      logger.info(`  ${entry}`);
-    }
+    logger.info(`Entradas cacheadas: ${info.entries}`);
   });
 
 cacheCmd

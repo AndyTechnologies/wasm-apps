@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [dev]
+    branches: [dev, main]
   pull_request:
     branches: [main]
 
@@ -17,14 +17,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --no-frozen-lockfile
         shell: bash
-      - name: Prettier (formato)
-        run: pnpm format:check
-        shell: bash
-      - name: TypeScript build (typecheck + lint)
-        run: pnpm -r build
+      - name: Check (format + build + tests)
+        run: pnpm check
         shell: bash
 
   unit-tests:
+    needs: lint
     strategy:
       fail-fast: false
       matrix:
@@ -46,8 +44,12 @@ jobs:
         shell: bash
 
   integration-tests:
-    runs-on: ubuntu-latest
     needs: unit-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -59,8 +61,18 @@ jobs:
         shell: bash
       - run: pnpm -r build
         shell: bash
-      - name: Setup cmake y xz-utils
+      - name: Cache wasmtime linker
+        uses: actions/cache@v4
+        with:
+          path: ~/.wasm-linker/
+          key: wasm-linker-${{ runner.os }}-${{ hashFiles('packages/linker/CMakeLists.txt') }}
+      - name: Setup system deps (Linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y cmake xz-utils
+        shell: bash
+      - name: Setup system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake xz
         shell: bash
       - name: Setup wasmtime
         run: pnpm run linker setup

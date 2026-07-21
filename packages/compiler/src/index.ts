@@ -7,9 +7,22 @@ import { getCached, saveToCache, computeKey } from './disk-cache.js';
 import type { CompileOptions, CompileResult } from '@wasm-apps/types';
 import { CompilerError } from '@wasm-apps/types';
 
-export { getCompileCacheInfo, clearCompileCache } from './disk-cache.js';
+export { getCompileCacheInfo, clearCompileCache, deleteCacheEntry } from './disk-cache.js';
+export { CompilerCacheRepository } from './compiler-cache-repository.js';
+export { AssemblyScriptCompilerStrategy } from './assemblyscript-compiler-strategy.js';
 
 const MEMORY_CACHE = new LRUCache<string, CompileResult>();
+const PROJECT_ROOT = process.cwd();
+
+/** Limpia la caché en memoria (útil en tests). */
+export function clearMemoryCache(): void {
+  MEMORY_CACHE.clear();
+}
+
+function isPathInsideProject(filePath: string): boolean {
+  const resolved = path.resolve(filePath);
+  return resolved.startsWith(PROJECT_ROOT);
+}
 
 export async function compileWasm(
   options: CompileOptions = {
@@ -28,26 +41,33 @@ export async function compileWasm(
   const fileCache = new LRUCache<string, string>(opts.maxMemoryCacheSize ?? MAX_MEMORY_CACHE_SIZE);
 
   const checkCache = (cached: CompileResult): boolean => compareHash(cached.hash, hash);
+  const memoryKey = hash;
 
-  if (MEMORY_CACHE.has(opts.fileName)) {
-    const cached = MEMORY_CACHE.get(opts.fileName)!;
+  if (MEMORY_CACHE.has(memoryKey)) {
+    const cached = MEMORY_CACHE.get(memoryKey)!;
     if (checkCache(cached)) return cached;
-    MEMORY_CACHE.delete(opts.fileName);
+    MEMORY_CACHE.delete(memoryKey);
   }
 
   const cacheKey = computeKey(opts.sourceCode, opts);
   const diskCached = getCached(cacheKey);
   if (diskCached && compareHash(diskCached.hash, hash)) {
-    MEMORY_CACHE.set(opts.fileName, diskCached);
+    MEMORY_CACHE.set(memoryKey, diskCached);
     return diskCached;
   }
 
+  const recordedDeps = new Set<string>();
+
   const readFileFromDisk = (filePath: string): string | null => {
     if (filePath === opts.fileName) return opts.sourceCode;
+    if (!isPathInsideProject(filePath)) {
+      return null;
+    }
     if (fileCache.has(filePath)) return fileCache.get(filePath)!;
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
       fileCache.set(filePath, content);
+      recordedDeps.add(filePath);
       return content;
     } catch {
       return null;
@@ -94,14 +114,21 @@ export async function compileWasm(
       const normalizedFileName = path.resolve(opts.fileName);
       if (normalizedReadName === normalizedFileName) return opts.sourceCode;
       if (name === 'asconfig.json') return null;
+      if (!isPathInsideProject(name) && name.startsWith('/')) {
+        return null;
+      }
       let resolved: string;
       if (name.startsWith('.')) {
         resolved = resolveImportPath(name, opts.fileName, opts.aliases || []);
       } else {
-        resolved = path.isAbsolute(name) ? name : path.resolve(baseDir || path.dirname(opts.fileName), name);
+        const base = baseDir || path.dirname(opts.fileName);
+        resolved = path.isAbsolute(name) ? name : path.resolve(base, name);
         if (!resolved.endsWith('.ts') && !resolved.endsWith('.wasm.ts')) {
           resolved += '.ts';
         }
+      }
+      if (!isPathInsideProject(resolved)) {
+        return null;
       }
       let content = readFileFromDisk(resolved);
       if (content === null && !resolved.endsWith('.wasm.ts')) {
@@ -155,11 +182,11 @@ export async function compileWasm(
     dtsContent,
     bindingsJs,
     sourceMap: sourceMap || undefined,
-    dependencies: [],
+    dependencies: Array.from(recordedDeps),
     hash,
   };
 
-  MEMORY_CACHE.set(opts.fileName, result);
+  MEMORY_CACHE.set(memoryKey, result);
   saveToCache(cacheKey, result);
   return result;
 }

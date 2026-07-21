@@ -20,7 +20,7 @@ El manifiesto almacena hashes de todos los archivos `.wasm` de entrada más las 
 
 ## Caché de descarga
 
-**Ubicación:** `~/.wasm-linker/wasmtime/` (global al usuario)
+**Ubicación:** `~/.wasm-linker/` (global al usuario)
 
 El archivo de Wasmtime C-API (~15 MB) se descarga una vez y se almacena en caché global. Las peticiones HTTP range permiten descargas reanudables. Se limpia con `wapp cache clear` y se regenera con `wapp setup`.
 

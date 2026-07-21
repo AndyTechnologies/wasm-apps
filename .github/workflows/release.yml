@@ -1,7 +1,5 @@
 name: Release
 on:
-  push:
-    branches: [main]
   pull_request:
     types: [closed]
     branches: [main]
@@ -12,11 +10,12 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 permissions:
   contents: write
   id-token: write
-  pull-requests: write
 
 jobs:
   release:
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    if: >
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'Release v'))
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -32,82 +31,43 @@ jobs:
           pnpm install --no-frozen-lockfile
           pnpm -r build
 
-      - name: Check for pending changesets
-        id: check
+      - name: Publish changed packages
         run: |
-          if ls .changeset/*.md 2>/dev/null | grep -vqE '(README|config)'; then
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          PUBLISHED=0
+          for pkg in packages/*/; do
+            NAME=$(node -p "require('./${pkg}package.json').name")
+            VERSION=$(node -p "require('./${pkg}package.json').version")
+            PUBLISHED_VER=$(npm view "$NAME" version 2>/dev/null || echo "0.0.0")
+            if [ "$VERSION" != "$PUBLISHED_VER" ]; then
+              echo "Publishing $NAME@$VERSION (was $PUBLISHED_VER)"
+              (cd "$pkg" && npm publish --provenance --access public)
+              PUBLISHED=$((PUBLISHED + 1))
+            else
+              echo "Skipping $NAME@$VERSION (already published)"
+            fi
+          done
+          if [ "$PUBLISHED" -eq 0 ]; then
+            >&2 echo "ERROR: No packages had version changes"
+            exit 1
           fi
-
-      - name: Version packages
-        if: steps.check.outputs.has_changesets == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          pnpm install --no-frozen-lockfile
-          pnpm changeset version
-          pnpm install --no-frozen-lockfile
-          git add -A
-          git commit -m "chore: version packages" || true
-          git push origin HEAD:changeset-release/main --force
-
-      - name: Create Version PR
-        if: steps.check.outputs.has_changesets == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr create \
-            --base main \
-            --head changeset-release/main \
-            --title "chore: version packages" \
-            --body "Version bump via Changesets" \
-            --label automated || true
-
-      - name: Publish to npm
-        if: steps.check.outputs.has_changesets == 'false'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          pnpm changeset publish
-          echo "Published to npm"
+          echo "Published $PUBLISHED package(s)"
 
       - name: Get version
-        if: steps.check.outputs.has_changesets == 'false'
         id: version
         run: |
           VERSION=$(node -p "require('./packages/cli/package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Extract changelog
-        if: steps.check.outputs.has_changesets == 'false'
-        id: changelog
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          awk -v ver="$VERSION" '
-            /^## / {
-              if (found) exit
-              if ($0 ~ "^## " ver "$") found=1
-              next
-            }
-            found { print }
-          ' packages/cli/CHANGELOG.md > /tmp/release_body.md
-
       - name: Create GitHub Release
-        if: steps.check.outputs.has_changesets == 'false'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION ya existe, saltando release"
+            echo "Tag v$VERSION already exists, skipping release"
             exit 0
           fi
           gh release create "v$VERSION" \
             --title "v$VERSION" \
-            --notes-file /tmp/release_body.md \
+            --generate-notes \
             --target "${{ github.sha }}"

@@ -1,8 +1,6 @@
 export { logger, colorizeByStatus, formatBytes } from './logger.js';
-export type { Logger } from './logger.js';
-import type { Logger as __Logger } from './logger.js';
-
-type Logger = __Logger;
+import type { Logger } from './logger.js';
+export type { Logger };
 
 /** Una entrada de exportación WASM. */
 export interface WasmExport {
@@ -128,6 +126,82 @@ export interface AsConfig {
   targets?: Record<string, Record<string, any>>;
 }
 
+// ──────────────────────────────────────────
+// Repository Pattern — interfaces de caché
+// ──────────────────────────────────────────
+
+/** Interfaz genérica para repositorios de caché. */
+export interface ICacheRepository<T> {
+  get(key: string): Promise<T | undefined>;
+  set(key: string, value: T): Promise<void>;
+  has(key: string): Promise<boolean>;
+  delete(key: string): Promise<void>;
+  clear(): Promise<void>;
+  info(): Promise<CacheInfo>;
+}
+
+/** Información de una caché. */
+export interface CacheInfo {
+  path: string;
+  exists: boolean;
+  size: number;
+  humanSize: string;
+  entries: number;
+}
+
+// ──────────────────────────────────────────
+// Strategy Pattern — interfaces de estrategia
+// ──────────────────────────────────────────
+
+/** Artefacto producido por un compilador. */
+export interface WasmArtifact {
+  wasmBytes: Uint8Array;
+  fileName: string;
+  moduleInfo?: WasmModuleInfo;
+  metadata?: Record<string, unknown>;
+}
+
+/** Estrategia de compilación: cómo compilar código fuente a WASM. */
+export interface ICompilerStrategy {
+  readonly name: string;
+  compile(source: string, options: CompileOptions): Promise<WasmArtifact>;
+}
+
+/** Estrategia de enlace: cómo generar el ejecutable nativo. */
+export interface ILinkerStrategy {
+  readonly name: string;
+  link(modules: WasmModuleInfo[], options: NativeAppOptions): Promise<string>;
+}
+
+/** Estrategia de generación de código C++. */
+export interface ICodegenStrategy {
+  readonly name: string;
+  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string;
+}
+
+// ──────────────────────────────────────────
+// Command Pattern
+// ──────────────────────────────────────────
+
+/** Metadatos para un comando CLI. */
+export interface CommandMeta {
+  name: string;
+  description: string;
+  aliases?: string[];
+}
+
+/** Interfaz para comandos CLI. */
+export interface ICommand {
+  readonly meta: CommandMeta;
+  execute(args: Record<string, any>): Promise<void>;
+}
+
+/** Stage del pipeline: transforma una entrada en una salida. */
+export interface Stage<I, O> {
+  readonly name: string;
+  execute(input: I, context: PipelineContext): Promise<O>;
+}
+
 /** Configuración de alto nivel del proyecto (wapp.json). */
 export interface WappConfig {
   sourceDir?: string;
@@ -218,6 +292,19 @@ export interface PluginContext {
   };
   config?: Record<string, unknown>;
   logger: Logger;
+}
+
+/** Gestor de plugins: registro y resolución de extensiones. */
+export interface IPluginManager {
+  registerCompiler(plugin: ICompilerStrategy): void;
+  getCompiler(name: string): ICompilerStrategy | undefined;
+  registerLinker(plugin: ILinkerStrategy): void;
+  getLinker(name: string): ILinkerStrategy | undefined;
+  registerCodegen(plugin: ICodegenStrategy): void;
+  getCodegen(name: string): ICodegenStrategy | undefined;
+  registerWasmPlugin(plugin: WasmPlugin): void;
+  getWasmPlugin(id: string): WasmPlugin | undefined;
+  loadWasmPlugins(configs?: PluginConfig[]): Promise<void>;
 }
 
 /** Un plugin del toolchain WASM. */

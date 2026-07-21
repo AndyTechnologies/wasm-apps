@@ -129,17 +129,12 @@ async function buildCommand(
     for (const file of inputFiles) {
       const result = await compileSingleFile(file, compileOpts);
       results.push(result);
-      if (result.success) {
-        logger.success(`OK: ${result.file} -> ${result.output}${result.output ? ` (${fs.statSync(result.output).size} bytes)` : ''}`);
-      } else {
-        logger.error(`FAIL: ${result.file} — ${result.error}`);
-      }
     }
   }
 
   for (const r of results) {
     if (r.success) {
-      logger.success(`OK: ${r.file} -> ${r.output}`);
+      logger.success(`OK: ${r.file} -> ${r.output}${r.output ? ` (${fs.statSync(r.output).size} bytes)` : ''}`);
     } else {
       logger.error(`FAIL: ${r.file} — ${r.error}`);
     }
@@ -189,7 +184,7 @@ async function watchCommand(
     try {
       fileMtimes.set(f, fs.statSync(f).mtimeMs);
     } catch {
-      // ignorar
+      logger.detail(`No se pudo leer metadatos de ${f}`);
     }
   }
 
@@ -210,6 +205,7 @@ async function watchCommand(
         sourceMap: options.sourcemap,
         runtime: options.runtime as AsRuntime,
         optimizeLevel: parseInt(options.optimizeLevel, 10),
+        shrinkLevel: options.shrinkLevel ? parseInt(options.shrinkLevel, 10) : undefined,
       });
       if (result.success) {
         logger.success(`OK: ${result.file} -> ${result.output}`);
@@ -222,31 +218,44 @@ async function watchCommand(
     try {
       fileMtimes.set(changedFile, fs.statSync(changedFile).mtimeMs);
     } catch {
-      // ignorar
+      logger.detail(`No se pudo actualizar mtime de ${changedFile}`);
     }
     logger.detail('\nEsperando cambios... (Ctrl+C para salir)\n');
   }, 300);
 
   if (process.platform === 'linux') {
-    logger.detail('Nota: en Linux, fs.watch recursive no vigila subdirectorios. Para watch completo, instala chokidar.');
-  }
-  for (const dir of watchedDirs) {
-    fs.watch(dir, { recursive: true }, (_eventType, filename) => {
-      const normalizedName = filename ? path.normalize(filename) : null;
-      if (
-        normalizedName &&
-        (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.asm.ts') || normalizedName.endsWith('.ts') || normalizedName.endsWith('.asm'))
-      ) {
-        const fullPath = path.join(dir, normalizedName);
-        let targetFile = inputFiles.includes(fullPath) ? fullPath : undefined;
-        if (!targetFile) {
-          targetFile = inputFiles.find((f) => path.basename(f) === filename);
+    logger.detail('Nota: en Linux se usa sondeo (polling) como fallback para watch recursivo.');
+    for (const dir of watchedDirs) {
+      fs.watch(dir, { recursive: false }, (_eventType, filename) => {
+        if (!filename) return;
+        const normalizedName = path.normalize(filename);
+        if (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.asm.ts') || normalizedName.endsWith('.ts') || normalizedName.endsWith('.asm')) {
+          const fullPath = path.join(dir, normalizedName);
+          if (inputFiles.includes(fullPath)) {
+            debouncedCompile(fullPath);
+          }
         }
-        if (targetFile) {
-          debouncedCompile(targetFile);
+      });
+    }
+  } else {
+    for (const dir of watchedDirs) {
+      fs.watch(dir, { recursive: true }, (_eventType, filename) => {
+        const normalizedName = filename ? path.normalize(filename) : null;
+        if (
+          normalizedName &&
+          (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.asm.ts') || normalizedName.endsWith('.ts') || normalizedName.endsWith('.asm'))
+        ) {
+          const fullPath = path.join(dir, normalizedName);
+          let targetFile = inputFiles.includes(fullPath) ? fullPath : undefined;
+          if (!targetFile) {
+            targetFile = inputFiles.find((f) => path.basename(f) === filename);
+          }
+          if (targetFile) {
+            debouncedCompile(targetFile);
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   await new Promise(() => {});

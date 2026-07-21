@@ -19,7 +19,7 @@ vi.mock('./disk-cache.js', async (importOriginal) => {
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { compileWasm } from './index.js';
+import { compileWasm, clearMemoryCache } from './index.js';
 import { clearCompileCache } from './disk-cache.js';
 
 describe('compileWasm', () => {
@@ -38,6 +38,7 @@ describe('compileWasm', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearMemoryCache();
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     clearCompileCache(tmpDir);
     fs.writeFileSync(wasmFile, 'export function _start(): void {}');
@@ -142,7 +143,7 @@ describe('compileWasm', () => {
     await expect(
       compileWasm({
         fileName: `${wasmFile}-missing`,
-        sourceCode: 'export function _start(): void {}',
+        sourceCode: 'export function _start(): void {} // missing-output-test',
       }),
     ).rejects.toThrow('No se generaron');
   });
@@ -152,7 +153,7 @@ describe('compileWasm', () => {
 
     await compileWasm({
       fileName: `${wasmFile}-dev`,
-      sourceCode: 'export function _start(): void {}',
+      sourceCode: 'export function _start(): void {} // dev-test',
       isDev: true,
       sourceMap: true,
     });
@@ -168,7 +169,7 @@ describe('compileWasm', () => {
 
     await compileWasm({
       fileName: `${wasmFile}-rel`,
-      sourceCode: 'export function _start(): void {}',
+      sourceCode: 'export function _start(): void {} // release-test',
       isDev: false,
       optimizeLevel: 2,
       shrinkLevel: 1,

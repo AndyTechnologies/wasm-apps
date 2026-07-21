@@ -50,6 +50,24 @@ function sanitizeIdentifier(name: string): string {
   return name.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^(\d)/, '_$1');
 }
 
+function escapeCppString(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\0/g, '\\0').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+}
+
+function formatHexBytes(bytes: Buffer): string {
+  const hex = bytes.toString('hex');
+  const parts: string[] = [];
+  for (let i = 0; i < hex.length; i += 64) {
+    const chunk = hex.slice(i, Math.min(i + 64, hex.length));
+    const byteParts: string[] = [];
+    for (let j = 0; j < chunk.length; j += 2) {
+      byteParts.push('0x' + chunk.slice(j, j + 2));
+    }
+    parts.push('    ' + byteParts.join(','));
+  }
+  return parts.join(',\n');
+}
+
 function buildModuleBuffers(modules: ResolvedLink['order']): ModuleBuffer[] {
   return modules.map((m) => ({
     varName: `wasm_bytes_${m.index}`,
@@ -164,7 +182,7 @@ function generateStringReader(): string {
     '  auto* data = span.data();',
     '  auto sz = span.size();',
     '  if (ptr < 4 || (uint32_t)ptr > (uint32_t)sz) return "";',
-    '  int32_t len = *reinterpret_cast<int32_t*>(data + ptr - 4) >> 1;',
+    '  int32_t len; std::memcpy(&len, data + ptr - 4, sizeof(len)); len >>= 1;',
     '  if (len < 0 || len > 65536) return "";',
     '  if (ptr + (int32_t)(len * 2) > (int32_t)sz) return "";',
     '  uint16_t* chars = reinterpret_cast<uint16_t*>(data + ptr);',
@@ -208,33 +226,34 @@ function generateStringReader(): string {
 function generateModuleBuffers(moduleBuffers: ModuleBuffer[]): string {
   let result = '';
   for (const mb of moduleBuffers) {
-    const byteStr = Array.from(mb.bytes).join(',');
-    result += `const unsigned char ${mb.varName}[] = { ${byteStr} };\n`;
+    const byteStr = formatHexBytes(mb.bytes);
+    result += `const unsigned char ${mb.varName}[] = {\n${byteStr}\n};\n`;
     result += `const size_t ${mb.lenVar} = ${mb.bytes.length};\n\n`;
   }
   return result;
 }
 
 function generateDefineExports(modules: ResolvedLink['order']): string {
-  let code = 'static void define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {\n';
-  code += '  static std::unordered_set<std::string> _defined;\n';
+  let code = 'static int define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {\n';
+  code += '  std::unordered_set<std::string> _defined;\n';
   for (const mod of modules) {
     const exports = mod.module.exports;
     if (exports.length === 0) continue;
     code += `  if (std::strcmp(instance_label, "instance${mod.index}") == 0) {\n`;
     for (const exp of exports) {
       const safeName = sanitizeIdentifier(exp.name);
-      code += `    if (_defined.find("${exp.name}") == _defined.end()) {\n`;
-      code += `      _defined.insert("${exp.name}");\n`;
-      code += `      auto exp = instance.get(ctx, "${exp.name}");\n`;
-      code += `      if (!exp) { std::cerr << "Error obteniendo export ${safeName}" << std::endl; std::exit(1); }\n`;
-      code += `      auto result = linker.define(ctx, "env", "${exp.name}", *exp);\n`;
-      code += `      if (!result) { std::cerr << "Error definiendo ${safeName}" << std::endl; std::exit(1); }\n`;
+      const escapedName = escapeCppString(exp.name);
+      code += `    if (_defined.find("${escapedName}") == _defined.end()) {\n`;
+      code += `      _defined.insert("${escapedName}");\n`;
+      code += `      auto exp = instance.get(ctx, "${escapedName}");\n`;
+      code += `      if (!exp) { std::cerr << "Error obteniendo export ${safeName}" << std::endl; return 1; }\n`;
+      code += `      auto result = linker.define(ctx, "env", "${escapedName}", *exp);\n`;
+      code += `      if (!result) { std::cerr << "Error definiendo ${safeName}" << std::endl; return 1; }\n`;
       code += `    }\n`;
     }
-    code += `    return;\n  }\n`;
+    code += `    return 0;\n  }\n`;
   }
-  code += `  std::cerr << "Unknown instance label " << instance_label << std::endl; std::exit(1);\n`;
+  code += `  std::cerr << "Unknown instance label " << instance_label << std::endl; return 1;\n`;
   code += '}\n\n';
   return code;
 }
@@ -269,10 +288,12 @@ function generateHostFunctionDefs(hostFuncs: Array<{ name: string; module: strin
     }
     const body = generator ? generator(func.params, func.results) : defaultResultCode(func.results);
     const funcType = funcTypeCpp(func.params, func.results);
+    const escapedModule = escapeCppString(func.module);
+    const escapedName = escapeCppString(func.name);
     code += `
   {
     auto ty = ${funcType};
-    linker.define(ctx, "${func.module}", "${func.name}",
+    linker.define(ctx, "${escapedModule}", "${escapedName}",
       Func(ctx, ty, [](Caller caller, Span<const Val> args, Span<Val> results) -> Result<std::monostate, Trap> {
 ${body}
       })
@@ -293,7 +314,9 @@ function generateGlobalDefs(neededGlobals: Map<string, { module: string; name: s
     } else {
       valStr = 'Val(int32_t(0))';
     }
-    code += `  linker.define(ctx, "${gl.module}", "${gl.name}", Global::wrap(ctx, ${valStr})).unwrap();\n`;
+    const escapedModule = escapeCppString(gl.module);
+    const escapedName = escapeCppString(gl.name);
+    code += `  linker.define(ctx, "${escapedModule}", "${escapedName}", Global::wrap(ctx, ${valStr})).unwrap();\n`;
   }
   return code;
 }
@@ -316,19 +339,20 @@ function generateModuleInstantiation(modules: ResolvedLink['order']): string {
     code += `  if (!${iv}) {\n`;
     code += `    std::cerr << "Error instanciando modulo ${mod.index}" << std::endl;\n`;
     code += `    return 1;\n  }\n`;
-    code += `  define_exports(linker, ctx, ${iv}.unwrap(), "${iv}");\n`;
+    code += `  if (!define_exports(linker, ctx, ${iv}.unwrap(), "${iv}")) return 1;\n`;
   }
   return code;
 }
 
 function generateEntryCall(entryModule: string, entryPoint: string): string {
-  return `\n  auto entry_exp = ${entryModule}.unwrap().get(ctx, "${entryPoint}");
-  if (!entry_exp) { std::cerr << "Entry point ${entryPoint} no encontrado" << std::endl; return 1; }
-  if (!std::get_if<Func>(&*entry_exp)) { std::cerr << "${entryPoint} no es una funcion" << std::endl; return 1; }
+  const escapedEntry = escapeCppString(entryPoint);
+  return `\n  auto entry_exp = ${entryModule}.unwrap().get(ctx, "${escapedEntry}");
+  if (!entry_exp) { std::cerr << "Entry point ${escapedEntry} no encontrado" << std::endl; return 1; }
+  if (!std::get_if<Func>(&*entry_exp)) { std::cerr << "${escapedEntry} no es una funcion" << std::endl; return 1; }
   auto entry_func = std::get<Func>(*entry_exp);
   auto result = entry_func.call(ctx, {});
   if (!result) {
-    std::cerr << "Error llamando a ${entryPoint}" << std::endl;
+    std::cerr << "Error llamando a ${escapedEntry}" << std::endl;
     return 1;
   }
 

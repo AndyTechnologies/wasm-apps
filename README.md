@@ -32,7 +32,7 @@ pnpm -r build
 pnpm run linker setup
 ```
 
-`pnpm run linker setup` descarga la C-API de Wasmtime (~15 MB) y la cachea en `~/.wasm-linker/wasmtime/`.
+`pnpm run linker setup` descarga la C-API de Wasmtime (~15 MB) y la cachea en `~/.wasm-linker/`.
 
 ### Instalación global como CLI
 
@@ -214,7 +214,7 @@ Compila todos los `.wasm.ts` del `sourceDir` y linkea un único ejecutable nativ
 wapp setup
 ```
 
-Descarga y cachea la C-API de Wasmtime en `~/.wasm-linker/wasmtime/`.
+Descarga y cachea la C-API de Wasmtime en `~/.wasm-linker/`.
 
 #### `cache`
 

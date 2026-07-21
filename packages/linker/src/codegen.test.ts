@@ -122,4 +122,36 @@ describe('generateCCode', () => {
     expect(code).toContain('_readAsString');
     expect(code).toContain('_readAsStringNT');
   });
+
+  it('define_exports is static int not static void', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false);
+    expect(code).toContain('static int define_exports(');
+    expect(code).not.toContain('static void define_exports(');
+  });
+
+  it('define_exports uses return 1 instead of std::exit(1)', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false);
+    expect(code).toContain('return 1;');
+    expect(code).not.toContain('std::exit(1)');
+  });
+
+  it('generateModuleInstantiation checks define_exports return value', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false);
+    expect(code).toContain('if (!define_exports(');
+  });
+
+  it('caller checks define_exports return for every module instance', () => {
+    const a = makeModule('a', ['helper']);
+    const b = makeModule('b', ['_start']);
+    const link = makeResolved([a, b]);
+    const code = generateCCode(link, '_start', false);
+    expect(code).toContain('if (!define_exports(linker, ctx, instance0.unwrap(), "instance0")) return 1;');
+    expect(code).toContain('if (!define_exports(linker, ctx, instance1.unwrap(), "instance1")) return 1;');
+  });
 });

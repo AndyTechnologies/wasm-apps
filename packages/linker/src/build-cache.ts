@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { formatBytes } from '@wasm-apps/types';
+import { formatBytes, logger } from '@wasm-apps/types';
 
 function pathsEqual(a: string, b: string): boolean {
   const resolvedA = path.resolve(a);
@@ -55,8 +55,19 @@ function getManifestPath(rootDir?: string): string {
 }
 
 function fileHash(filePath: string): string {
-  const content = fs.readFileSync(filePath);
-  return crypto.createHash('sha256').update(content).digest('hex');
+  const hash = crypto.createHash('sha256');
+  let fd: number | undefined;
+  const buffer = Buffer.alloc(65536);
+  try {
+    fd = fs.openSync(filePath, 'r');
+    let bytesRead: number;
+    while ((bytesRead = fs.readSync(fd, buffer, 0, 65536, null)) > 0) {
+      hash.update(buffer.subarray(0, bytesRead));
+    }
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+  return hash.digest('hex');
 }
 
 function loadManifest(rootDir?: string): BuildManifest | null {
@@ -64,7 +75,8 @@ function loadManifest(rootDir?: string): BuildManifest | null {
   if (!fs.existsSync(mPath)) return null;
   try {
     return JSON.parse(fs.readFileSync(mPath, 'utf-8'));
-  } catch {
+  } catch (err) {
+    logger.detail(`No se pudo leer el manifiesto de build: ${mPath} — ${(err as Error).message}`);
     return null;
   }
 }
@@ -182,7 +194,7 @@ export function getBuildCacheInfo(rootDir?: string): { path: string; exists: boo
       }
     }
   } catch {
-    // ignorar
+    logger.detail(`No se pudo leer el directorio de build: ${dir}`);
   }
 
   return {
@@ -215,7 +227,7 @@ function dirSize(dirPath: string): number {
       }
     }
   } catch {
-    // saltar inaccesibles
+    logger.detail(`No se pudo leer tamaño de directorio: ${dirPath}`);
   }
   return size;
 }
