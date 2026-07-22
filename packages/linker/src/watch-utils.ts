@@ -8,7 +8,7 @@ import { logger } from '@wasm-apps/types';
  * Retorna el path normalizado, o null si el path debe ser rechazado.
  */
 export function sanitizeWatchPath(filename: string): string | null {
-  const normalized = path.normalize(filename);
+  const normalized = path.normalize(filename).replace(/\\/g, '/');
   if (normalized.includes('..')) return null;
   return normalized;
 }

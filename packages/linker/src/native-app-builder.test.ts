@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LinkerError } from '@wasm-apps/types';
 
@@ -128,7 +129,7 @@ describe('NativeAppBuilder isCacheUpToDate', () => {
 
     expect(mockIsBuildUpToDate).toHaveBeenCalledWith(
       expect.arrayContaining([expect.stringContaining('test.wasm')]),
-      '/out/app',
+      path.resolve('/out/app'),
       expect.objectContaining({
         entry: '_start',
         wasi: false,
