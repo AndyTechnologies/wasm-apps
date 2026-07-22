@@ -4,10 +4,18 @@ import { get as httpGet } from 'node:http';
 import crypto from 'node:crypto';
 import { DownloadError } from '@wasm-apps/types';
 
+/** Base domains always trusted for redirects, regardless of the original URL's domain. */
+const TRUSTED_REDIRECT_DOMAINS = new Set(['github.com', 'githubusercontent.com']);
+
 /** Check if a hostname belongs to the same base domain (exact or subdomain). */
 function isSameBaseDomain(hostname: string, baseHostname: string): boolean {
   if (hostname === baseHostname) return true;
   if (hostname.endsWith('.' + baseHostname)) return true;
+  if (TRUSTED_REDIRECT_DOMAINS.has(baseHostname)) {
+    for (const trusted of TRUSTED_REDIRECT_DOMAINS) {
+      if (hostname === trusted || hostname.endsWith('.' + trusted)) return true;
+    }
+  }
   return false;
 }
 
