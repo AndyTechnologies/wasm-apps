@@ -317,7 +317,7 @@ function generateHostFunctionDefs(hostFuncs: Array<{ name: string; module: strin
     _check_result(linker.define(ctx, "${escapedModule}", "${escapedName}",
       Func(ctx, ty, [](Caller caller, Span<const Val> args, Span<Val> results) -> Result<std::monostate, Trap> {
 ${body}
-      }),
+      })),
       "define ${escapedModule}.${escapedName}");
   }
 `;
