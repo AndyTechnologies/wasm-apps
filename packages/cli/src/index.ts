@@ -15,6 +15,7 @@ import {
   loadPlugins,
   pipeline,
   PipelinePhase,
+  watchDirectory,
 } from '@wasm-apps/linker';
 
 const CONFIG_FILE = 'wapp.json';
@@ -137,9 +138,14 @@ function resolveOutputPath(
   customMatching?: ModuleMatchingStrategy,
 ): { output: string; entry: string; moduleMatching: ModuleMatchingStrategy } {
   const exeSuffix = process.platform === 'win32' ? '.exe' : '';
-  const outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
+  let outputName = (config.output || path.basename(rootDir)).replace(/\.exe$/i, '');
+  if (!outputName) outputName = path.basename(rootDir);
   const output =
-    (path.isAbsolute(outputName) ? outputName : outputName.includes(path.sep) ? path.resolve(rootDir, outputName) : path.join(outDir, outputName)) + exeSuffix;
+    (path.isAbsolute(outputName)
+      ? outputName
+      : outputName.includes('/') || outputName.includes('\\')
+        ? path.resolve(rootDir, outputName)
+        : path.join(outDir, outputName)) + exeSuffix;
   const entry = customEntry || config.entry || '_start';
   const moduleMatching = customMatching || config.moduleMatching || 'file-name';
   return { output, entry, moduleMatching };
@@ -241,12 +247,17 @@ export async function buildProject(options: {
   ctx = await pipeline.runPhase(PipelinePhase.BeforeCodeGen, ctx);
 
   const { output, entry, moduleMatching } = resolveOutputPath(config, rootDir, outDir, options.entry, options.moduleMatching);
-  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, options.target, options.wasi);
 
-  await pipeline.runPhase(PipelinePhase.AfterCodeGen, ctx);
+  ctx = await pipeline.runPhase(PipelinePhase.BeforeLink, ctx);
+  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, options.target, options.wasi);
+  ctx = await pipeline.runPhase(PipelinePhase.AfterLink, ctx);
+
+  ctx = await pipeline.runPhase(PipelinePhase.AfterCodeGen, ctx);
+  await pipeline.runPhase(PipelinePhase.AfterBundle, ctx);
 }
 
 async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string, outDir: string, wasi: boolean): Promise<void> {
+  await loadPlugins(config.plugins);
   const wasmTsFiles = await glob('**/*.wasm.ts', { cwd: sourceDir, absolute: true, nodir: true });
   if (wasmTsFiles.length === 0) {
     logger.warn('No se encontraron archivos .wasm.ts.');
@@ -269,12 +280,15 @@ export async function devCommand(options: {
   outDir?: string;
 }): Promise<void> {
   const rootDir = path.resolve(options.rootDir);
+  const compilerOverrides: WappConfig['compiler'] = {};
+  if (options.release !== undefined) compilerOverrides.release = options.release;
   const config = resolveConfig(rootDir, {
     entry: options.entry,
     target: options.target,
     output: options.output,
     sourceDir: options.sourceDir,
     outDir: options.outDir,
+    compiler: Object.keys(compilerOverrides).length > 0 ? compilerOverrides : undefined,
   });
 
   const sourceDir = path.resolve(rootDir, config.sourceDir || 'src');
@@ -307,26 +321,18 @@ export async function devCommand(options: {
   logger.step(`Vigilando ${sourceDir} por cambios en .wasm.ts...`);
   logger.detail('Esperando cambios... (Ctrl+C para salir)\n');
 
-  if (process.platform === 'linux') {
-    logger.detail('Nota: en Linux, fs.watch recursive no vigila subdirectorios. Para watch completo, instala chokidar.');
-  }
-
-  let debounceTimer: ReturnType<typeof setTimeout>;
-
-  fs.watch(sourceDir, { recursive: true }, (_eventType, filename) => {
-    const normalizedName = filename ? path.normalize(filename) : null;
-    if (normalizedName && (normalizedName.endsWith('.wasm.ts') || normalizedName.endsWith('.ts'))) {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        logger.step(`\nCambio detectado en ${normalizedName}, recompilando...`);
-        try {
-          await buildOnce(config, rootDir, sourceDir, outDir, wasi);
-        } catch (err: any) {
-          logger.error(`Error: ${err.message}`);
-        }
-        logger.detail('\nEsperando cambios... (Ctrl+C para salir)\n');
-      }, 300);
-    }
+  const stopWatching = watchDirectory(sourceDir, {
+    extensions: ['.wasm.ts', '.ts'],
+    onChange: async (changedFile) => {
+      const relativeName = path.relative(rootDir, changedFile);
+      logger.step(`\nCambio detectado en ${relativeName}, recompilando...`);
+      try {
+        await buildOnce(config, rootDir, sourceDir, outDir, wasi);
+      } catch (err: any) {
+        logger.error(`Error: ${err.message}`);
+      }
+      logger.detail('\nEsperando cambios... (Ctrl+C para salir)\n');
+    },
   });
 
   await new Promise(() => {});
@@ -342,11 +348,8 @@ export async function cacheInfo(): Promise<void> {
   if (dlInfo.exists) {
     logger.info(`  Ruta: ${dlInfo.path}`);
     logger.info(`  Tamano: ${dlInfo.humanSize} (${dlInfo.size} bytes)`);
-    if (dlInfo.entries.length > 0) {
-      logger.info('  Contenido:');
-      for (const entry of dlInfo.entries) {
-        logger.info(`    ${entry}`);
-      }
+    if (typeof dlInfo.entries === 'number' && dlInfo.entries > 0) {
+      logger.info(`  Entradas cacheadas: ${dlInfo.entries}`);
     }
     const status = await checkSetupStatus();
     if (status.wasmtime.status === 'ok') {

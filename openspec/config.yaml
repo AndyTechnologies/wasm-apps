@@ -1,0 +1,29 @@
+# OpenSpec — wasm-apps
+context: >
+  Monorepo toolchain (pnpm workspace) that compiles AssemblyScript (.wasm.ts) to
+  WebAssembly and links it into self-contained native executables (ELF/PE/Mach-O)
+  via Wasmtime C-API. 4 packages: types, cli, compiler, linker.
+
+strict_tdd: true
+
+testing:
+  runner: vitest
+  command: pnpm test:unit
+  layers:
+    unit: vitest
+    integration: node ./scripts/test-examples.mjs
+    e2e: null
+  coverage: vitest --coverage
+  quality:
+    linter: eslint
+    formatter: prettier
+    typecheck: tsc
+
+phases:
+  proposal: { model: opencode/deepseek-v4-flash-free }
+  spec: { model: opencode/deepseek-v4-flash-free }
+  design: { model: opencode/deepseek-v4-flash-free }
+  tasks: { model: opencode/deepseek-v4-flash-free }
+  apply: { model: opencode/deepseek-v4-flash-free }
+  verify: { model: opencode/deepseek-v4-flash-free }
+  archive: { model: opencode/deepseek-v4-flash-free }

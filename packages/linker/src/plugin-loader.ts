@@ -4,6 +4,7 @@ import { logger, type PluginConfig, type PluginContext, type WasmPlugin } from '
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { pipeline } from './pipeline.js';
 import { registerBuiltinHostFunctions } from './builtin-host-functions.js';
+import { pluginManager } from './plugin-manager.js';
 
 const DEFAULT_PLUGINS: PluginConfig[] = [
   { id: 'stdlib-plugin', enabled: true, config: {} },
@@ -22,6 +23,7 @@ function createContext(cfg: PluginConfig): PluginContext {
 
 function registerPlugin(plugin: WasmPlugin, context: PluginContext): void {
   plugin.register(context);
+  pluginManager.registerWasmPlugin(plugin);
   logger.detail(`Plugin cargado: ${plugin.id}`);
 }
 
@@ -32,6 +34,11 @@ function registerPlugin(plugin: WasmPlugin, context: PluginContext): void {
  * plugins personalizados mediante ruta de archivo.
  */
 export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void> {
+  // Always register built-in host functions (console, abort, Math, Date, etc.)
+  // even when custom plugins are provided. Custom plugin lists should not
+  // disable standard host function support.
+  registerBuiltinHostFunctions(hostFunctionRegistry);
+
   const configs = pluginConfigs && pluginConfigs.length > 0 ? pluginConfigs : DEFAULT_PLUGINS;
 
   for (const cfg of configs) {
@@ -40,7 +47,8 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
     const context = createContext(cfg);
 
     if (cfg.id === 'stdlib-plugin') {
-      registerBuiltinHostFunctions(hostFunctionRegistry);
+      // Built-in host functions already registered above.
+      // stdlib-plugin exists for backward compatibility — no other work needed.
       continue;
     }
 
@@ -58,6 +66,10 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
 
     if (cfg.path) {
       const resolvedPath = path.resolve(cfg.path);
+      if (!resolvedPath.startsWith(process.cwd())) {
+        logger.warn(`Plugin ${cfg.id}: la ruta ${resolvedPath} esta fuera del directorio del proyecto. Se omite por seguridad.`);
+        continue;
+      }
       try {
         const mod = (await import(pathToFileURL(resolvedPath).href)) as { default?: WasmPlugin; register?: (ctx: PluginContext) => void };
         const plugin: WasmPlugin | undefined = mod.default || (mod as unknown as WasmPlugin);

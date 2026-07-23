@@ -1,4 +1,9 @@
+import { LinkerError } from '@wasm-apps/types';
+
 export function readLEB128(data: Uint8Array | Buffer, offset: number): { value: number; size: number } {
+  if (offset >= data.length) {
+    throw new LinkerError(`LEB128 read at offset ${offset} would exceed buffer length ${data.length}`);
+  }
   let result = 0;
   let shift = 0;
   let count = 0;
@@ -8,7 +13,16 @@ export function readLEB128(data: Uint8Array | Buffer, offset: number): { value: 
     count++;
     if ((byte & 0x80) === 0) break;
     shift += 7;
-    if (shift > 35) break;
+    if (count >= 10) {
+      throw new LinkerError(`LEB128 value exceeds maximum encoded length of 10 bytes at offset ${offset - count}`);
+    }
+    if (shift > 35) {
+      throw new LinkerError('LEB128 value exceeds 36-bit limit — unsupported WASM 64-bit value');
+    }
+  }
+  // If we exhausted the buffer without finding the end of the LEB128 value
+  if ((data[offset - 1] & 0x80) !== 0) {
+    throw new LinkerError(`Incomplete LEB128 value — unexpected end of data at offset ${offset}`);
   }
   return { value: result, size: count };
 }

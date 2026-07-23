@@ -8,11 +8,7 @@ interface HookEntry {
 }
 
 function deepCloneContext(ctx: PipelineContext): PipelineContext {
-  return {
-    ...ctx,
-    wasmModules: ctx.wasmModules?.map((m) => ({ ...m, buffer: Buffer.from(m.buffer) })),
-    sourceFiles: ctx.sourceFiles?.map((f) => ({ ...f })),
-  };
+  return structuredClone(ctx);
 }
 
 /**

@@ -1,0 +1,17 @@
+=== Calculadora WASM ===
+Operaciones disponibles:
+  suma(5, 3)      = 8.0
+  multiplica(4, 6) = 24.0
+
+Serie de Fibonacci:
+Fibonacci(0.0) = 0.0
+Fibonacci(1.0) = 1.0
+Fibonacci(2.0) = 1.0
+Fibonacci(3.0) = 2.0
+Fibonacci(4.0) = 3.0
+Fibonacci(5.0) = 5.0
+Fibonacci(6.0) = 8.0
+Fibonacci(7.0) = 13.0
+Fibonacci(8.0) = 21.0
+Fibonacci(9.0) = 34.0
+Fibonacci(10.0) = 55.0

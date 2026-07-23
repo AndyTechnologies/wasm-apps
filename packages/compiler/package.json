@@ -1,6 +1,6 @@
 {
   "name": "@wasm-apps/compiler",
-  "version": "1.3.1",
+  "version": "1.4.1",
   "description": "Compila archivos AssemblyScript (.wasm.ts, .ts, .asm) a WebAssembly",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

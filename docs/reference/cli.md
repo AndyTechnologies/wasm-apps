@@ -45,7 +45,7 @@ Compila todos los `.wasm.ts` en `sourceDir` y enlaza un ejecutable nativo.
 wapp setup
 ```
 
-Descarga y almacena en caché la Wasmtime C-API en `~/.wasm-linker/wasmtime/`. Es seguro re-ejecutarlo — usa peticiones HTTP range para descargas reanudables.
+Descarga y almacena en caché la Wasmtime C-API en `~/.wasm-linker/`. Es seguro re-ejecutarlo — usa peticiones HTTP range para descargas reanudables.
 
 ### cache
 

@@ -24,9 +24,9 @@ export function hashString(input: string): string {
 export function resolveImportPath(importPath: string, sourceFile: string, aliases: ResolvedAlias[]): string {
   if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
     for (const alias of aliases) {
-      const pattern = typeof alias.find === 'string' ? alias.find : alias.find.source;
-      const resolvedAlias = importPath.replace(new RegExp(`^${pattern}`), alias.replacement);
-      if (resolvedAlias !== importPath) {
+      const find = typeof alias.find === 'string' ? alias.find : alias.find.source;
+      if (importPath.startsWith(find)) {
+        const resolvedAlias = alias.replacement + importPath.slice(find.length);
         return resolvedAlias.endsWith('.ts') ? resolvedAlias : `${resolvedAlias}.ts`;
       }
     }

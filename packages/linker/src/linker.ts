@@ -1,22 +1,25 @@
+import path from 'node:path';
 import type { WasmModuleInfo, ResolvedLink, ResolvedModule, ModuleMatchingStrategy } from '@wasm-apps/types';
 import { LinkerError } from '@wasm-apps/types';
-
-interface Edge {
-  from: string;
-  to: string;
-}
 
 /**
  * Construye el grafo de dependencias entre módulos WASM usando imports/exports.
  * Un módulo A depende de B si A importa funciones del módulo B.
  */
+function getModuleName(fileName: string, matching: ModuleMatchingStrategy): string {
+  if (matching === 'file-name') {
+    return path.basename(fileName).replace(/\.wasm$/i, '');
+  }
+  return fileName;
+}
+
 function buildDependencyGraph(
   modules: WasmModuleInfo[],
   matching: ModuleMatchingStrategy,
 ): { graph: Map<string, Set<string>>; nameToModule: Map<string, WasmModuleInfo> } {
   const nameToModule = new Map<string, WasmModuleInfo>();
   for (const mod of modules) {
-    const name = matching === 'file-name' ? mod.fileName.replace(/\.wasm$/i, '').replace(/.*[/\\]/, '') : mod.fileName;
+    const name = getModuleName(mod.fileName, matching);
     nameToModule.set(name, mod);
   }
 
@@ -26,7 +29,7 @@ function buildDependencyGraph(
   }
 
   for (const mod of modules) {
-    const modName = matching === 'file-name' ? mod.fileName.replace(/\.wasm$/i, '').replace(/.*[/\\]/, '') : mod.fileName;
+    const modName = getModuleName(mod.fileName, matching);
 
     for (const imp of mod.imports) {
       const depName = imp.module;
@@ -43,7 +46,7 @@ function buildDependencyGraph(
  * Orden topológico (algoritmo de Kahn) en el grafo de dependencias.
  * Lanza LinkerError al detectar un ciclo.
  */
-function topologicalSort(graph: Map<string, Set<string>>, nameToModule: Map<string, WasmModuleInfo>, matching: ModuleMatchingStrategy): ResolvedModule[] {
+function topologicalSort(graph: Map<string, Set<string>>, nameToModule: Map<string, WasmModuleInfo>): ResolvedModule[] {
   const inDegree = new Map<string, number>();
   const reverseDeps = new Map<string, Set<string>>();
 
@@ -80,7 +83,11 @@ function topologicalSort(graph: Map<string, Set<string>>, nameToModule: Map<stri
     });
 
     for (const dependent of reverseDeps.get(name) || []) {
-      const newDegree = (inDegree.get(dependent) || 1) - 1;
+      const current = inDegree.get(dependent);
+      if (current === undefined) {
+        throw new LinkerError(`Graph inconsistency: node ${dependent} not in inDegree map`);
+      }
+      const newDegree = current - 1;
       inDegree.set(dependent, newDegree);
       if (newDegree === 0) queue.push(dependent);
     }
@@ -134,7 +141,7 @@ export function resolveDependencies(modules: WasmModuleInfo[], matching: ModuleM
   }
 
   const { graph, nameToModule } = buildDependencyGraph(modules, matching);
-  const order = topologicalSort(graph, nameToModule, matching);
+  const order = topologicalSort(graph, nameToModule);
   const exportMap = buildExportMap(order);
 
   return { order, exportMap };

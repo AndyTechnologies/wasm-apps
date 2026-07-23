@@ -1,19 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { formatBytes } from '@wasm-apps/types';
+import { formatBytes, type CacheInfo } from '@wasm-apps/types';
 
 export interface CacheSummary {
   sizeBytes: number;
   fileCount: number;
-}
-
-export interface CacheInfo {
-  exists: boolean;
-  path: string;
-  size: number;
-  humanSize: string;
-  entries: string[];
 }
 
 /**
@@ -74,7 +66,7 @@ export async function getCacheInfo(): Promise<CacheInfo> {
     path: cacheDir,
     size: summary.sizeBytes,
     humanSize: formatBytes(summary.sizeBytes),
-    entries: fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir) : [],
+    entries: summary.fileCount,
   };
 }
 

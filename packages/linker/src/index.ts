@@ -18,6 +18,14 @@ export { pipeline, Pipeline } from './pipeline.js';
 export { loadPlugins } from './plugin-loader.js';
 export { PipelinePhase } from '@wasm-apps/types';
 export { treeShakeWasm } from './tree-shake.js';
+export { LinkerManifestRepository } from './linker-manifest-repository.js';
+export { DownloadCacheRepository } from './download-cache-repository.js';
+export { WasmtimeLinkerStrategy } from './wasmtime-linker-strategy.js';
+export { DefaultCodegenStrategy } from './default-codegen-strategy.js';
+export { NativeAppBuilder } from './native-app-builder.js';
+export { BuildPipeline, ParseModulesStage, ResolveDependenciesStage, GenerateCodeStage, CompileCppStage } from './build-pipeline.js';
+export { PluginManager, pluginManager } from './plugin-manager.js';
+export { watchDirectory } from './watch-utils.js';
 
 /**
  * Crea un ejecutable nativo a partir de módulos WASM.
@@ -30,13 +38,26 @@ export { treeShakeWasm } from './tree-shake.js';
  *
  * Soporta builds incrementales comparando hashes en el manifiesto de build.
  */
+function parseSemver(version: string): number[] {
+  const match = version.match(/wasmtime-v(\d+)\.(\d+)\.(\d+)-c-api/);
+  if (!match) return [0, 0, 0];
+  return [parseInt(match[1], 10), parseInt(match[2], 10), parseInt(match[3], 10)];
+}
+
 function resolveWasmtimePath(wasmtimePath?: string): string | undefined {
   if (wasmtimePath) return wasmtimePath;
   const cacheDir = path.join(os.homedir(), '.wasm-linker');
   if (!fs.existsSync(cacheDir)) return undefined;
   const entries = fs.readdirSync(cacheDir).filter((e) => e.startsWith('wasmtime-v') && e.endsWith('-c-api'));
   if (entries.length === 0) return undefined;
-  entries.sort().reverse();
+  entries.sort((a, b) => {
+    const va = parseSemver(a);
+    const vb = parseSemver(b);
+    for (let i = 0; i < 3; i++) {
+      if (va[i] !== vb[i]) return vb[i] - va[i];
+    }
+    return 0;
+  });
   return path.join(cacheDir, entries[0]);
 }
 
