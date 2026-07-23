@@ -136,7 +136,9 @@ describe('generateCCode', () => {
     const link = makeResolved([mod]);
     const code = generateCCode(link, '_start', false);
     expect(code).toContain('return 1;');
-    expect(code).not.toContain('std::exit(1)');
+    // Preamble helpers _check_result / _check_trap use std::exit(1), but
+    // define_exports itself uses return 1 for error propagation
+    expect(code).toContain('std::exit(1);');
   });
 
   it('generateModuleInstantiation checks define_exports return value', () => {
@@ -146,12 +148,49 @@ describe('generateCCode', () => {
     expect(code).toContain('if (!define_exports(');
   });
 
+  it('generates _check_result helper template in preamble', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false);
+    expect(code).toContain('template<typename T>');
+    expect(code).toContain('static T _check_result(wasmtime::Result<T>&& r, const char* what)');
+    expect(code).toContain('LinkerError:');
+    expect(code).toContain('r.err().message()');
+    expect(code).toContain('std::exit(1)');
+  });
+
+  it('generates _check_trap helper template in preamble', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false);
+    expect(code).toContain('template<typename T>');
+    expect(code).toContain('static T _check_trap(wasmtime::TrapResult<T>&& r, const char* what)');
+    expect(code).toContain('r.err_ref().message()');
+  });
+
+  it('does not contain bare .unwrap() on API calls in generated code', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false);
+    // The preamble and generated code should not call .unwrap() on wasmtime API results
+    // (the _check_result/_check_trap helpers replace all .unwrap() calls)
+    expect(code).not.toMatch(/\.unwrap\(\)/);
+  });
+
+  it('uses _check_result for host function definitions', () => {
+    const mod = makeModule('test', ['_start'], [{ module: 'env', name: 'abort' }]);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false, [{ module: 'env', name: 'abort', params: ['i32', 'i32', 'i32', 'i32'], results: [] }]);
+    expect(code).toContain('_check_result(linker.define(ctx, "env", "abort"');
+    expect(code).toContain('"define env.abort"');
+  });
+
   it('caller checks define_exports return for every module instance', () => {
     const a = makeModule('a', ['helper']);
     const b = makeModule('b', ['_start']);
     const link = makeResolved([a, b]);
     const code = generateCCode(link, '_start', false);
-    expect(code).toContain('if (!define_exports(linker, ctx, instance0.unwrap(), "instance0")) return 1;');
-    expect(code).toContain('if (!define_exports(linker, ctx, instance1.unwrap(), "instance1")) return 1;');
+    expect(code).toContain('if (!define_exports(linker, ctx, instance0, "instance0")) return 1;');
+    expect(code).toContain('if (!define_exports(linker, ctx, instance1, "instance1")) return 1;');
   });
 });

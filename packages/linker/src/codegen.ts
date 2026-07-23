@@ -163,6 +163,27 @@ function generatePreamble(): string {
     '',
     'using namespace wasmtime;',
     '',
+    '// Error handling helpers for wasmtime v46 API',
+    'template<typename T>',
+    'static T _check_result(wasmtime::Result<T>&& r, const char* what) {',
+    '  if (!r) {',
+    '    std::cerr << "LinkerError: " << what << " failed: "',
+    '              << r.err().message() << std::endl;',
+    '    std::exit(1);',
+    '  }',
+    '  return r.ok();',
+    '}',
+    '',
+    'template<typename T>',
+    'static T _check_trap(wasmtime::TrapResult<T>&& r, const char* what) {',
+    '  if (!r) {',
+    '    std::cerr << "LinkerError: " << what << " failed: "',
+    '              << r.err_ref().message() << std::endl;',
+    '    std::exit(1);',
+    '  }',
+    '  return r.ok();',
+    '}',
+    '',
     'static std::mt19937 _wasm_rng(std::random_device{}());',
     'static std::unordered_map<std::string, std::chrono::steady_clock::time_point> _wasm_timers;',
     '',
@@ -271,8 +292,8 @@ function generateMainStart(wasi: boolean): string {
     wasi_config.inherit_stdin();
     wasi_config.inherit_stdout();
     wasi_config.inherit_stderr();
-    ctx.set_wasi(std::move(wasi_config)).unwrap();
-    linker.define_wasi().unwrap();
+    _check_result(ctx.set_wasi(std::move(wasi_config)), "set_wasi");
+    _check_result(linker.define_wasi(), "define_wasi");
     \n`;
   }
   return code;
@@ -293,11 +314,11 @@ function generateHostFunctionDefs(hostFuncs: Array<{ name: string; module: strin
     code += `
   {
     auto ty = ${funcType};
-    linker.define(ctx, "${escapedModule}", "${escapedName}",
+    _check_result(linker.define(ctx, "${escapedModule}", "${escapedName}",
       Func(ctx, ty, [](Caller caller, Span<const Val> args, Span<Val> results) -> Result<std::monostate, Trap> {
 ${body}
-      })
-    ).unwrap();
+      }),
+      "define ${escapedModule}.${escapedName}");
   }
 `;
   }
@@ -316,7 +337,7 @@ function generateGlobalDefs(neededGlobals: Map<string, { module: string; name: s
     }
     const escapedModule = escapeCppString(gl.module);
     const escapedName = escapeCppString(gl.name);
-    code += `  linker.define(ctx, "${escapedModule}", "${escapedName}", Global::wrap(ctx, ${valStr})).unwrap();\n`;
+    code += `  _check_result(linker.define(ctx, "${escapedModule}", "${escapedName}", Global::wrap(ctx, ${valStr})), "define ${escapedModule}.${escapedName}");\n`;
   }
   return code;
 }
@@ -335,18 +356,15 @@ function generateModuleInstantiation(modules: ResolvedLink['order']): string {
   for (const mod of modules) {
     const iv = `instance${mod.index}`;
     const mv = `mod${mod.index}`;
-    code += `\n  auto ${iv} = linker.instantiate(ctx, ${mv}.unwrap());\n`;
-    code += `  if (!${iv}) {\n`;
-    code += `    std::cerr << "Error instanciando modulo ${mod.index}" << std::endl;\n`;
-    code += `    return 1;\n  }\n`;
-    code += `  if (!define_exports(linker, ctx, ${iv}.unwrap(), "${iv}")) return 1;\n`;
+    code += `\n  auto ${iv} = _check_trap(linker.instantiate(ctx,\n      _check_result(std::move(${mv}), "compile module ${mod.index}")),\n      "instantiate module ${mod.index}");\n`;
+    code += `  if (!define_exports(linker, ctx, ${iv}, "${iv}")) return 1;\n`;
   }
   return code;
 }
 
 function generateEntryCall(entryModule: string, entryPoint: string): string {
   const escapedEntry = escapeCppString(entryPoint);
-  return `\n  auto entry_exp = ${entryModule}.unwrap().get(ctx, "${escapedEntry}");
+  return `\n  auto entry_exp = ${entryModule}.get(ctx, "${escapedEntry}");
   if (!entry_exp) { std::cerr << "Entry point ${escapedEntry} no encontrado" << std::endl; return 1; }
   if (!std::get_if<Func>(&*entry_exp)) { std::cerr << "${escapedEntry} no es una funcion" << std::endl; return 1; }
   auto entry_func = std::get<Func>(*entry_exp);
