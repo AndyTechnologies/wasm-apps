@@ -145,7 +145,7 @@ describe('generateCCode', () => {
     const mod = makeModule('test', ['_start']);
     const link = makeResolved([mod]);
     const code = generateCCode(link, '_start', false);
-    expect(code).toContain('if (!define_exports(');
+    expect(code).toContain('if (define_exports(');
   });
 
   it('generates _check_result helper template in preamble', () => {
@@ -190,7 +190,7 @@ describe('generateCCode', () => {
     const b = makeModule('b', ['_start']);
     const link = makeResolved([a, b]);
     const code = generateCCode(link, '_start', false);
-    expect(code).toContain('if (!define_exports(linker, ctx, instance0, "instance0")) return 1;');
-    expect(code).toContain('if (!define_exports(linker, ctx, instance1, "instance1")) return 1;');
+    expect(code).toContain('if (define_exports(linker, ctx, instance0, "instance0") != 0) return 1;');
+    expect(code).toContain('if (define_exports(linker, ctx, instance1, "instance1") != 0) return 1;');
   });
 });

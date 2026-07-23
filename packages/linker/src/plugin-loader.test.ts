@@ -99,7 +99,8 @@ describe('loadPlugins', () => {
       { id: 'tree-shake-plugin', enabled: false, config: {} },
     ]);
 
-    expect(mockRegisterBuiltinHostFunctions).not.toHaveBeenCalled();
+    // registerBuiltinHostFunctions always runs even with disabled plugins
+    expect(mockRegisterBuiltinHostFunctions).toHaveBeenCalledTimes(1);
     expect(mockRegisterWasmPlugin).not.toHaveBeenCalled();
   });
 });

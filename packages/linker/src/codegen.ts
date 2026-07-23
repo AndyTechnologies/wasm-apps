@@ -256,7 +256,7 @@ function generateModuleBuffers(moduleBuffers: ModuleBuffer[]): string {
 
 function generateDefineExports(modules: ResolvedLink['order']): string {
   let code = 'static int define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {\n';
-  code += '  std::unordered_set<std::string> _defined;\n';
+  code += '  static std::unordered_set<std::string> _defined;\n';
   for (const mod of modules) {
     const exports = mod.module.exports;
     if (exports.length === 0) continue;
@@ -269,7 +269,7 @@ function generateDefineExports(modules: ResolvedLink['order']): string {
       code += `      auto exp = instance.get(ctx, "${escapedName}");\n`;
       code += `      if (!exp) { std::cerr << "Error obteniendo export ${safeName}" << std::endl; return 1; }\n`;
       code += `      auto result = linker.define(ctx, "env", "${escapedName}", *exp);\n`;
-      code += `      if (!result) { std::cerr << "Error definiendo ${safeName}" << std::endl; return 1; }\n`;
+      code += `      if (!result) { std::cerr << "Error definiendo ${safeName}: " << result.err().message() << std::endl; return 1; }\n`;
       code += `    }\n`;
     }
     code += `    return 0;\n  }\n`;
@@ -357,7 +357,7 @@ function generateModuleInstantiation(modules: ResolvedLink['order']): string {
     const iv = `instance${mod.index}`;
     const mv = `mod${mod.index}`;
     code += `\n  auto ${iv} = _check_trap(linker.instantiate(ctx,\n      _check_result(std::move(${mv}), "compile module ${mod.index}")),\n      "instantiate module ${mod.index}");\n`;
-    code += `  if (!define_exports(linker, ctx, ${iv}, "${iv}")) return 1;\n`;
+    code += `  if (define_exports(linker, ctx, ${iv}, "${iv}") != 0) return 1;\n`;
   }
   return code;
 }

@@ -34,6 +34,11 @@ function registerPlugin(plugin: WasmPlugin, context: PluginContext): void {
  * plugins personalizados mediante ruta de archivo.
  */
 export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void> {
+  // Always register built-in host functions (console, abort, Math, Date, etc.)
+  // even when custom plugins are provided. Custom plugin lists should not
+  // disable standard host function support.
+  registerBuiltinHostFunctions(hostFunctionRegistry);
+
   const configs = pluginConfigs && pluginConfigs.length > 0 ? pluginConfigs : DEFAULT_PLUGINS;
 
   for (const cfg of configs) {
@@ -42,7 +47,8 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
     const context = createContext(cfg);
 
     if (cfg.id === 'stdlib-plugin') {
-      registerBuiltinHostFunctions(hostFunctionRegistry);
+      // Built-in host functions already registered above.
+      // stdlib-plugin exists for backward compatibility — no other work needed.
       continue;
     }
 
