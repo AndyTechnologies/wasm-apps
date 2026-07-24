@@ -24,6 +24,30 @@ function serializeAliases(aliases?: ResolvedAlias[]): string {
 }
 
 /**
+ * Calcula una clave de caché determinista a partir del código fuente + toolchainId + flags de compilación.
+ * La clave incluye el toolchainId en el hash canónico, lo que evita colisiones entre toolchains.
+ * La clave es un resumen SHA-256 en hex de la representación canónica.
+ */
+export function computeToolchainKey(
+  sourceCode: string,
+  toolchainId: string,
+  opts: Partial<Pick<CompileOptions, 'isDev' | 'sourceMap' | 'optimizeLevel' | 'shrinkLevel' | 'runtime' | 'aliases'>> = {},
+): string {
+  const sourceHash = crypto.createHash('sha256').update(sourceCode).digest('hex');
+  const canonical = JSON.stringify({
+    toolchain: toolchainId,
+    sourceHash,
+    isDev: opts?.isDev ?? true,
+    sourceMap: opts?.sourceMap ?? true,
+    optimizeLevel: opts?.optimizeLevel ?? 3,
+    shrinkLevel: opts?.shrinkLevel ?? 0,
+    runtime: opts?.runtime ?? 'incremental',
+    aliases: serializeAliases(opts?.aliases),
+  });
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+/**
  * Calcula una clave de caché determinista a partir del código fuente + flags de compilación + aliases.
  * La clave es un resumen SHA-256 en hex de la representación canónica.
  */

@@ -1,0 +1,7 @@
+{% for module in modules -%}
+const unsigned char {{ module.varName }}[] = {
+{{ module.bufferHex }}
+};
+const size_t {{ module.lenVar }} = {{ module.bufferLength }};
+
+{%- endfor %}

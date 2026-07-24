@@ -7,9 +7,70 @@ const examplesDir = join(rootDir, 'examples');
 const cliScript = join(rootDir, 'packages/cli/dist/cli.js');
 const ext = process.platform === 'win32' ? '.exe' : '';
 
-const exampleDirs = ['basico', 'proyecto-completo', 'plugin-basico', 'plugin-avanzado'];
+const exampleDirs = [
+  'basico',
+  'proyecto-completo',
+  'plugin-basico',
+  'plugin-avanzado',
+  'cpp-saludo',
+  'rust-hello',
+  'precompiled',
+  'multi-toolchain',
+  'custom-template',
+];
+
+/**
+ * Check if a toolchain is available on the current system.
+ * For C++: verifies clang++ exists AND has wasm-ld available.
+ * For Rust: verifies cargo exists AND wasm32 target is installed.
+ * @param {'cpp'|'rust'} toolchain
+ * @returns {boolean}
+ */
+function isToolchainAvailable(toolchain) {
+  try {
+    if (toolchain === 'cpp') {
+      execFileSync('which', ['clang++'], { stdio: 'pipe' });
+      // Verify wasm-ld exists (the linker clang++ uses for wasm32 target)
+      const ldPath = execFileSync('clang++', ['--target=wasm32', '-print-prog-name=wasm-ld'], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }).trim();
+      if (!ldPath || !existsSync(ldPath)) return false;
+      return true;
+    }
+    if (toolchain === 'rust') {
+      execFileSync('which', ['cargo'], { stdio: 'pipe' });
+      const target = execFileSync('rustup', ['target', 'list', '--installed'], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      return target.includes('wasm32-unknown-unknown');
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Map example directories to required toolchains (empty = no special requirements).
+ * @type {Record<string, string[]>}
+ */
+const requiresToolchain = {
+  'cpp-saludo': ['cpp'],
+  'rust-hello': ['rust'],
+  'multi-toolchain': ['cpp'],
+  'custom-template': [],
+};
+
+/**
+ * Examples to always skip (e.g. because the minimal WASM binary cannot be linked).
+ * @type {Set<string>}
+ */
+const skipExamples = new Set(['precompiled']);
 
 let passed = 0;
+let skipped = 0;
 let failed = 0;
 
 for (const dir of exampleDirs) {
@@ -17,6 +78,23 @@ for (const dir of exampleDirs) {
 
   if (!existsSync(examplePath)) {
     console.error(`  SKIP: ${dir} (directorio no encontrado)`);
+    skipped++;
+    continue;
+  }
+
+  // Skip examples on the skip list
+  if (skipExamples.has(dir)) {
+    console.warn(`  SKIP: ${dir} (in skip list)`);
+    skipped++;
+    continue;
+  }
+
+  // Check toolchain requirements
+  const required = requiresToolchain[dir] || [];
+  const missing = required.filter((t) => !isToolchainAvailable(t));
+  if (missing.length > 0) {
+    console.warn(`  SKIP: ${dir} (requiere: ${missing.join(', ')})`);
+    skipped++;
     continue;
   }
 
@@ -92,9 +170,9 @@ for (const dir of exampleDirs) {
   passed++;
 }
 
-const total = passed + failed;
+const total = passed + failed + skipped;
 console.log(`\n${'='.repeat(36)}`);
-console.log(`  Total: ${total}  Passed: ${passed}  Failed: ${failed}`);
+console.log(`  Total: ${total}  Passed: ${passed}  Failed: ${failed}  Skipped: ${skipped}`);
 if (failed > 0) process.exit(1);
 
 function indent(text) {

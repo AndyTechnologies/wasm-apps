@@ -1,6 +1,8 @@
 import os from 'node:os';
-import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo, WasmExport, WasmImport } from '@wasm-apps/types';
+import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
+import { renderTemplate } from './template-renderer.js';
+import type { NunjucksTemplateContext, TemplateModuleEntry, TemplateHostFunctionEntry, TemplateGlobalEntry, TemplateExportEntry } from './template-context.js';
 
 const VALTYPE_TO_CPP: Record<string, string> = {
   i32: 'ValType::i32()',
@@ -126,257 +128,96 @@ function buildHostFunctionList(
   return hostFuncs;
 }
 
-function generatePreamble(): string {
-  return [
-    '#include <wasmtime.hh>',
-    '#include <iostream>',
-    '#include <cstdlib>',
-    '#include <cstring>',
-    '#include <chrono>',
-    '#include <unordered_map>',
-    '#include <unordered_set>',
-    '#include <random>',
-    '#include <string>',
-    '#include <cmath>',
-    '#include <limits>',
-    '#ifdef _MSC_VER',
-    '#include <intrin.h>',
-    '#endif',
-    '',
-    '#ifdef _MSC_VER',
-    'static inline int _wasm_clz32(uint32_t x) {',
-    '  unsigned long leading_zero;',
-    '  _BitScanReverse(&leading_zero, x);',
-    '  return 31 - (int)leading_zero;',
-    '}',
-    '#else',
-    'static inline int _wasm_clz32(uint32_t x) {',
-    '  return x == 0 ? 32 : __builtin_clz(x);',
-    '}',
-    '#endif',
-    '',
-    'static inline size_t _wasm_strnlen(const char* s, size_t maxlen) {',
-    '  size_t n = 0;',
-    '  while (n < maxlen && s[n]) ++n;',
-    '  return n;',
-    '}',
-    '',
-    'using namespace wasmtime;',
-    '',
-    '// Error handling helpers for wasmtime v46 API',
-    'template<typename T>',
-    'static T _check_result(wasmtime::Result<T>&& r, const char* what) {',
-    '  if (!r) {',
-    '    std::cerr << "LinkerError: " << what << " failed: "',
-    '              << r.err().message() << std::endl;',
-    '    std::exit(1);',
-    '  }',
-    '  return r.ok();',
-    '}',
-    '',
-    'template<typename T>',
-    'static T _check_trap(wasmtime::TrapResult<T>&& r, const char* what) {',
-    '  if (!r) {',
-    '    std::cerr << "LinkerError: " << what << " failed: "',
-    '              << r.err_ref().message() << std::endl;',
-    '    std::exit(1);',
-    '  }',
-    '  return r.ok();',
-    '}',
-    '',
-    'static std::mt19937 _wasm_rng(std::random_device{}());',
-    'static std::unordered_map<std::string, std::chrono::steady_clock::time_point> _wasm_timers;',
-    '',
-  ].join('\n');
-}
+/**
+ * Construye un NunjucksTemplateContext a partir de los parámetros de generateCCode.
+ * Esto reemplaza las funciones generatePreamble/generateStringReader/etc.
+ */
+function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): NunjucksTemplateContext {
+  const modules = link.order;
+  const moduleBuffers = buildModuleBuffers(modules);
+  const neededGlobals = buildNeededGlobals(modules);
 
-function generateStringReader(): string {
-  return [
-    'static std::string _readAsString(Caller& caller, int32_t ptr) {',
-    '  if (ptr <= 0) return "";',
-    '  auto mem = caller.get_export("memory");',
-    '  if (!mem) return "";',
-    '  auto* memory = std::get_if<wasmtime::Memory>(&*mem);',
-    '  if (!memory) return "";',
-    '  auto ctx = caller.context();',
-    '  auto span = memory->data(ctx);',
-    '  auto* data = span.data();',
-    '  auto sz = span.size();',
-    '  if (ptr < 4 || (uint32_t)ptr > (uint32_t)sz) return "";',
-    '  int32_t len; std::memcpy(&len, data + ptr - 4, sizeof(len)); len >>= 1;',
-    '  if (len < 0 || len > 65536) return "";',
-    '  if (ptr + (int32_t)(len * 2) > (int32_t)sz) return "";',
-    '  uint16_t* chars = reinterpret_cast<uint16_t*>(data + ptr);',
-    '  std::string result;',
-    '  result.reserve(len + 1);',
-    '  for (int32_t i = 0; i < len; i++) {',
-    '    uint16_t c = chars[i];',
-    '    if (c == 0) break;',
-    '    if (c < 0x80) {',
-    '      result += (char)c;',
-    '    } else if (c < 0x800) {',
-    '      result += (char)(0xC0 | (c >> 6));',
-    '      result += (char)(0x80 | (c & 0x3F));',
-    '    } else {',
-    '      result += (char)(0xE0 | (c >> 12));',
-    '      result += (char)(0x80 | ((c >> 6) & 0x3F));',
-    '      result += (char)(0x80 | (c & 0x3F));',
-    '    }',
-    '  }',
-    '  return result;',
-    '}',
-    '',
-    'static std::string _readAsStringNT(Caller& caller, int32_t ptr) {',
-    '  if (ptr <= 0) return "";',
-    '  auto mem = caller.get_export("memory");',
-    '  if (!mem) return "";',
-    '  auto* memory = std::get_if<wasmtime::Memory>(&*mem);',
-    '  if (!memory) return "";',
-    '  auto ctx = caller.context();',
-    '  auto span = memory->data(ctx);',
-    '  auto* data = span.data();',
-    '  auto sz = span.size();',
-    '  if (ptr >= (int32_t)sz) return "";',
-    '  size_t mlen = _wasm_strnlen(reinterpret_cast<const char*>(data + ptr), sz - ptr);',
-    '  return std::string(reinterpret_cast<const char*>(data + ptr), mlen);',
-    '}',
-    '',
-  ].join('\n');
-}
-
-function generateModuleBuffers(moduleBuffers: ModuleBuffer[]): string {
-  let result = '';
-  for (const mb of moduleBuffers) {
-    const byteStr = formatHexBytes(mb.bytes);
-    result += `const unsigned char ${mb.varName}[] = {\n${byteStr}\n};\n`;
-    result += `const size_t ${mb.lenVar} = ${mb.bytes.length};\n\n`;
-  }
-  return result;
-}
-
-function generateDefineExports(modules: ResolvedLink['order']): string {
-  let code = 'static int define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {\n';
-  code += '  static std::unordered_set<std::string> _defined;\n';
-  for (const mod of modules) {
-    const exports = mod.module.exports;
-    if (exports.length === 0) continue;
-    code += `  if (std::strcmp(instance_label, "instance${mod.index}") == 0) {\n`;
-    for (const exp of exports) {
-      const safeName = sanitizeIdentifier(exp.name);
-      const escapedName = escapeCppString(exp.name);
-      code += `    if (_defined.find("${escapedName}") == _defined.end()) {\n`;
-      code += `      _defined.insert("${escapedName}");\n`;
-      code += `      auto exp = instance.get(ctx, "${escapedName}");\n`;
-      code += `      if (!exp) { std::cerr << "Error obteniendo export ${safeName}" << std::endl; return 1; }\n`;
-      code += `      auto result = linker.define(ctx, "env", "${escapedName}", *exp);\n`;
-      code += `      if (!result) { std::cerr << "Error definiendo ${safeName}: " << result.err().message() << std::endl; return 1; }\n`;
-      code += `    }\n`;
+  const importTypeMap = new Map<string, WasmImportFuncType>();
+  if (importFuncTypes) {
+    for (const ft of importFuncTypes) {
+      importTypeMap.set(`${ft.module}.${ft.name}`, ft);
     }
-    code += `    return 0;\n  }\n`;
   }
-  code += `  std::cerr << "Unknown instance label " << instance_label << std::endl; return 1;\n`;
-  code += '}\n\n';
-  return code;
-}
 
-function generateMainStart(wasi: boolean): string {
-  let code = `int main(int argc, char *argv[]) {
-    Engine engine;
-    Store store(engine);
-    auto ctx = store.context();
-    Linker linker(engine);
-    \n`;
-  if (wasi) {
-    code += `    WasiConfig wasi_config;
-    wasi_config.inherit_argv();
-    wasi_config.inherit_stdin();
-    wasi_config.inherit_stdout();
-    wasi_config.inherit_stderr();
-    _check_result(ctx.set_wasi(std::move(wasi_config)), "set_wasi");
-    _check_result(linker.define_wasi(), "define_wasi");
-    \n`;
-  }
-  return code;
-}
+  const hostFuncs = buildHostFunctionList(modules, importTypeMap);
+  const entryModule = findEntryModule(link, entryPoint);
 
-function generateHostFunctionDefs(hostFuncs: Array<{ name: string; module: string; params: string[]; results: string[] }>): string {
-  let code = '';
-  for (const func of hostFuncs) {
+  // Construir entries de módulos
+  const templateModules: TemplateModuleEntry[] = moduleBuffers.map((mb, idx) => {
+    const mod = modules[idx];
+    return {
+      index: mb.varName === `wasm_bytes_${idx}` ? idx : idx,
+      varName: mb.varName,
+      lenVar: mb.lenVar,
+      moduleVar: mb.moduleVar,
+      instanceVar: mb.instanceVar,
+      bufferHex: formatHexBytes(mb.bytes),
+      bufferLength: mb.bytes.length,
+      exports:
+        mod.module.exports.length > 0
+          ? mod.module.exports.map(
+              (exp) =>
+                ({
+                  name: exp.name,
+                  kind: exp.kind,
+                  escapedName: escapeCppString(exp.name),
+                  safeName: sanitizeIdentifier(exp.name),
+                }) satisfies TemplateExportEntry,
+            )
+          : undefined,
+    };
+  });
+
+  // Construir entries de funciones host
+  const templateHostFunctions: TemplateHostFunctionEntry[] = hostFuncs.map((func) => {
     let generator = hostFunctionRegistry.get(func.module, func.name);
     if (!generator) {
       const byName = hostFunctionRegistry.getByName(func.name);
       if (byName) generator = byName.generator;
     }
     const body = generator ? generator(func.params, func.results) : defaultResultCode(func.results);
-    const funcType = funcTypeCpp(func.params, func.results);
-    const escapedModule = escapeCppString(func.module);
-    const escapedName = escapeCppString(func.name);
-    code += `
-  {
-    auto ty = ${funcType};
-    _check_result(linker.define(ctx, "${escapedModule}", "${escapedName}",
-      Func(ctx, ty, [](Caller caller, Span<const Val> args, Span<Val> results) -> Result<std::monostate, Trap> {
-${body}
-      })),
-      "define ${escapedModule}.${escapedName}");
-  }
-`;
-  }
-  return code;
-}
+    return {
+      module: func.module,
+      name: func.name,
+      escapedModule: escapeCppString(func.module),
+      escapedName: escapeCppString(func.name),
+      params: func.params,
+      results: func.results,
+      body,
+      funcTypeCpp: funcTypeCpp(func.params, func.results),
+    };
+  });
 
-function generateGlobalDefs(neededGlobals: Map<string, { module: string; name: string }>): string {
-  let code = '';
+  // Construir entries de globales
+  const templateGlobals: TemplateGlobalEntry[] = [];
   for (const [, gl] of neededGlobals) {
     const mathConst = MATH_CONSTANTS[gl.name];
-    let valStr: string;
-    if (mathConst !== undefined) {
-      valStr = `Val(double(${mathConst}))`;
-    } else {
-      valStr = 'Val(int32_t(0))';
-    }
-    const escapedModule = escapeCppString(gl.module);
-    const escapedName = escapeCppString(gl.name);
-    code += `  _check_result(linker.define(ctx, "${escapedModule}", "${escapedName}", Global::wrap(ctx, ${valStr})), "define ${escapedModule}.${escapedName}");\n`;
-  }
-  return code;
-}
-
-function generateModuleCompilation(moduleBuffers: ModuleBuffer[]): string {
-  let code = '';
-  for (const mb of moduleBuffers) {
-    code += `\n  auto ${mb.moduleVar} = Module::compile(engine, Span<uint8_t>(const_cast<uint8_t*>(${mb.varName}), ${mb.lenVar}));\n`;
-    code += `  if (!${mb.moduleVar}) { std::cerr << "Error compilando modulo: " << ${mb.moduleVar}.err().message() << std::endl; return 1; }\n`;
-  }
-  return code;
-}
-
-function generateModuleInstantiation(modules: ResolvedLink['order']): string {
-  let code = '';
-  for (const mod of modules) {
-    const iv = `instance${mod.index}`;
-    const mv = `mod${mod.index}`;
-    code += `\n  auto ${iv} = _check_trap(linker.instantiate(ctx,\n      _check_result(std::move(${mv}), "compile module ${mod.index}")),\n      "instantiate module ${mod.index}");\n`;
-    code += `  if (define_exports(linker, ctx, ${iv}, "${iv}") != 0) return 1;\n`;
-  }
-  return code;
-}
-
-function generateEntryCall(entryModule: string, entryPoint: string): string {
-  const escapedEntry = escapeCppString(entryPoint);
-  return `\n  auto entry_exp = ${entryModule}.get(ctx, "${escapedEntry}");
-  if (!entry_exp) { std::cerr << "Entry point ${escapedEntry} no encontrado" << std::endl; return 1; }
-  if (!std::get_if<Func>(&*entry_exp)) { std::cerr << "${escapedEntry} no es una funcion" << std::endl; return 1; }
-  auto entry_func = std::get<Func>(*entry_exp);
-  auto result = entry_func.call(ctx, {});
-  if (!result) {
-    std::cerr << "Error llamando a ${escapedEntry}" << std::endl;
-    return 1;
+    const valStr = mathConst !== undefined ? `Val(double(${mathConst}))` : 'Val(int32_t(0))';
+    templateGlobals.push({
+      module: gl.module,
+      name: gl.name,
+      escapedModule: escapeCppString(gl.module),
+      escapedName: escapeCppString(gl.name),
+      cppValue: valStr,
+    });
   }
 
-  return 0;
-}
-`;
+  return {
+    moduleName: 'wasm-linker',
+    entryPoint: entryModule,
+    entryFunctionName: entryPoint,
+    escapedEntryFunctionName: escapeCppString(entryPoint),
+    wasi,
+    wasmtimeVersion: '46.0.1',
+    modules: templateModules,
+    hostFunctions: templateHostFunctions,
+    globals: templateGlobals,
+  };
 }
 
 export function findEntryModule(link: ResolvedLink, entryPoint: string): string {
@@ -395,30 +236,6 @@ export function validateEntryExport(link: ResolvedLink, entryPoint: string): voi
 }
 
 export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string {
-  const modules = link.order;
-  const moduleBuffers = buildModuleBuffers(modules);
-  const neededGlobals = buildNeededGlobals(modules);
-
-  const importTypeMap = new Map<string, WasmImportFuncType>();
-  if (importFuncTypes) {
-    for (const ft of importFuncTypes) {
-      importTypeMap.set(`${ft.module}.${ft.name}`, ft);
-    }
-  }
-
-  const hostFuncs = buildHostFunctionList(modules, importTypeMap);
-  const entryModule = findEntryModule(link, entryPoint);
-
-  let cpp = generatePreamble();
-  cpp += generateStringReader();
-  cpp += generateModuleBuffers(moduleBuffers);
-  cpp += generateDefineExports(modules);
-  cpp += generateMainStart(wasi);
-  cpp += generateHostFunctionDefs(hostFuncs);
-  cpp += generateGlobalDefs(neededGlobals);
-  cpp += generateModuleCompilation(moduleBuffers);
-  cpp += generateModuleInstantiation(modules);
-  cpp += generateEntryCall(entryModule, entryPoint);
-
-  return cpp;
+  const context = buildTemplateContext(link, entryPoint, wasi, importFuncTypes);
+  return renderTemplate(context);
 }

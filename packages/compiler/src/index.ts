@@ -7,9 +7,17 @@ import { getCached, saveToCache, computeKey } from './disk-cache.js';
 import type { CompileOptions, CompileResult } from '@wasm-apps/types';
 import { CompilerError } from '@wasm-apps/types';
 
-export { getCompileCacheInfo, clearCompileCache, deleteCacheEntry } from './disk-cache.js';
+export { getCompileCacheInfo, clearCompileCache, deleteCacheEntry, computeToolchainKey } from './disk-cache.js';
 export { CompilerCacheRepository } from './compiler-cache-repository.js';
 export { AssemblyScriptCompilerStrategy } from './assemblyscript-compiler-strategy.js';
+export { AssemblyScriptToolchainStrategy } from './strategies/assemblyscript-strategy.js';
+export { CppCompilerStrategy } from './strategies/cpp-strategy.js';
+export { RustCompilerStrategy } from './strategies/rust-strategy.js';
+export { PrecompiledWasmStrategy } from './strategies/precompiled-strategy.js';
+export { ToolchainRouter } from './toolchain-router.js';
+export { UnsupportedExtensionError, ToolchainNotInstalledError } from './errors.js';
+export type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './strategies/toolchain-strategy.js';
+export { TOOLCHAIN_STRATEGY_VERSION } from './strategies/toolchain-strategy.js';
 
 const MEMORY_CACHE = new LRUCache<string, CompileResult>();
 const PROJECT_ROOT = process.cwd();
@@ -24,6 +32,13 @@ function isPathInsideProject(filePath: string): boolean {
   return resolved.startsWith(PROJECT_ROOT);
 }
 
+/**
+ * Compila un archivo AssemblyScript a WASM usando la API original.
+ *
+ * @deprecated Since multi-toolchain refactor. Use `ToolchainRouter` with
+ * `AssemblyScriptToolchainStrategy` instead. This function remains available
+ * for backward compatibility but delegates through the ToolchainRouter internally.
+ */
 export async function compileWasm(
   options: CompileOptions = {
     fileName: '',

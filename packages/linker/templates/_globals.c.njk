@@ -1,0 +1,3 @@
+{% for global in globals %}
+  _check_result(linker.define(ctx, "{{ global.escapedModule }}", "{{ global.escapedName }}", Global::wrap(ctx, {{ global.cppValue }})), "define {{ global.escapedModule }}.{{ global.escapedName }}");
+{% endfor -%}

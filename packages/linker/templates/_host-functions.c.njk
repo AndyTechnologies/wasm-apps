@@ -1,0 +1,10 @@
+{% for func in hostFunctions %}
+  {
+    auto ty = {{ func.funcTypeCpp }};
+    _check_result(linker.define(ctx, "{{ func.escapedModule }}", "{{ func.escapedName }}",
+      Func(ctx, ty, [](Caller caller, Span<const Val> args, Span<Val> results) -> Result<std::monostate, Trap> {
+{{ func.body }}
+      })),
+      "define {{ func.escapedModule }}.{{ func.escapedName }}");
+  }
+{% endfor -%}

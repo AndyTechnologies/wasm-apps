@@ -6,11 +6,84 @@ import os from 'node:os';
 vi.mock('glob', () => ({
   glob: vi.fn(),
 }));
-vi.mock('@wasm-apps/compiler', () => ({
-  compileWasm: vi.fn(),
-  getCompileCacheInfo: vi.fn(),
-  clearCompileCache: vi.fn(),
-}));
+vi.mock('@wasm-apps/compiler', () => {
+  const mockCompileAssemblyScript = vi.fn().mockResolvedValue({
+    wasmBytes: Buffer.from([0x00, 0x61, 0x73, 0x6d]),
+    fileName: 'main.wasm.ts',
+    toolchainId: 'assemblyscript',
+    metadata: { hash: 'abc123' },
+  });
+
+  const mockCompileCpp = vi.fn().mockResolvedValue({
+    wasmBytes: Buffer.from([0x00, 0x61, 0x73, 0x6d]),
+    fileName: 'hello.wasm.cpp',
+    toolchainId: 'cpp',
+  });
+
+  const mockCompileRust = vi.fn().mockResolvedValue({
+    wasmBytes: Buffer.from([0x00, 0x61, 0x73, 0x6d]),
+    fileName: 'world.wasm.rs',
+    toolchainId: 'rust',
+  });
+
+  const mockCompilePrecompiled = vi.fn().mockResolvedValue({
+    wasmBytes: Buffer.from([0x00, 0x61, 0x73, 0x6d]),
+    fileName: 'helper.wasm',
+    toolchainId: 'precompiled',
+  });
+
+  return {
+    compileWasm: vi.fn(),
+    getCompileCacheInfo: vi.fn(),
+    clearCompileCache: vi.fn(),
+    computeToolchainKey: vi.fn(),
+    ToolchainRouter: vi.fn(function () {
+      return {
+        registerBuiltins: vi.fn(),
+        getExtension: vi.fn(function (filePath: string) {
+          if (/\.wasm\.(ts|mjs|as)$/i.test(filePath)) return '.wasm.ts';
+          if (/\.wasm\.(cpp|cxx|cc)$/i.test(filePath)) return '.wasm.cpp';
+          if (/\.wasm\.rs$/i.test(filePath)) return '.wasm.rs';
+          if (/\.wasm$/i.test(filePath) && !/\.wasm\./.test(filePath)) return '.wasm';
+          return '';
+        }),
+        resolveForExtension: vi.fn(function (ext: string) {
+          const strategies: Record<string, any> = {
+            '.wasm.ts': {
+              id: 'assemblyscript',
+              extensions: ['.wasm.ts', '.wasm.mjs', '.as'],
+              compile: mockCompileAssemblyScript,
+              isAvailable: vi.fn().mockResolvedValue(true),
+            },
+            '.wasm.cpp': {
+              id: 'cpp',
+              extensions: ['.wasm.cpp', '.wasm.cxx', '.wasm.cc'],
+              compile: mockCompileCpp,
+              isAvailable: vi.fn().mockResolvedValue(true),
+            },
+            '.wasm.rs': {
+              id: 'rust',
+              extensions: ['.wasm.rs'],
+              compile: mockCompileRust,
+              isAvailable: vi.fn().mockResolvedValue(true),
+            },
+            '.wasm': {
+              id: 'precompiled',
+              extensions: ['.wasm'],
+              compile: mockCompilePrecompiled,
+              isAvailable: vi.fn().mockResolvedValue(true),
+            },
+          };
+          return strategies[ext] || undefined;
+        }),
+      };
+    }),
+    AssemblyScriptToolchainStrategy: vi.fn(),
+    CppCompilerStrategy: vi.fn(),
+    RustCompilerStrategy: vi.fn(),
+    PrecompiledWasmStrategy: vi.fn(),
+  };
+});
 vi.mock('@wasm-apps/linker', () => ({
   createNativeApp: vi.fn(),
   runSetup: vi.fn(),
@@ -25,7 +98,6 @@ vi.mock('@wasm-apps/linker', () => ({
 }));
 
 import { glob } from 'glob';
-import { compileWasm } from '@wasm-apps/compiler';
 import { createNativeApp, loadPlugins, pipeline } from '@wasm-apps/linker';
 import { resolveConfig, initProject, buildProject } from './index.js';
 
@@ -111,13 +183,8 @@ describe('buildProject', () => {
     fs.mkdirSync(srcDir, { recursive: true });
     fs.mkdirSync(outDir, { recursive: true });
     vi.clearAllMocks();
-    (glob as any).mockResolvedValue([path.join(srcDir, 'main.wasm.ts')]);
-    (compileWasm as any).mockResolvedValue({
-      wasmBytes: Buffer.from([0x00, 0x61, 0x73, 0x6d]),
-      dtsContent: '',
-      bindingsJs: '',
-      hash: 'abc123',
-    });
+    // glob is called twice: first for compiled extensions, second for precompiled .wasm
+    (glob as any).mockResolvedValueOnce([path.join(srcDir, 'main.wasm.ts')]).mockResolvedValueOnce([]);
     (createNativeApp as any).mockResolvedValue(undefined);
     (loadPlugins as any).mockResolvedValue(undefined);
   });
@@ -135,7 +202,8 @@ describe('buildProject', () => {
       entry: '_start',
     });
 
-    expect(compileWasm).toHaveBeenCalledOnce();
+    // Verify output wasm file was created
+    expect(fs.existsSync(path.join(outDir, 'main.wasm'))).toBe(true);
     expect(createNativeApp).toHaveBeenCalledOnce();
     expect(createNativeApp).toHaveBeenCalledWith(expect.objectContaining({ entry: '_start', wasi: false }));
   });
@@ -161,12 +229,65 @@ describe('buildProject', () => {
     ).rejects.toThrow('no existe');
   });
 
-  it('throws when no .wasm.ts files found', async () => {
-    (glob as any).mockResolvedValue([]);
+  it('throws when no source files found', async () => {
+    (glob as any).mockReset().mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     await expect(
       buildProject({
         rootDir: tmpDir,
       }),
-    ).rejects.toThrow('No se encontraron archivos');
+    ).rejects.toThrow('No se encontraron archivos fuente');
+  });
+
+  it('discovers and compiles C++ source files', async () => {
+    fs.writeFileSync(path.join(srcDir, 'hello.wasm.cpp'), 'extern "C" { void _start() {} }');
+
+    (glob as any)
+      .mockReset()
+      .mockResolvedValueOnce([path.join(srcDir, 'hello.wasm.cpp')])
+      .mockResolvedValueOnce([]);
+
+    await buildProject({
+      rootDir: tmpDir,
+      entry: '_start',
+    });
+
+    expect(fs.existsSync(path.join(outDir, 'hello.cpp.wasm'))).toBe(true);
+    expect(createNativeApp).toHaveBeenCalledOnce();
+  });
+
+  it('discovers and compiles Rust source files', async () => {
+    fs.writeFileSync(path.join(srcDir, 'world.wasm.rs'), 'fn main() {}');
+
+    (glob as any)
+      .mockReset()
+      .mockResolvedValueOnce([path.join(srcDir, 'world.wasm.rs')])
+      .mockResolvedValueOnce([]);
+
+    await buildProject({
+      rootDir: tmpDir,
+      entry: '_start',
+    });
+
+    expect(fs.existsSync(path.join(outDir, 'world.rust.wasm'))).toBe(true);
+    expect(createNativeApp).toHaveBeenCalledOnce();
+  });
+
+  it('discovers precompiled .wasm files', async () => {
+    // Create a valid binary .wasm file (just magic bytes + basic content)
+    const wasmBuffer = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    fs.writeFileSync(path.join(srcDir, 'helper.wasm'), wasmBuffer);
+
+    (glob as any)
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([path.join(srcDir, 'helper.wasm')]);
+
+    await buildProject({
+      rootDir: tmpDir,
+      entry: '_start',
+    });
+
+    expect(fs.existsSync(path.join(outDir, 'helper.wasm'))).toBe(true);
+    expect(createNativeApp).toHaveBeenCalledOnce();
   });
 });

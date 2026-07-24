@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { ToolchainError, CompilerError, LinkerError, DownloadError, CMakeError, ConfigError, ZigError, PipelinePhase, formatBytes } from './index.js';
+import {
+  ToolchainError,
+  CompilerError,
+  LinkerError,
+  DownloadError,
+  CMakeError,
+  ConfigError,
+  ZigError,
+  PipelinePhase,
+  formatBytes,
+  EXTENSION_TO_TOOLCHAIN,
+} from './index.js';
+import type { ToolchainId, WasmArtifact, WappConfig } from './index.js';
 
 describe('formatBytes', () => {
   it('formatea 0 bytes', () => {
@@ -109,5 +121,105 @@ describe('PipelinePhase', () => {
     expect(PipelinePhase.BeforeLink).toBe('beforeLink');
     expect(PipelinePhase.AfterLink).toBe('afterLink');
     expect(PipelinePhase.AfterBundle).toBe('afterBundle');
+  });
+});
+
+// ──────────────────────────────────────────
+// Multi-Toolchain types (Phase 1)
+// ──────────────────────────────────────────
+
+describe('ToolchainId type', () => {
+  it('accepts all four toolchain identifiers as values', () => {
+    // Runtime check — ToolchainId is a union, so we verify values exist
+    const ids: ToolchainId[] = ['assemblyscript', 'cpp', 'rust', 'precompiled'];
+    expect(ids).toHaveLength(4);
+    expect(ids).toContain('assemblyscript');
+    expect(ids).toContain('cpp');
+    expect(ids).toContain('rust');
+    expect(ids).toContain('precompiled');
+  });
+});
+
+describe('EXTENSION_TO_TOOLCHAIN', () => {
+  it('maps .wasm.ts to assemblyscript', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.wasm.ts']).toBe('assemblyscript');
+  });
+
+  it('maps .wasm.mjs to assemblyscript', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.wasm.mjs']).toBe('assemblyscript');
+  });
+
+  it('maps .as to assemblyscript', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.as']).toBe('assemblyscript');
+  });
+
+  it('maps .wasm.cpp to cpp', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.wasm.cpp']).toBe('cpp');
+  });
+
+  it('maps .wasm.cxx to cpp', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.wasm.cxx']).toBe('cpp');
+  });
+
+  it('maps .wasm.cc to cpp', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.wasm.cc']).toBe('cpp');
+  });
+
+  it('maps .wasm.rs to rust', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.wasm.rs']).toBe('rust');
+  });
+
+  it('maps .wasm to precompiled', () => {
+    expect(EXTENSION_TO_TOOLCHAIN['.wasm']).toBe('precompiled');
+  });
+
+  it('has exactly 8 entries', () => {
+    expect(Object.keys(EXTENSION_TO_TOOLCHAIN)).toHaveLength(8);
+  });
+});
+
+describe('WasmArtifact with toolchainId', () => {
+  it('accepts all toolchainId values', () => {
+    const artifact: WasmArtifact = {
+      wasmBytes: new Uint8Array([0x00, 0x61, 0x73, 0x6d]),
+      fileName: 'test.wasm.ts',
+      toolchainId: 'assemblyscript',
+    };
+    expect(artifact.toolchainId).toBe('assemblyscript');
+  });
+
+  it('accepts cpp toolchainId', () => {
+    const artifact: WasmArtifact = {
+      wasmBytes: new Uint8Array([0x00, 0x61, 0x73, 0x6d]),
+      fileName: 'test.wasm.cpp',
+      toolchainId: 'cpp',
+    };
+    expect(artifact.toolchainId).toBe('cpp');
+  });
+});
+
+describe('WappConfig with toolchains and linker', () => {
+  it('accepts compiler.toolchains with toolchain overrides', () => {
+    const config: WappConfig = {
+      compiler: {
+        release: true,
+        optimizeLevel: 3,
+        toolchains: {
+          cpp: { release: false, optimizeLevel: 2 },
+          assemblyscript: { release: true },
+        },
+      },
+    };
+    expect(config.compiler?.toolchains?.cpp?.optimizeLevel).toBe(2);
+    expect(config.compiler?.toolchains?.assemblyscript?.release).toBe(true);
+  });
+
+  it('accepts linker.templatePath', () => {
+    const config: WappConfig = {
+      linker: {
+        templatePath: './my-templates',
+      },
+    };
+    expect(config.linker?.templatePath).toBe('./my-templates');
   });
 });

@@ -5,10 +5,12 @@ import { LinkerError } from '@wasm-apps/types';
 // Mock dependencies of native-app-builder
 const mockIsBuildUpToDate = vi.hoisted(() => vi.fn());
 const mockSaveBuildManifest = vi.hoisted(() => vi.fn());
+const mockComputeTemplateHash = vi.hoisted(() => vi.fn().mockReturnValue('mock-template-hash'));
 
 vi.mock('./build-cache.js', () => ({
   isBuildUpToDate: mockIsBuildUpToDate,
   saveBuildManifest: mockSaveBuildManifest,
+  computeTemplateHash: mockComputeTemplateHash,
 }));
 
 vi.mock('./wasm-io.js', () => ({
@@ -133,6 +135,7 @@ describe('NativeAppBuilder isCacheUpToDate', () => {
       expect.objectContaining({
         entry: '_start',
         wasi: false,
+        templateHash: 'mock-template-hash',
       }),
     );
     expect(result).toBe(true);

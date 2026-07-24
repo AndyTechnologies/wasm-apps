@@ -48,6 +48,15 @@ coverage/
 # Agent workspace
 .opencode/
 
+# Test output files
+actual-stdout.txt
+
+# Backup files
+*.bak
+
+# Rust build artifacts (cargo target dirs)
+target/
+
 # Graphify knowledge graph
 graphify-out/
 
