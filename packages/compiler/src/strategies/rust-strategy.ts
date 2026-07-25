@@ -1,34 +1,9 @@
 import type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './toolchain-strategy.js';
 import { CompilerError } from '@wasm-apps/types';
-import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-
-/**
- * Wrapper para execFile que retorna una Promise con { stdout, stderr }.
- * El await directo sobre execFile de node:child_process no espera a que
- * el proceso termine — este wrapper sí lo hace.
- *
- * Soporta tanto el callback API (producción) como funciones mock que
- * retornan Promise directamente (tests).
- */
-function runExecFile(cmd: string, args: string[], options?: any): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const childProcessOrPromise = execFile(cmd, args, options, (err, stdout, stderr) => {
-      if (err) reject(err);
-      else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
-    });
-    // En tests, execFile suele ser un mock que retorna una Promise.
-    // Detectamos ese caso y resolvemos desde allí también.
-    if (childProcessOrPromise instanceof Promise) {
-      childProcessOrPromise.then(
-        (val: any) => resolve({ stdout: String(val?.stdout ?? ''), stderr: String(val?.stderr ?? '') }),
-        (err: any) => reject(err),
-      );
-    }
-  });
-}
+import { runExecFile } from './_utils.js';
 
 /**
  * Estrategia de compilación para Rust (.wasm.rs).
@@ -112,12 +87,7 @@ export class RustCompilerStrategy implements ToolchainStrategy {
       }
 
       // Read the compiled WASM bytes
-      let wasmBytes: Buffer;
-      try {
-        wasmBytes = execFileSync('cat', [wasmOutput], { timeout: 10_000 });
-      } catch {
-        wasmBytes = fs.readFileSync(wasmOutput);
-      }
+      const wasmBytes = fs.readFileSync(wasmOutput);
 
       return {
         wasmBytes: new Uint8Array(wasmBytes),

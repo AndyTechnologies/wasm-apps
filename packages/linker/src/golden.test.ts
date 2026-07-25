@@ -5,7 +5,7 @@
  * and compares it byte-for-byte after the Nunjucks template refactoring.
  *
  * Run BEFORE refactoring to capture golden output:
- *   pnpm vitest run packages/linker/src/golden.test.ts --update
+ *   UPDATE_GOLDEN=true pnpm vitest run packages/linker/src/golden.test.ts
  *
  * Run AFTER refactoring to verify output is identical:
  *   pnpm vitest run packages/linker/src/golden.test.ts
@@ -108,7 +108,7 @@ const FIXTURES: GoldenFixture[] = [
 
 describe('generateCCode golden files', () => {
   // Check if we should update golden files
-  const shouldUpdate = process.argv.includes('--update');
+  const shouldUpdate = process.env.UPDATE_GOLDEN === 'true';
 
   for (const fixture of FIXTURES) {
     it(`output matches golden for '${fixture.name}'`, () => {

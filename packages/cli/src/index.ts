@@ -9,6 +9,7 @@ import {
   CppCompilerStrategy,
   RustCompilerStrategy,
   PrecompiledWasmStrategy,
+  ToolchainNotInstalledError,
   getCompileCacheInfo,
   clearCompileCache,
 } from '@wasm-apps/compiler';
@@ -149,7 +150,14 @@ async function compileProjectFiles(
   const precompiledFiles = allWasmFiles.filter((f) => /\.wasm$/i.test(path.basename(f)));
 
   // 4. Exclude build artifacts from cargo target/ and node_modules/
-  const isExcluded = (f: string) => f.includes(`${path.sep}target${path.sep}`) || f.includes(`${path.sep}node_modules${path.sep}`);
+  const isExcluded = (f: string) => {
+    const sep = path.sep;
+    // Match /target/ or /node_modules/ at any path depth (cross-platform)
+    const targetPattern = `${sep}target${sep}`;
+    const nodeModulesPattern = `${sep}node_modules${sep}`;
+    // Also handle trailing paths (end of string after sep)
+    return f.includes(targetPattern) || f.includes(nodeModulesPattern) || f.endsWith(`${sep}target`) || f.endsWith(`${sep}node_modules`);
+  };
   const filteredCompiled = compiledFiles.filter((f) => !isExcluded(f));
   const filteredPrecompiled = precompiledFiles.filter((f) => !isExcluded(f));
 
@@ -163,6 +171,7 @@ async function compileProjectFiles(
   }
 
   const wasmFiles: string[] = [];
+  const errors: Array<{ file: string; message: string }> = [];
 
   for (const file of allFiles) {
     const relativeName = path.relative(rootDir, file);
@@ -180,19 +189,32 @@ async function compileProjectFiles(
     const ext = router.getExtension(file);
     const strategy = router.resolveForExtension(ext);
     if (!strategy) {
-      throw new ConfigError(`No hay toolchain registrado para: ${file}`);
+      errors.push({ file, message: `No hay toolchain registrado para: ${file}` });
+      continue;
+    }
+
+    // Check if the toolchain is available before attempting compilation
+    const available = await strategy.isAvailable();
+    if (!available) {
+      errors.push({ file, message: `Toolchain "${strategy.id}" no está disponible. Saltando ${relativeName}.` });
+      continue;
     }
 
     // Get per-toolchain compiler options
     const toolchainId = strategy.id as ToolchainId;
     const compilerOptions = getCompilerOptionsForToolchain(config.compiler, toolchainId);
 
-    // Compile
-    const result = await strategy.compile({
-      sourceCode,
-      fileName: file,
-      compilerOptions,
-    });
+    let result: Awaited<ReturnType<typeof strategy.compile>>;
+    try {
+      result = await strategy.compile({
+        sourceCode,
+        fileName: file,
+        compilerOptions,
+      });
+    } catch (err: any) {
+      errors.push({ file, message: err.message ?? String(err) });
+      continue;
+    }
 
     // Determine output name based on toolchain
     const basename = path.basename(file);
@@ -219,6 +241,20 @@ async function compileProjectFiles(
     const wasmPath = path.join(outDir, wasmFileName);
     fs.writeFileSync(wasmPath, result.wasmBytes);
     wasmFiles.push(wasmPath);
+  }
+
+  // Report partial failures
+  if (errors.length > 0) {
+    for (const err of errors) {
+      logger.warn(`  ${err.file}: ${err.message}`);
+    }
+    if (wasmFiles.length === 0) {
+      throw new ConfigError(`Todos los archivos fuente fallaron al compilar (${errors.length} errores). Revisá que los toolchains estén instalados.`, {
+        sourceDir,
+        errors,
+      });
+    }
+    logger.warn(`  ${errors.length} archivo(s) fallaron, ${wasmFiles.length} compilados exitosamente.`);
   }
 
   return wasmFiles;

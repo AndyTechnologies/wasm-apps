@@ -73,6 +73,18 @@ describe('ToolchainRouter', () => {
     expect(router.getExtension('noext')).toBe('');
   });
 
+  it('getExtension does not match .wasm in directory names', () => {
+    const router = new ToolchainRouter();
+    expect(router.getExtension('/home/user/.wasm_cache/src/main.wasm.ts')).toBe('.wasm.ts');
+    expect(router.getExtension('/home/user/.wasm_cache/src/lib.as')).toBe('.as');
+  });
+
+  it('getExtension handles multiple dots correctly', () => {
+    const router = new ToolchainRouter();
+    expect(router.getExtension('a.wasm.cpp.wasm.ts')).toBe('.wasm.ts');
+    expect(router.getExtension('module.wasm')).toBe('.wasm');
+  });
+
   it('compileFile compiles using the correct strategy', async () => {
     const router = new ToolchainRouter();
     const asStrategy = createMockStrategy('assemblyscript', ['.wasm.ts']);

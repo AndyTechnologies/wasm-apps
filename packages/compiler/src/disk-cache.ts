@@ -72,6 +72,13 @@ interface CacheEntry {
   result: CompileResult;
 }
 
+/**
+ * Establece el directorio de caché (útil para tests).
+ */
+export function setCacheDir(dir: string): void {
+  _cacheDir = dir;
+}
+
 /** Carga un resultado de compilación de la caché de disco. Retorna null si no existe o está corrupto. */
 export function getCached(key: string): CompileResult | null {
   const dirPath = path.join(getCacheDir(), key);

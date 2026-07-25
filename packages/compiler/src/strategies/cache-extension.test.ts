@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { computeToolchainKey, computeKey } from '../disk-cache.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { computeToolchainKey, computeKey, setCacheDir } from '../disk-cache.js';
 import { CompilerCacheRepository } from '../compiler-cache-repository.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 describe('computeToolchainKey', () => {
   const sourceCode = 'export function add(a: i32, b: i32): i32 { return a + b; }';
@@ -83,13 +86,21 @@ describe('computeKey (original) unchanged', () => {
 
 describe('CompilerCacheRepository toolchain extension', () => {
   let repository: CompilerCacheRepository;
+  let tmpCacheDir: string;
 
   beforeEach(() => {
+    tmpCacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cache-test-'));
+    setCacheDir(tmpCacheDir);
     repository = new CompilerCacheRepository();
   });
 
+  afterEach(() => {
+    if (fs.existsSync(tmpCacheDir)) {
+      fs.rmSync(tmpCacheDir, { recursive: true, force: true });
+    }
+  });
+
   it('setToolchainId stores the toolchain id', () => {
-    // setToolchainId should exist and not throw
     expect(() => repository.setToolchainId('cpp')).not.toThrow();
   });
 
@@ -102,7 +113,7 @@ describe('CompilerCacheRepository toolchain extension', () => {
   it('saveFromSourceWithToolchain and getFromSourceWithToolchain round-trip', () => {
     const source = 'export function test(): void {}';
     const toolchainId = 'assemblyscript';
-    const mockResult = {
+    const result = {
       wasmBytes: new Uint8Array([0x00, 0x61, 0x73, 0x6d]),
       dtsContent: 'export function test(): void;\n',
       bindingsJs: 'module.exports = {};\n',
@@ -110,18 +121,18 @@ describe('CompilerCacheRepository toolchain extension', () => {
       hash: 'abc123',
     };
 
-    repository.setToolchainId(toolchainId);
-    repository.saveFromSourceWithToolchain(source, toolchainId, mockResult as any);
+    repository.saveFromSourceWithToolchain(source, toolchainId, result);
 
     const cached = repository.getFromSourceWithToolchain(source, toolchainId);
-    // Should be null because saveToCache writes to disk and our getCached is mocked to null
-    // This test verifies the wiring doesn't throw
-    expect(typeof repository.saveFromSourceWithToolchain).toBe('function');
-    expect(typeof repository.getFromSourceWithToolchain).toBe('function');
+    expect(cached).not.toBeNull();
+    expect(cached!.hash).toBe('abc123');
+    expect(cached!.dependencies).toEqual(['test.wasm.ts']);
+    expect(cached!.dtsContent).toBe('export function test(): void;\n');
+    expect(cached!.bindingsJs).toBe('module.exports = {};\n');
+    expect(new Uint8Array(cached!.wasmBytes)).toEqual(new Uint8Array([0x00, 0x61, 0x73, 0x6d]));
   });
 
   it('different toolchainIds produce different cache keys', () => {
-    // This tests internal behavior via the public API
     const source = 'same source';
     const opts = { release: true };
 

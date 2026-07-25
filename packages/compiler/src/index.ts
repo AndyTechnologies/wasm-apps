@@ -29,7 +29,8 @@ export function clearMemoryCache(): void {
 
 function isPathInsideProject(filePath: string): boolean {
   const resolved = path.resolve(filePath);
-  return resolved.startsWith(PROJECT_ROOT);
+  const boundary = PROJECT_ROOT + path.sep;
+  return resolved === PROJECT_ROOT || resolved.startsWith(boundary);
 }
 
 /**

@@ -80,7 +80,6 @@ describe('PrecompiledWasmStrategy', () => {
       }),
     ).rejects.toThrow(CompilerError);
 
-    // Verify it's the magic byte error specifically
     await expect(
       strategy.compile({
         sourceCode: '',
@@ -98,7 +97,7 @@ describe('PrecompiledWasmStrategy', () => {
         sourceCode: '',
         fileName: emptyPath,
       }),
-    ).rejects.toThrow(/magic/i);
+    ).rejects.toThrow(/too short/i);
   });
 
   it('throws CompilerError when source file does not exist', async () => {
@@ -112,10 +111,20 @@ describe('PrecompiledWasmStrategy', () => {
     ).rejects.toThrow(CompilerError);
   });
 
+  it('throws CompilerError with WASM_FILE_NOT_FOUND when file does not exist', async () => {
+    const missingPath = path.join(tmpDir, 'nonexistent.wasm');
+
+    await expect(
+      strategy.compile({
+        sourceCode: '',
+        fileName: missingPath,
+      }),
+    ).rejects.toThrow(/not found/i);
+  });
+
   it('throws CompilerError for first bytes that are close but not exact WASM magic', async () => {
     const borderlinePath = path.join(tmpDir, 'borderline.wasm');
-    // First byte off by 1: 0x01 instead of 0x00
-    const badMagic = new Uint8Array([0x01, 0x61, 0x73, 0x6d]);
+    const badMagic = new Uint8Array([0x01, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
     fs.writeFileSync(borderlinePath, Buffer.from(badMagic));
 
     await expect(
@@ -124,5 +133,26 @@ describe('PrecompiledWasmStrategy', () => {
         fileName: borderlinePath,
       }),
     ).rejects.toThrow(/magic/i);
+  });
+
+  it('throws CompilerError with INVALID_WASM_MAGIC for wrong version byte', async () => {
+    const versionPath = path.join(tmpDir, 'bad-version.wasm');
+    // Correct magic but wrong version (0x02 instead of 0x01)
+    const badVersion = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x02, 0x00, 0x00, 0x00]);
+    fs.writeFileSync(versionPath, Buffer.from(badVersion));
+
+    await expect(
+      strategy.compile({
+        sourceCode: '',
+        fileName: versionPath,
+      }),
+    ).rejects.toThrow(CompilerError);
+
+    await expect(
+      strategy.compile({
+        sourceCode: '',
+        fileName: versionPath,
+      }),
+    ).rejects.toThrow(/version/i);
   });
 });

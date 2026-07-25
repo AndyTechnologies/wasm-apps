@@ -1,5 +1,6 @@
 import type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './strategies/toolchain-strategy.js';
 import { UnsupportedExtensionError } from './errors.js';
+import { logger } from '@wasm-apps/types';
 
 /**
  * Enrutador de toolchains: registra estrategias de compilación y resuelve
@@ -19,6 +20,9 @@ export class ToolchainRouter {
    * Si ya existe una con el mismo id, la sobrescribe.
    */
   register(strategy: ToolchainStrategy): void {
+    if (this.strategies.has(strategy.id)) {
+      logger.warn(`Overwriting existing strategy "${strategy.id}"`);
+    }
     this.strategies.set(strategy.id, strategy);
     this.rebuildExtensionMap();
   }
@@ -71,19 +75,18 @@ export class ToolchainRouter {
    *   'script.as' → '.as'
    */
   getExtension(filePath: string): string {
-    const wasmIndex = filePath.indexOf('.wasm');
+    const basename = filePath.split('/').pop()?.split('\\').pop() ?? filePath;
+    const wasmIndex = basename.lastIndexOf('.wasm');
     if (wasmIndex !== -1) {
-      const suffix = filePath.slice(wasmIndex); // '.wasm.ts', '.wasm', etc.
+      const suffix = basename.slice(wasmIndex);
       if (suffix === '.wasm' || this.extensionMap.has(suffix)) {
         return suffix;
       }
-      // Podría ser .wasm.cpp, .wasm.ts, etc.
       return suffix;
     }
-    // Fallback: extensión normal
-    const dotIndex = filePath.lastIndexOf('.');
+    const dotIndex = basename.lastIndexOf('.');
     if (dotIndex === -1) return '';
-    return filePath.slice(dotIndex);
+    return basename.slice(dotIndex);
   }
 
   /**
