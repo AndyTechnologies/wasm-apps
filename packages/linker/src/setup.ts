@@ -5,6 +5,7 @@ import { downloadFile } from './downloader.js';
 import { extractArchive, extractZip } from './extract.js';
 import { logger } from '@wasm-apps/types';
 import { CacheManager, getCacheInfo } from './cache.js';
+import { setupRmlui } from './rmlui-setup.js';
 
 const WASMTIME_VERSION = '46.0.1';
 
@@ -68,9 +69,10 @@ export async function setupWasmtime(wasmtimePath?: string, ignoreCache?: boolean
   logger.success('Wasmtime C-API setup complete');
 }
 
-/** Alias para setupWasmtime, mantenido para compatibilidad hacia atrás con el CLI. */
+/** Alias para setupWasmtime + setupRmlui, mantenido para compatibilidad hacia atrás con el CLI. */
 export async function runSetup(options?: { ignoreCache?: boolean }): Promise<void> {
   await setupWasmtime(undefined, options?.ignoreCache);
+  await setupRmlui(options?.ignoreCache);
 }
 
 /** Verifica si Wasmtime C-API está instalado correctamente. */
