@@ -1,6 +1,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   type ILinkerStrategy,
   type ICodegenStrategy,
@@ -13,7 +14,10 @@ import {
 import { parseWasmModule } from './wasm-io.js';
 import { WasmtimeLinkerStrategy } from './wasmtime-linker-strategy.js';
 import { DefaultCodegenStrategy } from './default-codegen-strategy.js';
-import { isBuildUpToDate, saveBuildManifest } from './build-cache.js';
+import { isBuildUpToDate, saveBuildManifest, computeTemplateHash } from './build-cache.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class NativeAppBuilder {
   private wasmPaths: string[] = [];
@@ -27,6 +31,7 @@ export class NativeAppBuilder {
   private outputPath?: string;
   private linkerStrategy: ILinkerStrategy;
   private codegenStrategy: ICodegenStrategy;
+  private templateDir?: string;
   private validateBeforeBuild = true;
 
   constructor(linkerStrategy?: ILinkerStrategy, codegenStrategy?: ICodegenStrategy, wasmtimeVersion?: string) {
@@ -79,6 +84,11 @@ export class NativeAppBuilder {
 
   setOutputPath(output: string): this {
     this.outputPath = path.resolve(output);
+    return this;
+  }
+
+  setTemplateDir(dir: string): this {
+    this.templateDir = path.resolve(dir);
     return this;
   }
 
@@ -139,6 +149,8 @@ export class NativeAppBuilder {
   async isCacheUpToDate(): Promise<boolean> {
     if (!this.outputPath) return false;
     const resolvedPath = this.resolveWasmtimePath();
+    const templateDir = this.templateDir || path.resolve(__dirname, '../templates');
+    const templateHash = computeTemplateHash(templateDir);
     return isBuildUpToDate(this.wasmPaths, this.outputPath, {
       entry: this.entry,
       target: this.target,
@@ -146,6 +158,7 @@ export class NativeAppBuilder {
       moduleMatching: this.moduleMatching,
       wasmtimePath: resolvedPath || undefined,
       wasmtimeVersion: this.wasmtimeVersion,
+      templateHash,
     });
   }
 
@@ -204,6 +217,9 @@ export class NativeAppBuilder {
 
     const result = await this.linkerStrategy.link(this.resolvedModules, nativeOptions);
 
+    const templateDir = this.templateDir || path.resolve(__dirname, '../templates');
+    const templateHash = computeTemplateHash(templateDir);
+
     saveBuildManifest(this.wasmPaths, outputPath, {
       entry: this.entry,
       target: this.target || '',
@@ -211,6 +227,7 @@ export class NativeAppBuilder {
       moduleMatching: this.moduleMatching,
       wasmtimePath: resolvedWasmtimePath || '',
       wasmtimeVersion: this.wasmtimeVersion,
+      templateHash,
     });
 
     if (!quiet) logger.success(`Built: ${outputPath}`);

@@ -17,6 +17,7 @@ export class DevCommand implements ICommand {
       release: args.release || false,
       sourceDir: args.sourceDir,
       outDir: args.outDir,
+      verbose: args.verbose || false,
     });
   }
 }

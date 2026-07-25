@@ -1,4 +1,4 @@
-export { logger, colorizeByStatus, formatBytes } from './logger.js';
+export { logger, formatBytes } from './logger.js';
 import type { Logger } from './logger.js';
 export type { Logger };
 
@@ -150,6 +150,41 @@ export interface CacheInfo {
 }
 
 // ──────────────────────────────────────────
+// Multi-Toolchain types
+// ──────────────────────────────────────────
+
+/** Identificador único de un toolchain de compilación. */
+export type ToolchainId = 'assemblyscript' | 'cpp' | 'rust' | 'precompiled';
+
+/** Mapeo de extensiones de archivo a toolchainId (longest-suffix first = first match wins). */
+export const EXTENSION_TO_TOOLCHAIN: Record<string, ToolchainId> = {
+  '.wasm.ts': 'assemblyscript',
+  '.wasm.mjs': 'assemblyscript',
+  '.as': 'assemblyscript',
+  '.wasm.cpp': 'cpp',
+  '.wasm.cxx': 'cpp',
+  '.wasm.cc': 'cpp',
+  '.wasm.rs': 'rust',
+  '.wasm': 'precompiled',
+} as const;
+
+/** Overrides para configurar cómo se invoca un toolchain específico. */
+export interface ToolchainOverrides {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+/** Opciones de compilación que pueden sobrescribirse por toolchain. */
+export interface CompilerOverrides {
+  release?: boolean;
+  runtime?: AsRuntime;
+  optimizeLevel?: number;
+  shrinkLevel?: number;
+  sourceMap?: boolean;
+}
+
+// ──────────────────────────────────────────
 // Strategy Pattern — interfaces de estrategia
 // ──────────────────────────────────────────
 
@@ -159,6 +194,8 @@ export interface WasmArtifact {
   fileName: string;
   moduleInfo?: WasmModuleInfo;
   metadata?: Record<string, unknown>;
+  /** Identifica qué toolchain produjo este artefacto. */
+  toolchainId: ToolchainId;
 }
 
 /** Estrategia de compilación: cómo compilar código fuente a WASM. */
@@ -220,6 +257,13 @@ export interface WappConfig {
     optimizeLevel?: number;
     shrinkLevel?: number;
     sourceMap?: boolean;
+    /** Overrides per-toolchain. Cada entrada extiende/sobrescribe las opciones globales del compilador. */
+    toolchains?: Partial<Record<ToolchainId, CompilerOverrides>>;
+  };
+  /** Configuración del linker. */
+  linker?: {
+    /** Ruta a un directorio con templates Nunjucks personalizados. */
+    templatePath?: string;
   };
   optimization?: {
     level?: 'z' | 's' | '0' | '1' | '2' | '3';
@@ -342,13 +386,6 @@ export class CompilerError extends ToolchainError {
 export class LinkerError extends ToolchainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'LINKER_ERROR', details);
-  }
-}
-
-/** Error lanzado por el toolchain Zig (sin usar, reservado para uso futuro). */
-export class ZigError extends ToolchainError {
-  constructor(message: string, details?: Record<string, unknown>) {
-    super(message, 'ZIG_ERROR', details);
   }
 }
 

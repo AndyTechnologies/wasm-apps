@@ -2,8 +2,17 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { glob } from 'glob';
-import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy } from '@wasm-apps/types';
-import { compileWasm, getCompileCacheInfo, clearCompileCache } from '@wasm-apps/compiler';
+import { logger, ConfigError, type WappConfig, type ModuleMatchingStrategy, type ToolchainId } from '@wasm-apps/types';
+import {
+  ToolchainRouter,
+  AssemblyScriptToolchainStrategy,
+  CppCompilerStrategy,
+  RustCompilerStrategy,
+  PrecompiledWasmStrategy,
+  ToolchainNotInstalledError,
+  getCompileCacheInfo,
+  clearCompileCache,
+} from '@wasm-apps/compiler';
 import {
   createNativeApp,
   runSetup as linkerSetup,
@@ -93,38 +102,159 @@ export function initProject(rootDir: string, overrides?: Partial<WappConfig>): W
   return config;
 }
 
-async function compileWasFiles(
-  wasmTsFiles: string[],
+function getCompilerOptionsForToolchain(
+  global: WappConfig['compiler'] | undefined,
+  toolchainId: string,
+): {
+  release?: boolean;
+  runtime?: string;
+  optimizeLevel?: number;
+  shrinkLevel?: number;
+  sourceMap?: boolean;
+} {
+  const base: Record<string, unknown> = {};
+  if (global?.release !== undefined) base.release = global.release;
+  if (global?.runtime !== undefined) base.runtime = global.runtime;
+  if (global?.optimizeLevel !== undefined) base.optimizeLevel = global.optimizeLevel;
+  if (global?.shrinkLevel !== undefined) base.shrinkLevel = global.shrinkLevel;
+  if (global?.sourceMap !== undefined) base.sourceMap = global.sourceMap;
+
+  const toolchainOverrides = global?.toolchains?.[toolchainId as ToolchainId];
+  if (toolchainOverrides) {
+    return { ...base, ...toolchainOverrides } as any;
+  }
+  return base as any;
+}
+
+/**
+ * Compila todos los archivos fuente encontrados en sourceDir a WebAssembly,
+ * usando el ToolchainRouter para enrutar cada archivo a su estrategia de compilación.
+ */
+async function compileProjectFiles(
   sourceDir: string,
   outDir: string,
   rootDir: string,
   config: WappConfig,
-  pipelineContext: Record<string, any>,
+  _pipelineContext: Record<string, any>,
 ): Promise<string[]> {
-  const isDev = !config.compiler?.release;
+  // 1. Create ToolchainRouter and register all built-in strategies
+  const router = new ToolchainRouter();
+  router.registerBuiltins([new AssemblyScriptToolchainStrategy(), new CppCompilerStrategy(), new RustCompilerStrategy(), new PrecompiledWasmStrategy()]);
+
+  // 2. Glob all supported compiled extensions
+  const compiledGlob = '**/*.wasm.{ts,mjs,as,cpp,cxx,cc,rs}';
+  const compiledFiles = await glob(compiledGlob, { cwd: sourceDir, absolute: true, nodir: true });
+
+  // 3. Glob precompiled .wasm files separately (files that end in just .wasm)
+  const allWasmFiles = await glob('**/*.wasm', { cwd: sourceDir, absolute: true, nodir: true });
+  const precompiledFiles = allWasmFiles.filter((f) => /\.wasm$/i.test(path.basename(f)));
+
+  // 4. Exclude build artifacts from cargo target/ and node_modules/
+  const isExcluded = (f: string) => {
+    const sep = path.sep;
+    // Match /target/ or /node_modules/ at any path depth (cross-platform)
+    const targetPattern = `${sep}target${sep}`;
+    const nodeModulesPattern = `${sep}node_modules${sep}`;
+    // Also handle trailing paths (end of string after sep)
+    return f.includes(targetPattern) || f.includes(nodeModulesPattern) || f.endsWith(`${sep}target`) || f.endsWith(`${sep}node_modules`);
+  };
+  const filteredCompiled = compiledFiles.filter((f) => !isExcluded(f));
+  const filteredPrecompiled = precompiledFiles.filter((f) => !isExcluded(f));
+
+  const allFiles = [...filteredCompiled, ...filteredPrecompiled];
+
+  if (allFiles.length === 0) {
+    throw new ConfigError(
+      `No se encontraron archivos fuente en '${sourceDir}'. Formatos soportados: .wasm, .wasm.ts, .wasm.mjs, .as, .wasm.cpp, .wasm.cxx, .wasm.cc, .wasm.rs`,
+      { sourceDir },
+    );
+  }
+
   const wasmFiles: string[] = [];
+  const errors: Array<{ file: string; message: string }> = [];
 
-  for (const file of wasmTsFiles) {
-    const sourceCode = fs.readFileSync(file, 'utf-8');
+  for (const file of allFiles) {
     const relativeName = path.relative(rootDir, file);
-
     logger.info(`  Compilando ${relativeName}...`);
 
-    const result = await compileWasm({
-      fileName: file,
-      sourceCode,
-      isDev,
-      runtime: config.compiler?.runtime || 'incremental',
-      sourceMap: isDev ? config.compiler?.sourceMap : false,
-      optimizeLevel: config.compiler?.optimizeLevel,
-      shrinkLevel: config.compiler?.shrinkLevel,
-    });
+    // Read source code (strategies that need it will use it; binary .wasm gracefully falls back)
+    let sourceCode = '';
+    try {
+      sourceCode = fs.readFileSync(file, 'utf-8');
+    } catch {
+      // Precompiled .wasm files are binary; strategies handle read from disk
+    }
 
-    let baseName = path.basename(file, '.wasm.ts');
-    const wasmPath = path.join(outDir, `${baseName}.wasm`);
+    // Resolve strategy via extension
+    const ext = router.getExtension(file);
+    const strategy = router.resolveForExtension(ext);
+    if (!strategy) {
+      errors.push({ file, message: `No hay toolchain registrado para: ${file}` });
+      continue;
+    }
+
+    // Check if the toolchain is available before attempting compilation
+    const available = await strategy.isAvailable();
+    if (!available) {
+      errors.push({ file, message: `Toolchain "${strategy.id}" no está disponible. Saltando ${relativeName}.` });
+      continue;
+    }
+
+    // Get per-toolchain compiler options
+    const toolchainId = strategy.id as ToolchainId;
+    const compilerOptions = getCompilerOptionsForToolchain(config.compiler, toolchainId);
+
+    let result: Awaited<ReturnType<typeof strategy.compile>>;
+    try {
+      result = await strategy.compile({
+        sourceCode,
+        fileName: file,
+        compilerOptions,
+      });
+    } catch (err: any) {
+      errors.push({ file, message: err.message ?? String(err) });
+      continue;
+    }
+
+    // Determine output name based on toolchain
+    const basename = path.basename(file);
+    const baseWithoutExt = basename.slice(0, -(ext.length || 0));
+
+    let wasmFileName: string;
+    switch (strategy.id) {
+      case 'assemblyscript':
+        wasmFileName = `${baseWithoutExt}.wasm`;
+        break;
+      case 'cpp':
+        wasmFileName = `${baseWithoutExt}.cpp.wasm`;
+        break;
+      case 'rust':
+        wasmFileName = `${baseWithoutExt}.rust.wasm`;
+        break;
+      case 'precompiled':
+        wasmFileName = `${baseWithoutExt}.wasm`;
+        break;
+      default:
+        wasmFileName = `${baseWithoutExt}.wasm`;
+    }
+
+    const wasmPath = path.join(outDir, wasmFileName);
     fs.writeFileSync(wasmPath, result.wasmBytes);
-
     wasmFiles.push(wasmPath);
+  }
+
+  // Report partial failures
+  if (errors.length > 0) {
+    for (const err of errors) {
+      logger.warn(`  ${err.file}: ${err.message}`);
+    }
+    if (wasmFiles.length === 0) {
+      throw new ConfigError(`Todos los archivos fuente fallaron al compilar (${errors.length} errores). Revisá que los toolchains estén instalados.`, {
+        sourceDir,
+        errors,
+      });
+    }
+    logger.warn(`  ${errors.length} archivo(s) fallaron, ${wasmFiles.length} compilados exitosamente.`);
   }
 
   return wasmFiles;
@@ -159,18 +289,22 @@ async function linkNativeApp(
   config: WappConfig,
   target?: string,
   wasi?: boolean,
+  verbose = false,
 ): Promise<void> {
   logger.step('Linkeando ejecutable nativo...');
 
-  await createNativeApp({
-    inputPaths: wasmFiles,
-    output,
-    target: target || config.target,
-    entry,
-    wasi: wasi || config.wasi || false,
-    moduleMatching,
-    wasmtimePath: config.wasmtimePath,
-  });
+  await createNativeApp(
+    {
+      inputPaths: wasmFiles,
+      output,
+      target: target || config.target,
+      entry,
+      wasi: wasi || config.wasi || false,
+      moduleMatching,
+      wasmtimePath: config.wasmtimePath,
+    },
+    !verbose,
+  );
 
   logger.success(`Ejecutable creado: ${path.resolve(output)}`);
 }
@@ -187,6 +321,7 @@ export async function buildProject(options: {
   shrinkLevel?: number;
   sourceDir?: string;
   outDir?: string;
+  verbose?: boolean;
 }): Promise<void> {
   const rootDir = path.resolve(options.rootDir);
   const compilerOverrides: WappConfig['compiler'] = {};
@@ -216,13 +351,6 @@ export async function buildProject(options: {
     fs.mkdirSync(outDir, { recursive: true });
   }
 
-  const wasmTsFiles = await glob('**/*.wasm.ts', { cwd: sourceDir, absolute: true, nodir: true });
-  if (wasmTsFiles.length === 0) {
-    throw new ConfigError(`No se encontraron archivos .wasm.ts en '${sourceDir}'.`, { sourceDir });
-  }
-
-  logger.step(`Compilando ${wasmTsFiles.length} archivos AssemblyScript...`);
-
   const pipelineContext = {
     sourceDir,
     outDir,
@@ -239,7 +367,8 @@ export async function buildProject(options: {
   };
 
   let ctx = await pipeline.runPhase(PipelinePhase.BeforeModuleCompile, pipelineContext);
-  const wasmFiles = await compileWasFiles(wasmTsFiles, sourceDir, outDir, rootDir, config, ctx);
+  logger.step('Compilando fuentes a WebAssembly...');
+  const wasmFiles = await compileProjectFiles(sourceDir, outDir, rootDir, config, ctx);
   ctx = await pipeline.runPhase(PipelinePhase.AfterModuleCompile, ctx);
 
   logger.success(`Compilacion completada: ${wasmFiles.length} archivos .wasm generados en ${outDir}`);
@@ -249,24 +378,29 @@ export async function buildProject(options: {
   const { output, entry, moduleMatching } = resolveOutputPath(config, rootDir, outDir, options.entry, options.moduleMatching);
 
   ctx = await pipeline.runPhase(PipelinePhase.BeforeLink, ctx);
-  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, options.target, options.wasi);
+  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, options.target, options.wasi, options.verbose);
   ctx = await pipeline.runPhase(PipelinePhase.AfterLink, ctx);
 
   ctx = await pipeline.runPhase(PipelinePhase.AfterCodeGen, ctx);
   await pipeline.runPhase(PipelinePhase.AfterBundle, ctx);
 }
 
-async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string, outDir: string, wasi: boolean): Promise<void> {
+async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string, outDir: string, wasi: boolean, verbose = false): Promise<void> {
   await loadPlugins(config.plugins);
-  const wasmTsFiles = await glob('**/*.wasm.ts', { cwd: sourceDir, absolute: true, nodir: true });
-  if (wasmTsFiles.length === 0) {
-    logger.warn('No se encontraron archivos .wasm.ts.');
-    return;
+
+  let wasmFiles: string[];
+  try {
+    wasmFiles = await compileProjectFiles(sourceDir, outDir, rootDir, config, {});
+  } catch (err: any) {
+    if (err instanceof ConfigError && err.message.includes('No se encontraron archivos fuente')) {
+      logger.warn(err.message);
+      return;
+    }
+    throw err;
   }
 
-  const wasmFiles = await compileWasFiles(wasmTsFiles, sourceDir, outDir, rootDir, config, {});
   const { output, entry, moduleMatching } = resolveOutputPath(config, rootDir, outDir, config.entry, config.moduleMatching);
-  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, config.target, wasi);
+  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, config.target, wasi, verbose);
 }
 
 export async function devCommand(options: {
@@ -278,6 +412,7 @@ export async function devCommand(options: {
   release?: boolean;
   sourceDir?: string;
   outDir?: string;
+  verbose?: boolean;
 }): Promise<void> {
   const rootDir = path.resolve(options.rootDir);
   const compilerOverrides: WappConfig['compiler'] = {};
@@ -316,18 +451,18 @@ export async function devCommand(options: {
   }
 
   logger.step('Build inicial...');
-  await buildOnce(config, rootDir, sourceDir, outDir, wasi);
+  await buildOnce(config, rootDir, sourceDir, outDir, wasi, options.verbose);
 
-  logger.step(`Vigilando ${sourceDir} por cambios en .wasm.ts...`);
+  logger.step(`Vigilando ${sourceDir} por cambios en archivos fuente...`);
   logger.detail('Esperando cambios... (Ctrl+C para salir)\n');
 
   const stopWatching = watchDirectory(sourceDir, {
-    extensions: ['.wasm.ts', '.ts'],
+    extensions: ['.wasm.ts', '.wasm.mjs', '.as', '.wasm.cpp', '.wasm.cxx', '.wasm.cc', '.wasm.rs', '.ts'],
     onChange: async (changedFile) => {
       const relativeName = path.relative(rootDir, changedFile);
       logger.step(`\nCambio detectado en ${relativeName}, recompilando...`);
       try {
-        await buildOnce(config, rootDir, sourceDir, outDir, wasi);
+        await buildOnce(config, rootDir, sourceDir, outDir, wasi, options.verbose);
       } catch (err: any) {
         logger.error(`Error: ${err.message}`);
       }

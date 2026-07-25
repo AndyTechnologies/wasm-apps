@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
 
 const program = new Command();
-program.name('wapp').description('Compila y linkea proyectos AssemblyScript en ejecutables nativos').version(version);
+program.name('wapp').description('Compila y linkea proyectos multi-lenguaje (AssemblyScript, C++, Rust) en ejecutables nativos').version(version);
 
 program
   .command('init')
@@ -30,7 +30,7 @@ program
 
 program
   .command('build')
-  .description('Compila los archivos .wasm.ts y linkea el ejecutable nativo')
+  .description('Compila archivos .wasm.ts, .wasm.cpp, .wasm.rs a WebAssembly y linkea ejecutables nativos')
   .option('-o, --output <file>', 'Ruta del ejecutable de salida')
   .option('-t, --target <triple>', 'Target de cross-compilacion (ej. x86_64-linux-gnu, aarch64-macos)')
   .option('-e, --entry <name>', 'Funcion de entrada', '_start')
@@ -41,6 +41,7 @@ program
   .option('--optimize-level <n>', 'Nivel de optimizacion 0-3')
   .option('--shrink-level <n>', 'Nivel de reduccion 0-2')
   .option('--wasi', 'Habilitar interfaz WASI', false)
+  .option('--verbose', 'Muestra informacion detallada de compilacion')
   .action(async (options) => {
     try {
       const cmd = getCommand('build') || new BuildCommand();
@@ -64,6 +65,7 @@ program
   .option('--release', 'Modo release (optimizado, sin sourcemaps)', false)
   .option('--source-dir <dir>', 'Directorio con archivos fuente .wasm.ts')
   .option('--out-dir <dir>', 'Directorio para archivos .wasm intermedios')
+  .option('--verbose', 'Muestra informacion detallada de compilacion')
   .action(async (options) => {
     try {
       const cmd = getCommand('dev') || new DevCommand();

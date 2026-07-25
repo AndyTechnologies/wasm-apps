@@ -1,0 +1,20 @@
+static int define_exports(Linker &linker, Store::Context ctx, Instance instance, const char* instance_label) {
+  static std::unordered_set<std::string> _defined;
+{% for mod in modules -%}
+{% if mod.exports | length > 0 %}
+  if (std::strcmp(instance_label, "{{ mod.instanceVar }}") == 0) {
+{% for exp in mod.exports %}
+    if (_defined.find("{{ exp.escapedName }}") == _defined.end()) {
+      _defined.insert("{{ exp.escapedName }}");
+      auto exp = instance.get(ctx, "{{ exp.escapedName }}");
+      if (!exp) { std::cerr << "Error obteniendo export {{ exp.safeName }}" << std::endl; return 1; }
+      auto result = linker.define(ctx, "env", "{{ exp.escapedName }}", *exp);
+      if (!result) { std::cerr << "Error definiendo {{ exp.safeName }}: " << result.err().message() << std::endl; return 1; }
+    }
+{% endfor %}
+    return 0;
+  }
+{% endif %}
+{%- endfor %}
+  std::cerr << "Unknown instance label " << instance_label << std::endl; return 1;
+}

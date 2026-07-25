@@ -1,15 +1,92 @@
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const rootDir = resolve(import.meta.dirname, '..');
 const examplesDir = join(rootDir, 'examples');
 const cliScript = join(rootDir, 'packages/cli/dist/cli.js');
 const ext = process.platform === 'win32' ? '.exe' : '';
 
-const exampleDirs = ['basico', 'proyecto-completo', 'plugin-basico', 'plugin-avanzado'];
+const exampleDirs = [
+  'basico',
+  'proyecto-completo',
+  'plugin-basico',
+  'plugin-avanzado',
+  'cpp-saludo',
+  'rust-hello',
+  'precompiled',
+  'multi-toolchain',
+  'custom-template',
+];
+
+/**
+ * Check if a toolchain is available on the current system.
+ * For C++: verifies clang++ exists AND has wasm-ld available.
+ * For Rust: verifies cargo exists AND wasm32 target is installed.
+ * @param {'cpp'|'rust'} toolchain
+ * @returns {boolean}
+ */
+function isToolchainAvailable(toolchain) {
+  try {
+    if (toolchain === 'cpp') {
+      execFileSync('which', ['clang++'], { stdio: 'pipe' });
+      // Verify wasm-ld exists (the linker clang++ uses for wasm32 target)
+      const ldPath = execFileSync('clang++', ['--target=wasm32', '-print-prog-name=wasm-ld'], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }).trim();
+      if (!ldPath || !existsSync(ldPath)) return false;
+      return true;
+    }
+    if (toolchain === 'rust') {
+      execFileSync('which', ['cargo'], { stdio: 'pipe' });
+      const target = execFileSync('rustup', ['target', 'list', '--installed'], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      return target.includes('wasm32-unknown-unknown');
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Map example directories to required toolchains (empty = no special requirements).
+ * @type {Record<string, string[]>}
+ */
+const requiresToolchain = {
+  'cpp-saludo': ['cpp'],
+  'rust-hello': ['rust'],
+  'multi-toolchain': ['cpp'],
+  'custom-template': [],
+  // precompiled depends on basico's build output (AssemblyScript WASM)
+  precompiled: [],
+};
+
+/**
+ * Examples to always skip.
+ * @type {Set<string>}
+ */
+const skipExamples = new Set([]);
+
+/**
+ * Clean build artifacts for a given example directory.
+ * Removes wasm-out/, .wapp_build/, and .wapp_cache/ so every build starts fresh.
+ * @param {string} examplePath
+ */
+function cleanBuildArtifacts(examplePath) {
+  for (const dir of ['wasm-out', '.wapp_build', '.wapp_cache']) {
+    const fullPath = join(examplePath, dir);
+    if (existsSync(fullPath)) {
+      rmSync(fullPath, { recursive: true, force: true });
+    }
+  }
+}
 
 let passed = 0;
+let skipped = 0;
 let failed = 0;
 
 for (const dir of exampleDirs) {
@@ -17,7 +94,44 @@ for (const dir of exampleDirs) {
 
   if (!existsSync(examplePath)) {
     console.error(`  SKIP: ${dir} (directorio no encontrado)`);
+    skipped++;
     continue;
+  }
+
+  // Skip examples on the skip list
+  if (skipExamples.has(dir)) {
+    console.warn(`  SKIP: ${dir} (in skip list)`);
+    skipped++;
+    continue;
+  }
+
+  // Check toolchain requirements
+  const required = requiresToolchain[dir] || [];
+  const missing = required.filter((t) => !isToolchainAvailable(t));
+  if (missing.length > 0) {
+    console.warn(`  SKIP: ${dir} (requiere: ${missing.join(', ')})`);
+    skipped++;
+    continue;
+  }
+
+  // Clean build artifacts so every example builds from scratch
+  cleanBuildArtifacts(examplePath);
+
+  // precompiled depends on basico's compiled WASM — clean src/ and copy before building
+  if (dir === 'precompiled') {
+    const basicoWasm = join(examplesDir, 'basico', 'wasm-out', 'main.wasm');
+    if (!existsSync(basicoWasm)) {
+      console.error(`  SKIP: ${dir} (basico must be built first — wasm-out/main.wasm not found)`);
+      skipped++;
+      continue;
+    }
+    const precompiledSrcDir = join(examplePath, 'src');
+    // Clean any stale .wasm files from src/
+    for (const f of readdirSync(precompiledSrcDir)) {
+      if (f.endsWith('.wasm')) rmSync(join(precompiledSrcDir, f));
+    }
+    copyFileSync(basicoWasm, join(precompiledSrcDir, 'main.wasm'));
+    console.log(`  (copied basico/wasm-out/main.wasm → src/main.wasm)`);
   }
 
   process.stdout.write(`\n--- ${dir} ---\n`);
@@ -92,9 +206,9 @@ for (const dir of exampleDirs) {
   passed++;
 }
 
-const total = passed + failed;
+const total = passed + failed + skipped;
 console.log(`\n${'='.repeat(36)}`);
-console.log(`  Total: ${total}  Passed: ${passed}  Failed: ${failed}`);
+console.log(`  Total: ${total}  Passed: ${passed}  Failed: ${failed}  Skipped: ${skipped}`);
 if (failed > 0) process.exit(1);
 
 function indent(text) {

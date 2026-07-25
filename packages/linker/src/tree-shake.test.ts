@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { treeShakeWasm } from './tree-shake.js';
+import { treeShake } from './tree-shake.js';
 
 function encodeU32(value: number): number[] {
   const bytes: number[] = [];
@@ -93,22 +93,22 @@ function isWasmValid(wasm: Uint8Array | Buffer): boolean {
   }
 }
 
-describe('treeShakeWasm', () => {
+describe('treeShake', () => {
   it('retorna buffer cuando no hay secciones de código', () => {
     const wasm = buildWasm([sharedTypes, funcSection([0]), exportSection([{ name: 'main', kind: 0, index: 0 }]), codeSection([simpleBody([])])]);
-    const result = treeShakeWasm(wasm);
+    const result = treeShake(wasm);
     expect(result).toBeInstanceOf(Buffer);
     expect(result.length).toBeGreaterThan(0);
   });
 
   it('maneja wasm sin sección de export', () => {
     const wasm = buildWasm([sharedTypes, funcSection([0]), codeSection([simpleBody([])])]);
-    const result = treeShakeWasm(wasm);
+    const result = treeShake(wasm);
     expect(Buffer.from(result)).toEqual(Buffer.from(wasm));
   });
 
   it('maneja wasm vacío', () => {
-    const result = treeShakeWasm(new Uint8Array([]));
+    const result = treeShake(new Uint8Array([]));
     expect(Buffer.from(result)).toEqual(Buffer.from(new Uint8Array([])));
   });
 
@@ -119,14 +119,14 @@ describe('treeShakeWasm', () => {
       exportSection([{ name: 'main', kind: 0, index: 0 }]),
       codeSection([simpleBody([1]), simpleBody([])]),
     ]);
-    const result = treeShakeWasm(wasm);
+    const result = treeShake(wasm);
     expect(result).toBeInstanceOf(Buffer);
     expect(result.length).toBeGreaterThan(0);
   });
 
   it('preserva header WASM', () => {
     const wasm = buildWasm([sharedTypes, funcSection([0]), codeSection([simpleBody([])])]);
-    const result = treeShakeWasm(wasm);
+    const result = treeShake(wasm);
     expect(result[0]).toBe(0x00);
     expect(result[1]).toBe(0x61);
     expect(result[2]).toBe(0x73);

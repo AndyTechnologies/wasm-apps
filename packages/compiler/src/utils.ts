@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
-import path from 'node:path';
-import type { AsConfig, ResolvedAlias } from '@wasm-apps/types';
+import type { AsConfig } from '@wasm-apps/types';
 
 /** Compara dos hashes SHA-256 para igualdad (comparación en tiempo constante). */
 export function compareHash(a: string, b: string): boolean {
@@ -15,25 +14,6 @@ export function compareHash(a: string, b: string): boolean {
 /** Calcula el resumen SHA-256 en hex de un string. */
 export function hashString(input: string): string {
   return crypto.createHash('sha256').update(input, 'utf-8').digest('hex');
-}
-
-/**
- * Resuelve la ruta de un import local, aplicando alias configurados.
- * Si no encuentra alias, resuelve relativo al archivo fuente.
- */
-export function resolveImportPath(importPath: string, sourceFile: string, aliases: ResolvedAlias[]): string {
-  if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
-    for (const alias of aliases) {
-      const find = typeof alias.find === 'string' ? alias.find : alias.find.source;
-      if (importPath.startsWith(find)) {
-        const resolvedAlias = alias.replacement + importPath.slice(find.length);
-        return resolvedAlias.endsWith('.ts') ? resolvedAlias : `${resolvedAlias}.ts`;
-      }
-    }
-  }
-  const sourceDir = path.dirname(sourceFile);
-  const resolved = path.resolve(sourceDir, importPath);
-  return resolved.endsWith('.ts') ? resolved : `${resolved}.ts`;
 }
 
 /** Extrae los nombres y tipos de las exportaciones de un source AssemblyScript. */

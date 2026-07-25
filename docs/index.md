@@ -1,6 +1,6 @@
 # Documentación de wasm-apps
 
-Compila AssemblyScript (`.wasm.ts`) a WebAssembly y lo enlaza en ejecutables nativos autocontenidos.
+Compila AssemblyScript, C++ y Rust a WebAssembly y lo enlaza en ejecutables nativos autocontenidos (ToolchainRouter + Nunjucks + Wasmtime C-API).
 
 ## Secciones
 

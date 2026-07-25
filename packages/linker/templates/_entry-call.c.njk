@@ -1,0 +1,11 @@
+auto entry_exp = {{ entryPoint }}.get(ctx, "{{ escapedEntryFunctionName }}");
+  if (!entry_exp) { std::cerr << "Entry point {{ escapedEntryFunctionName }} no encontrado" << std::endl; return 1; }
+  if (!std::get_if<Func>(&*entry_exp)) { std::cerr << "{{ escapedEntryFunctionName }} no es una funcion" << std::endl; return 1; }
+  auto entry_func = std::get<Func>(*entry_exp);
+  auto result = entry_func.call(ctx, {});
+  if (!result) {
+    std::cerr << "Error llamando a {{ escapedEntryFunctionName }}" << std::endl;
+    return 1;
+  }
+
+  return 0;

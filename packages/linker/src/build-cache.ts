@@ -4,6 +4,42 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { formatBytes, logger } from '@wasm-apps/types';
 
+/**
+ * Computes a SHA-256 hash of all Nunjucks template files in a directory.
+ * Reads all `.njk` files recursively, concatenates sorted by relative path.
+ * Used to detect template changes and trigger cache invalidation.
+ */
+export function computeTemplateHash(templateDir: string): string {
+  const hash = crypto.createHash('sha256');
+  const files: string[] = [];
+
+  if (!fs.existsSync(templateDir)) return hash.digest('hex');
+
+  function walk(dir: string) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith('.njk')) {
+        files.push(fullPath);
+      }
+    }
+  }
+
+  walk(templateDir);
+  files.sort();
+
+  for (const file of files) {
+    const relativePath = path.relative(templateDir, file);
+    const content = fs.readFileSync(file, 'utf-8');
+    hash.update(relativePath);
+    hash.update(content);
+  }
+
+  return hash.digest('hex');
+}
+
 function pathsEqual(a: string, b: string): boolean {
   const resolvedA = path.resolve(a);
   const resolvedB = path.resolve(b);
@@ -35,6 +71,7 @@ interface BuildManifestOptions {
   moduleMatching: string;
   wasmtimePath: string;
   wasmtimeVersion: string;
+  templateHash: string;
 }
 
 interface BuildManifest {
@@ -103,6 +140,7 @@ export async function isBuildUpToDate(
     moduleMatching: string;
     wasmtimePath?: string;
     wasmtimeVersion: string;
+    templateHash?: string;
   },
   rootDir?: string,
 ): Promise<boolean> {
@@ -119,6 +157,8 @@ export async function isBuildUpToDate(
   if (manifest.options.moduleMatching !== options.moduleMatching) return false;
   if (manifest.options.wasmtimePath !== (options.wasmtimePath || '')) return false;
   if (manifest.options.wasmtimeVersion !== options.wasmtimeVersion) return false;
+
+  if (options.templateHash !== undefined && manifest.options.templateHash !== options.templateHash) return false;
 
   if (manifest.wasmFiles.length !== wasmFiles.length) return false;
   for (let i = 0; i < wasmFiles.length; i++) {
@@ -145,6 +185,7 @@ export function saveBuildManifest(
     moduleMatching: string;
     wasmtimePath?: string;
     wasmtimeVersion: string;
+    templateHash?: string;
   },
   rootDir?: string,
 ): void {
@@ -164,6 +205,7 @@ export function saveBuildManifest(
       moduleMatching: options.moduleMatching,
       wasmtimePath: options.wasmtimePath || '',
       wasmtimeVersion: options.wasmtimeVersion,
+      templateHash: options.templateHash || '',
     },
     outputHash: fileHash(output),
     createdAt: new Date().toISOString(),

@@ -2,10 +2,10 @@
 
 ## Visión General
 
-wasm-apps es una toolchain que transforma código AssemblyScript (`.wasm.ts`) en ejecutables nativos autocontenidos (ELF/PE/Mach-O) usando Wasmtime C-API.
+wasm-apps es una toolchain que transforma código AssemblyScript, C++ o Rust en ejecutables nativos autocontenidos (ELF/PE/Mach-O) usando Wasmtime C-API.
 
 ```
-.wasm.ts ──► Compilador (AssemblyScript) ──► .wasm ──► Linker (C++ + Wasmtime) ──► Binario nativo
+.wasm.ts|.wasm.cpp|.wasm.rs|.wasm  ──► ToolchainRouter ──► .wasm ──► Linker (Nunjucks + Wasmtime) ──► Binario nativo
 ```
 
 ## Diagrama de Bloques
@@ -29,27 +29,70 @@ wasm-apps es una toolchain que transforma código AssemblyScript (`.wasm.ts`) en
          ▼            ▼            ▼
 ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
 │   Compiler      │ │     Linker      │ │      Types      │
-│  (Strategy)     │ │   (Strategy)    │ │  (Compartido)   │
+│  (Microkernel)  │ │   (Pipeline)    │ │  (Compartido)   │
 │                 │ │                 │ │                 │
-│ AssemblyScript  │ │ Wasmtime        │ │ Interfaces      │
-│ DebugCompiler   │ │ LinuxLinker     │ │ Errores         │
-│ ReleaseCompiler │ │ MacLinker       │ │ Logger          │
-│ RustCompiler(*) │ │ WindowsLinker   │ │ Caché           │
-└─────────────────┘ └────────┬────────┘ └─────────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  PluginManager  │
-                    │  (Microkernel)  │
-                    │                 │
-                    │ WasmPlugin      │
-                    │ HostFunctionReg.│
-                    │ Pipeline Hooks  │
-                    └─────────────────┘
+│ ToolchainRouter │ │ Wasmtime        │ │ Interfaces      │
+│  ├─ AS Strategy │ │ Nunjucks Temp.  │ │ Errores         │
+│  ├─ C++ Strategy│ │ PluginManager   │ │ Logger          │
+│  ├─ Rust Strategy│ │ Build Cache     │ │ Caché           │
+│  └─ Precompiled │ └─────────────────┘ └─────────────────┘
+└─────────────────┘
 ```
 
 ## Patrones Arquitectónicos
 
-### 1. Pipeline Architecture (Tuberías)
+### 1. Microkernel + Strategy — ToolchainRouter
+
+**Propósito**: Enrutar archivos fuente al compilador correcto según su extensión, manteniendo el núcleo mínimo y las estrategias como plugins internos.
+
+**Ubicación**: `packages/compiler/src/toolchain-router.ts`, `packages/compiler/src/strategies/`
+
+**Implementación**:
+
+```typescript
+interface ToolchainStrategy {
+  readonly id: ToolchainId;
+  readonly name: string;
+  readonly extensions: string[];
+  isAvailable(): Promise<boolean>;
+  compile(options: ToolchainCompileOptions): Promise<ToolchainResult>;
+}
+
+class ToolchainRouter {
+  register(strategy: ToolchainStrategy): void;
+  resolveForExtension(extension: string): ToolchainStrategy | undefined;
+  getExtension(filePath: string): string;
+  async compileFile(options: ToolchainCompileOptions): Promise<ToolchainResult>;
+}
+```
+
+**Estrategias registradas**:
+
+| Estrategia                        | Extensiones                          | Compilador                |
+| --------------------------------- | ------------------------------------ | ------------------------- |
+| `AssemblyScriptToolchainStrategy` | `.wasm.ts`, `.wasm.mjs`, `.as`       | `assemblyscript/asc`      |
+| `CppCompilerStrategy`             | `.wasm.cpp`, `.wasm.cxx`, `.wasm.cc` | clang++ / CMake           |
+| `RustCompilerStrategy`            | `.wasm.rs`                           | cargo (wasm32)            |
+| `PrecompiledWasmStrategy`         | `.wasm`                              | Passthrough (magic bytes) |
+
+**Resolución longest-suffix-first**: El router siempre elige el sufijo más largo, por lo que `.wasm.ts` gana contra `.wasm` genérico. Esto permite tener archivos `.wasm.cpp` sin que el router los confunda con `.wasm` precompilados.
+
+**Extensión**: Para añadir un nuevo lenguaje, implementá `ToolchainStrategy` y registralo en el router:
+
+```typescript
+class ZigCompilerStrategy implements ToolchainStrategy {
+  readonly id = 'zig';
+  readonly extensions = ['.wasm.zig'];
+  async compile(options: ToolchainCompileOptions): Promise<ToolchainResult> {
+    // compilar Zig a WASM
+  }
+}
+router.register(new ZigCompilerStrategy());
+```
+
+---
+
+### 2. Pipeline Architecture (Tuberías)
 
 **Propósito**: Orquestar las etapas de transformación de fuente a binario como una secuencia de stages independientes.
 
@@ -73,7 +116,7 @@ class BuildPipeline {
 
 - `ParseModulesStage` — Lee y parsea módulos `.wasm`
 - `ResolveDependenciesStage` — Resuelve dependencias (orden topológico)
-- `GenerateCodeStage` — Genera código C++ con Wasmtime API
+- `GenerateCodeStage` — Genera código C++ con Nunjucks templates
 - `CompileCppStage` — Compila con cmake-js
 
 **Uso**:
@@ -87,28 +130,13 @@ const pipeline = BuildPipeline.createDefaultPipeline(outputPath, {
 const result = await pipeline.run(wasmFiles);
 ```
 
-**Extensión**: Para añadir una nueva etapa, implementa `Stage<I,O>` y añádela al pipeline:
-
-```typescript
-class ValidateStage implements Stage<WasmModuleInfo[], WasmModuleInfo[]> {
-  readonly name = 'validate';
-  async execute(input, context) {
-    // validación
-    return input;
-  }
-}
-pipeline.addStage(new ValidateStage());
-```
-
 ---
 
-### 2. Strategy Pattern (Estrategia)
+### 3. Strategy Pattern — Compiladores y Linkers
 
-**Propósito**: Encapsular comportamientos intercambiables (compiladores, linkers, generación de código) detrás de interfaces comunes.
+**Propósito**: Encapsular comportamientos intercambiables detrás de interfaces comunes.
 
-**Ubicación**: `packages/types/src/index.ts` (interfaces), `packages/compiler/src/assemblyscript-compiler-strategy.ts`, `packages/linker/src/wasmtime-linker-strategy.ts`, `packages/linker/src/default-codegen-strategy.ts`
-
-**Interfaces**:
+**Interfaces** (en `packages/types/src/index.ts`):
 
 ```typescript
 interface ICompilerStrategy {
@@ -120,39 +148,20 @@ interface ILinkerStrategy {
   readonly name: string;
   link(modules: WasmModuleInfo[], options: NativeAppOptions): Promise<string>;
 }
-
-interface ICodegenStrategy {
-  readonly name: string;
-  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string;
-}
 ```
 
 **Implementaciones actuales**:
 
-- `AssemblyScriptCompilerStrategy` — Compilador AS nativo
+- `AssemblyScriptToolchainStrategy` / `CppCompilerStrategy` / `RustCompilerStrategy` / `PrecompiledWasmStrategy` — compiladores
 - `WasmtimeLinkerStrategy` — Linker usando Wasmtime C-API
-- `DefaultCodegenStrategy` — Generación de C++ estándar
-
-**Extensión**: Para añadir un nuevo compilador (ej. Rust):
-
-```typescript
-class RustCompilerStrategy implements ICompilerStrategy {
-  readonly name = 'rust';
-  async compile(source: string, options: CompileOptions): Promise<WasmArtifact> {
-    // compilar Rust a WASM
-  }
-}
-```
 
 ---
 
-### 3. Builder Pattern (Constructor)
+### 4. Builder Pattern — NativeAppBuilder
 
-**Propósito**: Separar la construcción de un ejecutable nativo de su representación, permitiendo configurar paso a paso.
+**Propósito**: Separar la construcción de un ejecutable nativo de su representación.
 
 **Ubicación**: `packages/linker/src/native-app-builder.ts`
-
-**Uso**:
 
 ```typescript
 const binary = await new NativeAppBuilder()
@@ -161,142 +170,85 @@ const binary = await new NativeAppBuilder()
   .setEntry('_start')
   .setTarget('x86_64-linux')
   .setWasi(false)
-  .setModuleMatching('file-name')
   .setOutputPath('./dist/app')
   .build();
 ```
 
-**Validación**: El builder valida que todos los requisitos estén satisfechos antes de construir (módulos existentes, output path definido).
-
-**Caché incremental**: El builder verifica el manifiesto de build antes de reconstruir. La caché del compilador tiene dos niveles:
-
-- **Caché en memoria** (LRU, 100 entradas): keyeada por SHA-256 del contenido fuente. La clave es el hash, no el nombre del archivo, evitando colisiones entre archivos con el mismo nombre en diferentes directorios.
-- **Caché en disco** (`.wapp_cache/compiler/{key}/`): keyeada por SHA-256 del contenido fuente + opciones de compilación. Incluye `result.json`, `out.wasm`, `out.d.ts`, `out.js`, `out.wasm.map`.
-
 ---
 
-### 4. Repository Pattern (Repositorio) — Caché
+### 5. Repository Pattern — Caché
 
-**Propósito**: Abstraer el almacenamiento de artefactos cacheados detrás de una interfaz común, desacoplando la lógica de negocio del sistema de archivos.
+**Propósito**: Abstraer el almacenamiento de artefactos cacheados.
 
-**Ubicación**: `packages/types/src/index.ts` (interfaz), `packages/compiler/src/compiler-cache-repository.ts`, `packages/linker/src/linker-manifest-repository.ts`, `packages/linker/src/download-cache-repository.ts`
-
-**Interfaz**:
+**Interfaz** (en `packages/types/src/index.ts`):
 
 ```typescript
 interface ICacheRepository<T> {
   get(key: string): Promise<T | undefined>;
   set(key: string, value: T): Promise<void>;
   has(key: string): Promise<boolean>;
-  delete(key: string): Promise<void>;
   clear(): Promise<void>;
-  info(): Promise<CacheInfo>;
 }
 ```
 
 **Implementaciones**:
 
-| Repositorio                | Almacena                   | Ubicación                         |
-| -------------------------- | -------------------------- | --------------------------------- |
-| `CompilerCacheRepository`  | Artefactos WASM compilados | `.wapp_cache/compiler/{key}/`     |
-| `LinkerManifestRepository` | Manifiesto de build        | `.wapp_build/build-manifest.json` |
-| `DownloadCacheRepository`  | Wasmtime C-API descargada  | `~/.wasm-linker/`                 |
-
-**Inyección**: Los repositorios se inyectan en los servicios que los necesitan, facilitando pruebas y cambios de implementación.
+| Repositorio                | Almacena            | Clave                                 | Ubicación                         |
+| -------------------------- | ------------------- | ------------------------------------- | --------------------------------- |
+| `CompilerCacheRepository`  | Artefactos WASM     | SHA-256(source + flags + toolchainId) | `.wapp_cache/compiler/{key}/`     |
+| `LinkerManifestRepository` | Manifiesto de build | Hashes WASM + options + templateHash  | `.wapp_build/build-manifest.json` |
+| `DownloadCacheRepository`  | Wasmtime C-API      | —                                     | `~/.wasm-linker/`                 |
 
 ---
 
-### 5. Microkernel / Plugin Pattern
+### 6. Nunjucks Template Rendering
 
-**Propósito**: Proporcionar un núcleo mínimo extensible mediante plugins, permitiendo añadir nuevos compiladores, linkers, generadores de código y hooks sin modificar el núcleo.
+**Propósito**: Reemplazar la concatenación de strings en C++ con templates declarativos, permitiendo personalización.
 
-**Ubicación**: `packages/linker/src/plugin-manager.ts`, `packages/linker/src/plugin-loader.ts`, `packages/linker/src/pipeline.ts`
+**Ubicación**: `packages/linker/src/template-renderer.ts`, `packages/linker/templates/`
 
-**Núcleo (Kernel)**:
+**Flujo**:
 
-- `PluginManager` — Registro central de extensiones
-- `Pipeline` (plugin hooks) — Sistema de fases con hooks
-- `HostFunctionRegistry` — Registro de funciones host C++
+1. `codegen.ts` construye un `NunjucksTemplateContext` desde `ResolvedLink`
+2. `template-renderer.ts` configura un entorno Nunjucks con autoescape: false
+3. Renderiza `main.c.njk` que incluye partials (`_preamble.c.njk`, `_host-functions.c.njk`, `_module-buffers.c.njk`, etc.)
+4. El resultado es código C++ que se compila con cmake-js
+
+**Personalización**: Se puede apuntar a un directorio de templates custom vía `wapp.json` → `linker.templatePath`. Los partials faltantes caen en los built-in.
+
+**Template Hash**: Cada cambio en los templates invalida el build cache automáticamente.
+
+---
+
+### 7. Microkernel / Plugin Pattern — Linker Plugins
+
+**Propósito**: Extender el pipeline de build con hooks y funciones host personalizadas.
+
+**Ubicación**: `packages/linker/src/plugin-manager.ts`
 
 **Puntos de extensión**:
 
-- `ICompilerStrategy` — Nuevos compiladores
-- `ILinkerStrategy` — Nuevos linkers
-- `ICodegenStrategy` — Nuevos generadores de código
-- `WasmPlugin` — Plugins con hooks en fases del pipeline
-- `PipelineHook` — Hooks en fases específicas (`BeforeModuleCompile`, `AfterModuleCompile`, `BeforeCodeGen`, `AfterCodeGen`, etc.)
+- `HostFunctionRegistry` — Registro de funciones host C++
+- `PipelineHook` — Hooks en fases (`BeforeModuleCompile`, `AfterCodeGen`, `BeforeLink`, etc.)
 
-**Ejemplo: registrar un nuevo compilador**:
-
-```typescript
-import { pluginManager } from '@wasm-apps/linker';
-
-class ZigToWasmCompiler implements ICompilerStrategy {
-  readonly name = 'zig';
-  async compile(source: string, options: CompileOptions): Promise<WasmArtifact> {
-    // ...
-  }
-}
-
-pluginManager.registerCompiler(new ZigToWasmCompiler());
-// Uso:
-const compiler = pluginManager.getCompiler('zig');
-```
-
-**Seguridad**: Los plugins personalizados cargados desde `wapp.json` → `plugins[].path` están restringidos al directorio del proyecto. Cualquier ruta fuera de `process.cwd()` se rechaza con una advertencia.
-
-**Ejemplo: plugin con hook**:
-
-```typescript
-const myPlugin: WasmPlugin = {
-  id: 'my-validator',
-  register(ctx) {
-    ctx.pipeline.register(PipelinePhase.BeforeModuleCompile, 'my-validator', async (context) => {
-      // validar archivos fuente
-    });
-  },
-};
-pluginManager.registerWasmPlugin(myPlugin);
-```
+Los plugins se cargan desde `wapp.json` → `plugins[]`. Ver `docs/USER_PLUGINS.md` y `docs/DEV_PLUGINS.md`.
 
 ---
 
-### 6. Command Pattern (Comando)
+### 8. Command Pattern — CLI
 
-**Propósito**: Encapsular cada operación del CLI como un objeto comando independiente, facilitando la adición de nuevos comandos y las pruebas unitarias.
-
-**Ubicación**: `packages/types/src/index.ts` (interfaz), `packages/cli/src/commands/`
-
-**Interfaz**:
-
-```typescript
-interface ICommand {
-  readonly meta: CommandMeta;
-  execute(args: Record<string, any>): Promise<void>;
-}
-```
+**Propósito**: Encapsular cada operación del CLI como un objeto comando independiente.
 
 **Comandos actuales**:
 
-| Comando       | Clase               | Descripción        |
-| ------------- | ------------------- | ------------------ |
-| `init`        | `InitCommand`       | Crear `wapp.json`  |
-| `build`       | `BuildCommand`      | Compilar + linkear |
-| `dev`         | `DevCommand`        | Watch + rebuild    |
-| `setup`       | `SetupCommand`      | Descargar Wasmtime |
-| `cache info`  | `CacheInfoCommand`  | Estado de cachés   |
-| `cache clear` | `CacheClearCommand` | Limpiar cachés     |
-
-**Invocador**: `cli.ts` actúa como invocador que parsea argumentos con Commander, obtiene el comando del registro y lo ejecuta. La versión del CLI se lee de `package.json` dinámicamente para evitar desincronización.
-
-**Manejo de errores**: Si un comando no está registrado en `getCommand()`, el CLI muestra un error y sale con código 1, en lugar de fallar silenciosamente.
-
-**Extensión**: Para añadir un nuevo comando:
-
-1. Crear la clase en `packages/cli/src/commands/mi-comando.ts`
-2. Implementar `ICommand`
-3. Registrarlo en `packages/cli/src/commands/index.ts`
-4. Añadirlo al CLI en `packages/cli/src/cli.ts`
+| Comando       | Clase               | Descripción                          |
+| ------------- | ------------------- | ------------------------------------ |
+| `init`        | `InitCommand`       | Crear `wapp.json`                    |
+| `build`       | `BuildCommand`      | Compilar (multi-toolchain) + linkear |
+| `dev`         | `DevCommand`        | Watch + rebuild                      |
+| `setup`       | `SetupCommand`      | Descargar Wasmtime                   |
+| `cache info`  | `CacheInfoCommand`  | Estado de cachés                     |
+| `cache clear` | `CacheClearCommand` | Limpiar cachés                       |
 
 ---
 
@@ -306,67 +258,37 @@ interface ICommand {
 1. CLI recibe "wapp build --release"
 2. BuildCommand.execute() se invoca
 3. Resuelve config desde wapp.json + CLI args
-4. Carga plugins (WasmPlugin registrados)
-5. Encuentra archivos .wasm.ts en sourceDir
-6. Compila cada uno con ICompilerStrategy:
-   a. Calcula hash → verifica CompilerCacheRepository
-   b. Si no en caché: asc.main() genera .wasm
-   c. Guarda en CompilerCacheRepository
-7. Pipeline orquesta:
+4. Carga plugins (linker PluginManager)
+5. Crea ToolchainRouter con 4 estrategias built-in
+6. Globs archivos multi-extensión: **/*.wasm.{ts,mjs,as,cpp,cxx,cc,rs} + **/*.wasm
+7. Para cada archivo:
+   a. router.getExtension() → sufijo más largo
+   b. router.resolveForExtension() → ToolchainStrategy
+   c. strategy.isAvailable() → verifica toolchain instalado
+   d. strategy.compile() → compila a .wasm
+   e. Cachea con computeToolchainKey()
+8. Pipeline orquesta:
    a. ParseModulesStage → parsea .wasm
    b. ResolveDependenciesStage → orden topológico
-   c. GenerateCodeStage → genera C++
+   c. GenerateCodeStage → render Nunjucks template → C++
    d. CompileCppStage → cmake-js → binario
-8. Verifica LinkerManifestRepository → build up-to-date?
-   a. Si no: ejecuta NativeAppBuilder.build()
-   b. Guarda manifiesto
-9. Devuelve ruta del binario
+9. Verifica LinkerManifestRepository (incluye templateHash)
+10. Devuelve ruta del binario
 ```
 
 ## Gestión de Caché
 
-El sistema tiene tres capas de caché:
+Tres capas, todas implementan `ICacheRepository<T>`:
 
-1. **Compiler Cache** (proyecto-local, `.wapp_cache/compiler/`)
-   - Clave: SHA-256 de source + flags
-   - Implementación: `CompilerCacheRepository`
-
-2. **Build Cache** (proyecto-local, `.wapp_build/build-manifest.json`)
-   - Manifiesto con hashes de inputs y opciones
-   - Implementación: `LinkerManifestRepository`
-
-3. **Download Cache** (global, `~/.wasm-linker/`)
-   - Wasmtime C-API descargada
-   - Implementación: `DownloadCacheRepository`
-
-Todas implementan `ICacheRepository<T>` y se gestionan desde `wapp cache info/clear`.
-
-### Manejo de errores en caché
-
-- `fileHash()` en `build-cache.ts` maneja correctamente el caso donde `openSync` falla (declara `fd` como `number | undefined` y solo cierra si existe).
-- `readLEB128()` en `wasm-leb128.ts` lanza `RangeError` para valores >36 bits en lugar de truncar silenciosamente.
-- `has()` en `LinkerManifestRepository` captura `SyntaxError` de `JSON.parse` y trata la caché como inválida en lugar de propagar la excepción.
+1. **Compiler Cache** (`.wapp_cache/compiler/`) — clave incluye toolchainId
+2. **Build Cache** (`.wapp_build/build-manifest.json`) — incluye templateHash
+3. **Download Cache** (`~/.wasm-linker/`) — Wasmtime C-API
 
 ## Multiplataforma
 
 - Rutas con `path.join()`, `path.resolve()`
-- Ejecución con `cross-spawn` (spawn) o `execFileSync` (sin shell)
+- Ejecución con `execFile`/`execFileSync` (sin shell)
 - Extensión `.exe` en Windows
 - Signals (SIGINT/SIGTERM) solo en POSIX
 - `os.tmpdir()` para directorios temporales
-- `os.homedir()` para caché de descargas
 - `os.EOL` para saltos de línea en archivos generados
-
-### Resolución de imports en el compilador
-
-El compilador AssemblyScript restringe la resolución de imports al directorio del proyecto (`PROJECT_ROOT`). Cualquier intento de leer archivos fuera del proyecto (path traversal) retorna `null`. Esto previene que código `.wasm.ts` malicioso acceda a `/etc/passwd` u otros archivos sensibles del sistema.
-
-Además, la resolución de alias en `resolveImportPath` usa `String.prototype.startsWith` en lugar de `new RegExp`, eliminando el vector ReDoS que existía al construir dinámicamente una expresión regular desde input del usuario (`wapp.json` → `compiler.aliases`).
-
-### Compilación con cmake-js
-
-El flag `--target` se pasa correctamente a cmake-js para cross-compilación. El `CMakeLists.txt` generado escapa propermente:
-
-- Barras invertidas y comillas dobles en `wasmtimePath`
-- Variables CMake `${...}` para evitar inyección
-- Directorios `include` y `lib` envueltos en comillas dobles para soportar rutas con espacios

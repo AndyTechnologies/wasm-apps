@@ -24,7 +24,9 @@ Crea `wapp.json` en el directorio indicado (o el actual). Error si el archivo ya
 wapp build [options]
 ```
 
-Compila todos los `.wasm.ts` en `sourceDir` y enlaza un ejecutable nativo.
+Descubre archivos fuente de todas las extensiones soportadas en `sourceDir`, los compila a `.wasm` usando el `ToolchainRouter` y enlaza un ejecutable nativo.
+
+**Extensiones soportadas**: `.wasm.ts`, `.wasm.mjs`, `.as`, `.wasm.cpp`, `.wasm.cxx`, `.wasm.cc`, `.wasm.rs`, `.wasm`
 
 | Opción                             | Por defecto           | Descripción                               |
 | ---------------------------------- | --------------------- | ----------------------------------------- |
@@ -39,13 +41,20 @@ Compila todos los `.wasm.ts` en `sourceDir` y enlaza un ejecutable nativo.
 | `--shrink-level <n>`               | `0`                   | Nivel de reducción 0-2                    |
 | `--wasi`                           | `false`               | Habilitar WASI                            |
 
+**Archivos intermedios**: Los `.wasm` compilados se nombran como `{base}.{toolchainId}.wasm`:
+
+- `math.wasm.ts` → `math.wasm`
+- `engine.wasm.cpp` → `engine.cpp.wasm`
+- `crypto.wasm.rs` → `crypto.rust.wasm`
+- `library.wasm` → `library.wasm`
+
 ### setup
 
 ```
 wapp setup
 ```
 
-Descarga y almacena en caché la Wasmtime C-API en `~/.wasm-linker/`. Es seguro re-ejecutarlo — usa peticiones HTTP range para descargas reanudables.
+Descarga y almacena en caché la Wasmtime C-API en `~/.wasm-linker/`. Es seguro re-ejecutarlo.
 
 ### cache
 
@@ -62,6 +71,8 @@ wapp cache clear      Limpiar todas las cachés
 pnpm run compiler build <files...> [options]
 pnpm run compiler watch <files...> [options]
 ```
+
+Compila archivos fuente a WebAssembly usando el ToolchainRouter.
 
 | Opción                | Por defecto   | Descripción                                       |
 | --------------------- | ------------- | ------------------------------------------------- |

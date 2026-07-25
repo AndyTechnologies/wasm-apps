@@ -85,6 +85,10 @@ describe('compileCpp valid target', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMkdtemp.mockRejectedValue(new Error('mock mkdtemp'));
+    mockExecFile.mockImplementation((_bin: any, _args: any, _opts: any, cb: any) => {
+      cb(new Error('CMake failed'), '', 'stderr');
+      return { stdout: { pipe: vi.fn() }, stderr: { pipe: vi.fn() } };
+    });
   });
 
   it('accepts alphanumeric target — fails on mkdtemp not ConfigError', async () => {
@@ -136,6 +140,10 @@ describe('compileCpp chmod error logging', () => {
     vi.clearAllMocks();
     // Make mkdtemp succeed so we can test further
     mockMkdtemp.mockResolvedValue('/tmp/wasm-linker-test');
+    mockExecFile.mockImplementation((_bin: any, _args: any, _opts: any, cb: any) => {
+      cb(new Error('CMake failed'), '', 'stderr');
+      return { stdout: { pipe: vi.fn() }, stderr: { pipe: vi.fn() } };
+    });
   });
 
   it('logs warning when chmod fails', async () => {

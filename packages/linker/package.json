@@ -1,6 +1,6 @@
 {
   "name": "@wasm-apps/linker",
-  "version": "1.4.1",
+  "version": "1.5.1",
   "description": "Convierte archivos .wasm en ejecutables nativos usando C++ + Wasmtime",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -48,9 +48,12 @@
     "commander": "^15.0.0",
     "glob": "^13.0.6",
     "lzma-native": "^8.0.6",
+    "nunjucks": "^3.2.4",
     "picocolors": "^1.1.1",
     "tar": "^7.5.20",
     "@wasm-apps/types": "workspace:*"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/nunjucks": "^3.2.4"
+  }
 }

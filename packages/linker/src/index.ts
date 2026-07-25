@@ -1,12 +1,16 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { saveBuildManifest, isBuildUpToDate } from './build-cache.js';
+import { fileURLToPath } from 'node:url';
+import { saveBuildManifest, isBuildUpToDate, computeTemplateHash } from './build-cache.js';
 import { resolveDependencies } from './linker.js';
 import { generateCCode } from './codegen.js';
 import { compileCpp } from './compiler.js';
 import type { NativeAppOptions, WasmModuleInfo, WasmImport, WasmExport, WasmImportFuncType, ModuleMatchingStrategy } from '@wasm-apps/types';
 import { LinkerError, logger } from '@wasm-apps/types';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export { isBuildUpToDate, saveBuildManifest };
 export { getBuildCacheInfo, clearBuildCache } from './build-cache.js';
@@ -17,7 +21,6 @@ export { treeShake } from './tree-shake.js';
 export { pipeline, Pipeline } from './pipeline.js';
 export { loadPlugins } from './plugin-loader.js';
 export { PipelinePhase } from '@wasm-apps/types';
-export { treeShakeWasm } from './tree-shake.js';
 export { LinkerManifestRepository } from './linker-manifest-repository.js';
 export { DownloadCacheRepository } from './download-cache-repository.js';
 export { WasmtimeLinkerStrategy } from './wasmtime-linker-strategy.js';
@@ -73,6 +76,9 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
     throw new LinkerError('Wasmtime C-API no encontrado. Ejecuta "wapp setup" primero.', { cacheDir: path.join(os.homedir(), '.wasm-linker') });
   }
 
+  const defaultTemplateDir = path.resolve(__dirname, '../templates');
+  const templateHash = computeTemplateHash(defaultTemplateDir);
+
   if (!quiet) {
     const cacheOk = await isBuildUpToDate(inputPaths, outputPath, {
       entry,
@@ -81,6 +87,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
       moduleMatching,
       wasmtimePath: resolvedWasmtimePath,
       wasmtimeVersion,
+      templateHash,
     });
     if (cacheOk) {
       logger.success(`Build up-to-date: ${outputPath}`);
@@ -116,9 +123,17 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Compiling native binary...');
 
-  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath });
+  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath }, !quiet);
 
-  saveBuildManifest(inputPaths, outputPath, { entry, target: options.target, wasi, moduleMatching, wasmtimePath: resolvedWasmtimePath, wasmtimeVersion });
+  saveBuildManifest(inputPaths, outputPath, {
+    entry,
+    target: options.target,
+    wasi,
+    moduleMatching,
+    wasmtimePath: resolvedWasmtimePath,
+    wasmtimeVersion,
+    templateHash,
+  });
 
   if (!quiet) logger.success(`Built: ${outputPath}`);
   return outputPath;

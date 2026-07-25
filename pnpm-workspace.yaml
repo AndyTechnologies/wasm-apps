@@ -5,3 +5,7 @@ allowBuilds:
   lzma-native: true
   nx: true
   unrs-resolver: true
+
+overrides:
+  brace-expansion: ^5.0.8
+  tar: ^7.5.21

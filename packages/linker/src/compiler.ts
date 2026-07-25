@@ -19,7 +19,7 @@ const CMAKE_JS_BIN = require.resolve('cmake-js/bin/cmake-js');
  * @param outputPath - Ruta absoluta donde se ubicará el binario
  * @param options - Opciones (target, wasmtimePath, etc.)
  */
-export async function compileCpp(cppSource: string, outputPath: string, options: NativeAppOptions): Promise<void> {
+export async function compileCpp(cppSource: string, outputPath: string, options: NativeAppOptions, verbose = false): Promise<void> {
   const TARGET_RE = /^[a-zA-Z0-9_-]+$/;
   if (options.target && !TARGET_RE.test(options.target)) {
     throw new ConfigError(`Invalid target "${options.target}" — only alphanumeric, underscores, and hyphens allowed`);
@@ -36,9 +36,12 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
     const cmakeContent = generateCMakeLists(options.wasmtimePath);
     await fs.promises.writeFile(path.join(buildDir, 'CMakeLists.txt'), cmakeContent);
 
+    logger.detail('Compilando enlace nativo...');
+
     try {
       await new Promise<void>((resolve, reject) => {
         const cmakeArgs = ['compile', '--directory', buildDir, '--out', buildDir];
+        cmakeArgs.push('--log-level', verbose ? 'info' : 'error');
         if (options.target) {
           cmakeArgs.push('--target', options.target);
         }
@@ -56,8 +59,10 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
             }
           },
         );
-        child.stdout?.pipe(process.stdout);
-        child.stderr?.pipe(process.stderr);
+        if (verbose) {
+          child.stdout?.pipe(process.stdout);
+          child.stderr?.pipe(process.stderr);
+        }
       });
     } catch (err: unknown) {
       throw err instanceof CMakeError ? err : new CMakeError(`CMake compilation failed: ${(err as Error).message}`);
@@ -75,7 +80,7 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
       try {
         await fs.promises.chmod(outputPath, 0o755);
       } catch (chmodErr: unknown) {
-        logger.warn(`chmod failed for ${outputPath}: ${(chmodErr as Error).message}`);
+        logger.detail(`chmod falló para ${outputPath}: ${(chmodErr as Error).message}`);
       }
     }
   } finally {

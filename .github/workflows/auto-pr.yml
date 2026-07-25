@@ -43,6 +43,29 @@ jobs:
             echo "PR from dev to main already exists, skipping"
           fi
 
+      - name: Wait for CI to pass
+        if: steps.check.outputs.match == 'true' && steps.dupe.outputs.count == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          SHA="${{ github.sha }}"
+          echo "Waiting for CI to pass on commit $SHA..."
+          for i in $(seq 1 30); do
+            STATUS=$(gh api "repos/${{ github.repository }}/commits/$SHA/status" --jq '.state')
+            if [ "$STATUS" = "success" ]; then
+              echo "✅ CI passed!"
+              exit 0
+            elif [ "$STATUS" = "failure" ]; then
+              echo "❌ CI failed!"
+              exit 1
+            fi
+            echo "Attempt $i: status=$STATUS, retrying in 30s..."
+            sleep 30
+          done
+          echo "⏰ Timeout waiting for CI"
+          exit 1
+
       - name: Create Release PR
         if: steps.check.outputs.match == 'true' && steps.dupe.outputs.count == '0'
         env:

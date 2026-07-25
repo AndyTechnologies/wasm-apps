@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { logger, AsRuntime } from '@wasm-apps/types';
+import { logger, AsRuntime, ConfigError } from '@wasm-apps/types';
 import { glob } from 'glob';
 import path from 'node:path';
 import fs from 'node:fs';
-import { compileWasm } from './index.js';
+import { compileAssemblyScriptCore } from './index.js';
 
 function isWasmTsFile(file: string): boolean {
   return file.endsWith('.wasm.ts') || file.endsWith('.asm.ts') || file.endsWith('.asm');
@@ -15,7 +15,7 @@ async function resolveInputFiles(inputs: string[]): Promise<string[]> {
   for (const p of inputs) {
     const resolved = path.resolve(p);
     if (!fs.existsSync(resolved)) {
-      throw new Error(`El archivo '${p}' no existe.`);
+      throw new ConfigError(`El archivo '${p}' no existe.`);
     }
     const stat = fs.statSync(resolved);
     if (stat.isDirectory()) {
@@ -24,11 +24,11 @@ async function resolveInputFiles(inputs: string[]): Promise<string[]> {
     } else if (stat.isFile() && (isWasmTsFile(resolved) || resolved.endsWith('.ts'))) {
       files.push(resolved);
     } else {
-      throw new Error(`'${p}' no es un archivo .wasm.ts, .ts, .asm ni una carpeta.`);
+      throw new ConfigError(`'${p}' no es un archivo .wasm.ts, .ts, .asm ni una carpeta.`);
     }
   }
   if (files.length === 0) {
-    throw new Error('No se encontraron archivos AssemblyScript para compilar.');
+    throw new ConfigError('No se encontraron archivos AssemblyScript para compilar.');
   }
   return files;
 }
@@ -47,15 +47,15 @@ async function compileSingleFile(file: string, options: CompileFileOptions): Pro
   const relativeName = path.relative(process.cwd(), file);
 
   try {
-    const result = await compileWasm({
-      fileName: file,
+    const result = await compileAssemblyScriptCore(
       sourceCode,
-      isDev: options.isDev,
-      sourceMap: options.sourceMap,
-      runtime: options.runtime,
-      optimizeLevel: options.optimizeLevel,
-      shrinkLevel: options.shrinkLevel,
-    });
+      file,
+      options.isDev,
+      options.runtime,
+      options.sourceMap,
+      options.optimizeLevel,
+      options.shrinkLevel,
+    );
 
     let baseName: string;
     if (file.endsWith('.wasm.ts')) {

@@ -1,0 +1,48 @@
+static std::string _readAsString(Caller& caller, int32_t ptr) {
+  if (ptr <= 0) return "";
+  auto mem = caller.get_export("memory");
+  if (!mem) return "";
+  auto* memory = std::get_if<wasmtime::Memory>(&*mem);
+  if (!memory) return "";
+  auto ctx = caller.context();
+  auto span = memory->data(ctx);
+  auto* data = span.data();
+  auto sz = span.size();
+  if (ptr < 4 || (uint32_t)ptr > (uint32_t)sz) return "";
+  int32_t len; std::memcpy(&len, data + ptr - 4, sizeof(len)); len >>= 1;
+  if (len < 0 || len > 65536) return "";
+  if (ptr + (int32_t)(len * 2) > (int32_t)sz) return "";
+  uint16_t* chars = reinterpret_cast<uint16_t*>(data + ptr);
+  std::string result;
+  result.reserve(len + 1);
+  for (int32_t i = 0; i < len; i++) {
+    uint16_t c = chars[i];
+    if (c == 0) break;
+    if (c < 0x80) {
+      result += (char)c;
+    } else if (c < 0x800) {
+      result += (char)(0xC0 | (c >> 6));
+      result += (char)(0x80 | (c & 0x3F));
+    } else {
+      result += (char)(0xE0 | (c >> 12));
+      result += (char)(0x80 | ((c >> 6) & 0x3F));
+      result += (char)(0x80 | (c & 0x3F));
+    }
+  }
+  return result;
+}
+
+static std::string _readAsStringNT(Caller& caller, int32_t ptr) {
+  if (ptr <= 0) return "";
+  auto mem = caller.get_export("memory");
+  if (!mem) return "";
+  auto* memory = std::get_if<wasmtime::Memory>(&*mem);
+  if (!memory) return "";
+  auto ctx = caller.context();
+  auto span = memory->data(ctx);
+  auto* data = span.data();
+  auto sz = span.size();
+  if (ptr >= (int32_t)sz) return "";
+  size_t mlen = _wasm_strnlen(reinterpret_cast<const char*>(data + ptr), sz - ptr);
+  return std::string(reinterpret_cast<const char*>(data + ptr), mlen);
+}
