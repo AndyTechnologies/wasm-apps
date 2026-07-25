@@ -1,26 +1,35 @@
 import type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './toolchain-strategy.js';
 import { compileWasm } from '../index.js';
+import { runExecFile } from './_utils.js';
 
 /**
  * Estrategia de compilación para AssemblyScript (.wasm.ts / .wasm.mjs / .as).
  *
  * Mantiene compatibilidad total con la API compileWasm() original,
  * produciendo el mismo resultado que se obtenía antes del refactor multi-toolchain.
+ *
+ * AssemblyScript ya no es dependencia npm — se invoca via spawn como C++ y Rust.
+ * El usuario debe tener `asc` (assemblyscript CLI) en su PATH.
  */
 export class AssemblyScriptToolchainStrategy implements ToolchainStrategy {
   readonly id = 'assemblyscript';
   readonly extensions = ['.wasm.ts', '.wasm.mjs', '.as'];
 
   /**
-   * Verifica si AssemblyScript está disponible.
-   * Siempre disponible cuando el paquete está instalado (dependencia npm).
+   * Verifica si AssemblyScript está disponible en el sistema.
+   * Primero busca `asc` en PATH, luego intenta via npx.
    */
   async isAvailable(): Promise<boolean> {
     try {
-      await import('assemblyscript/asc');
+      await runExecFile('which', ['asc'], { timeout: 5000 });
       return true;
     } catch {
-      return false;
+      try {
+        await runExecFile('npx', ['asc', '--version'], { timeout: 10000 });
+        return true;
+      } catch {
+        return false;
+      }
     }
   }
 

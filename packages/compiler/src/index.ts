@@ -1,6 +1,7 @@
-import asc from 'assemblyscript/asc';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { runExecFile } from './strategies/_utils.js';
 import { LRUCache, MAX_MEMORY_CACHE_SIZE } from './cache.js';
 import { compareHash, hashString, mergeAsConfig, resolveImportPath } from './utils.js';
 import { getCached, saveToCache, computeKey } from './disk-cache.js';
@@ -71,137 +72,106 @@ export async function compileWasm(
     return diskCached;
   }
 
-  const recordedDeps = new Set<string>();
-
-  const readFileFromDisk = (filePath: string): string | null => {
-    if (filePath === opts.fileName) return opts.sourceCode;
-    if (!isPathInsideProject(filePath)) {
-      return null;
-    }
-    if (fileCache.has(filePath)) return fileCache.get(filePath)!;
-    try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      fileCache.set(filePath, content);
-      recordedDeps.add(filePath);
-      return content;
-    } catch {
-      return null;
-    }
-  };
-
-  let wasmBytes: Uint8Array | null = null;
-  let dtsContent: string | null = null;
-  let bindingsJs: string | null = null;
-  let sourceMap: string | null = null;
-
   const target = opts.isDev ? 'debug' : 'release';
   const configOptions = mergeAsConfig({}, target);
 
-  const baseArgs = [opts.fileName, '--runtime', opts.runtime || 'incremental', '--exportRuntime', '--bindings', 'raw', '--outFile', 'out.wasm'];
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asc-compile-'));
+  const srcFile = path.join(tmpDir, 'source.ts');
+  const outFile = path.join(tmpDir, 'output.wasm');
 
-  if (opts.isDev) {
-    baseArgs.push('--debug');
-    if (opts.sourceMap !== false) {
-      baseArgs.push('--sourceMap');
-    }
-  } else {
-    baseArgs.push('--optimize');
-    if (opts.optimizeLevel !== undefined) {
-      baseArgs.push('--optimizeLevel', opts.optimizeLevel.toString());
-    }
-    if (opts.shrinkLevel !== undefined) {
-      baseArgs.push('--shrinkLevel', opts.shrinkLevel.toString());
-    }
-    baseArgs.push('--noAssert');
-  }
+  try {
+    fs.writeFileSync(srcFile, opts.sourceCode, 'utf-8');
 
-  for (const [key, value] of Object.entries({ ...configOptions })) {
-    if (typeof value === 'boolean') {
-      if (value) baseArgs.push(`--${key}`);
+    const baseArgs: string[] = [srcFile, '--runtime', opts.runtime || 'incremental', '--exportRuntime', '--bindings', 'raw', '--outFile', outFile];
+
+    if (opts.isDev) {
+      baseArgs.push('--debug');
+      if (opts.sourceMap !== false) {
+        baseArgs.push('--sourceMap');
+      }
     } else {
-      baseArgs.push(`--${key}`, value.toString());
+      baseArgs.push('--optimize');
+      if (opts.optimizeLevel !== undefined) {
+        baseArgs.push('--optimizeLevel', opts.optimizeLevel.toString());
+      }
+      if (opts.shrinkLevel !== undefined) {
+        baseArgs.push('--shrinkLevel', opts.shrinkLevel.toString());
+      }
+      baseArgs.push('--noAssert');
+    }
+
+    for (const [key, value] of Object.entries({ ...configOptions })) {
+      if (typeof value === 'boolean') {
+        if (value) baseArgs.push(`--${key}`);
+      } else {
+        baseArgs.push(`--${key}`, value.toString());
+      }
+    }
+
+    const { stderr } = await runExecFile('asc', baseArgs);
+
+    const stderrStr = stderr?.toString() || '';
+
+    if (stderrStr.includes('ERROR') || stderrStr.includes('FAIL')) {
+      throw new CompilerError(`Error en compilacion AssemblyScript:\n${stderrStr}`, {
+        fileName: opts.fileName,
+        stderr: stderrStr,
+      });
+    }
+
+    const outWasmPath = path.join(tmpDir, 'output.wasm');
+    const outJsPath = path.join(tmpDir, 'output.js');
+    const outDtsPath = path.join(tmpDir, 'output.d.ts');
+    const outSourceMapPath = path.join(tmpDir, 'output.wasm.map');
+
+    let wasmBytes: Uint8Array | null = null;
+    let dtsContent: string | null = null;
+    let bindingsJs: string | null = null;
+    let sourceMap: string | null = null;
+
+    if (fs.existsSync(outWasmPath)) {
+      wasmBytes = new Uint8Array(fs.readFileSync(outWasmPath));
+    }
+    if (fs.existsSync(outDtsPath)) {
+      dtsContent = fs.readFileSync(outDtsPath, 'utf-8');
+    }
+    if (fs.existsSync(outJsPath)) {
+      bindingsJs = fs.readFileSync(outJsPath, 'utf-8');
+    }
+    if (fs.existsSync(outSourceMapPath)) {
+      sourceMap = fs.readFileSync(outSourceMapPath, 'utf-8');
+    }
+
+    if (!wasmBytes || dtsContent === null || bindingsJs === null) {
+      throw new CompilerError('No se generaron todos los archivos necesarios', {
+        fileName: opts.fileName,
+        hasWasm: !!wasmBytes,
+        hasDts: dtsContent !== null,
+        hasBindings: bindingsJs !== null,
+      });
+    }
+
+    const result: CompileResult = {
+      wasmBytes,
+      dtsContent,
+      bindingsJs,
+      sourceMap: sourceMap || undefined,
+      dependencies: [],
+      hash,
+    };
+
+    MEMORY_CACHE.set(memoryKey, result);
+    saveToCache(cacheKey, result);
+    return result;
+  } catch (err: any) {
+    if (err instanceof CompilerError) throw err;
+    throw new CompilerError(`Error compilando AssemblyScript:\n${err.stderr || err.message || err}`, {
+      fileName: opts.fileName,
+      stderr: err.stderr || err.message,
+    });
+  } finally {
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   }
-
-  const { error, stderr, stdout } = await asc.main(baseArgs, {
-    readFile: (name: string, baseDir: string) => {
-      const normalizedReadName = path.resolve(name);
-      const normalizedFileName = path.resolve(opts.fileName);
-      if (normalizedReadName === normalizedFileName) return opts.sourceCode;
-      if (name === 'asconfig.json') return null;
-      if (!isPathInsideProject(name) && name.startsWith('/')) {
-        return null;
-      }
-      let resolved: string;
-      if (name.startsWith('.')) {
-        resolved = resolveImportPath(name, opts.fileName, opts.aliases || []);
-      } else {
-        const base = baseDir || path.dirname(opts.fileName);
-        resolved = path.isAbsolute(name) ? name : path.resolve(base, name);
-        if (!resolved.endsWith('.ts') && !resolved.endsWith('.wasm.ts')) {
-          resolved += '.ts';
-        }
-      }
-      if (!isPathInsideProject(resolved)) {
-        return null;
-      }
-      let content = readFileFromDisk(resolved);
-      if (content === null && !resolved.endsWith('.wasm.ts')) {
-        content = readFileFromDisk(resolved.replace(/\.ts$/, '.wasm.ts'));
-      }
-      return content;
-    },
-    writeFile: (name: string, contents: string | Uint8Array) => {
-      if (name === 'out.wasm') {
-        wasmBytes = contents as Uint8Array;
-      } else if (name === 'out.js') {
-        bindingsJs = contents as string;
-      } else if (name === 'out.d.ts') {
-        dtsContent = contents as string;
-      } else if (name === 'out.wasm.map') {
-        sourceMap = contents as string;
-      }
-    },
-    listFiles: () => [],
-  });
-
-  const stderrStr = stderr?.toString() || '';
-  const stdoutStr = stdout?.toString() || '';
-
-  if (error) {
-    throw new CompilerError(`Error compilando AssemblyScript:\n${stderrStr}\n${stdoutStr}`, {
-      fileName: opts.fileName,
-      stderr: stderrStr,
-      stdout: stdoutStr,
-    });
-  }
-
-  if (stderrStr.includes('ERROR') || stderrStr.includes('FAIL')) {
-    throw new CompilerError(`Error en compilacion AssemblyScript:\n${stderrStr}`, {
-      fileName: opts.fileName,
-      stderr: stderrStr,
-    });
-  }
-
-  if (!wasmBytes || dtsContent === null || bindingsJs === null) {
-    throw new CompilerError('No se generaron todos los archivos necesarios', {
-      fileName: opts.fileName,
-      hasWasm: !!wasmBytes,
-      hasDts: dtsContent !== null,
-      hasBindings: bindingsJs !== null,
-    });
-  }
-
-  const result: CompileResult = {
-    wasmBytes,
-    dtsContent,
-    bindingsJs,
-    sourceMap: sourceMap || undefined,
-    dependencies: Array.from(recordedDeps),
-    hash,
-  };
-
-  MEMORY_CACHE.set(memoryKey, result);
-  saveToCache(cacheKey, result);
-  return result;
 }
