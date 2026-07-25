@@ -52,15 +52,15 @@ jobs:
           SHA="${{ github.sha }}"
           echo "Waiting for CI to pass on commit $SHA..."
           for i in $(seq 1 30); do
-            STATUS=$(gh api "repos/${{ github.repository }}/commits/$SHA/status" --jq '.state')
-            if [ "$STATUS" = "success" ]; then
+            CONCLUSION=$(gh run list --commit "$SHA" --workflow "CI" --json conclusion --jq '.[0].conclusion // "pending"' --limit 1)
+            echo "Attempt $i: conclusion=$CONCLUSION"
+            if [ "$CONCLUSION" = "success" ]; then
               echo "✅ CI passed!"
               exit 0
-            elif [ "$STATUS" = "failure" ]; then
-              echo "❌ CI failed!"
+            elif [ "$CONCLUSION" = "failure" ] || [ "$CONCLUSION" = "cancelled" ] || [ "$CONCLUSION" = "timed_out" ]; then
+              echo "❌ CI failed (conclusion=$CONCLUSION)!"
               exit 1
             fi
-            echo "Attempt $i: status=$STATUS, retrying in 30s..."
             sleep 30
           done
           echo "⏰ Timeout waiting for CI"
