@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const rootDir = resolve(import.meta.dirname, '..');
 const examplesDir = join(rootDir, 'examples');
@@ -61,13 +61,29 @@ const requiresToolchain = {
   'rust-hello': ['rust'],
   'multi-toolchain': ['cpp'],
   'custom-template': [],
+  // precompiled depends on basico's build output (AssemblyScript WASM)
+  precompiled: [],
 };
 
 /**
- * Examples to always skip (e.g. because the minimal WASM binary cannot be linked).
+ * Examples to always skip.
  * @type {Set<string>}
  */
-const skipExamples = new Set(['precompiled']);
+const skipExamples = new Set([]);
+
+/**
+ * Clean build artifacts for a given example directory.
+ * Removes wasm-out/, .wapp_build/, and .wapp_cache/ so every build starts fresh.
+ * @param {string} examplePath
+ */
+function cleanBuildArtifacts(examplePath) {
+  for (const dir of ['wasm-out', '.wapp_build', '.wapp_cache']) {
+    const fullPath = join(examplePath, dir);
+    if (existsSync(fullPath)) {
+      rmSync(fullPath, { recursive: true, force: true });
+    }
+  }
+}
 
 let passed = 0;
 let skipped = 0;
@@ -96,6 +112,26 @@ for (const dir of exampleDirs) {
     console.warn(`  SKIP: ${dir} (requiere: ${missing.join(', ')})`);
     skipped++;
     continue;
+  }
+
+  // Clean build artifacts so every example builds from scratch
+  cleanBuildArtifacts(examplePath);
+
+  // precompiled depends on basico's compiled WASM — clean src/ and copy before building
+  if (dir === 'precompiled') {
+    const basicoWasm = join(examplesDir, 'basico', 'wasm-out', 'main.wasm');
+    if (!existsSync(basicoWasm)) {
+      console.error(`  SKIP: ${dir} (basico must be built first — wasm-out/main.wasm not found)`);
+      skipped++;
+      continue;
+    }
+    const precompiledSrcDir = join(examplePath, 'src');
+    // Clean any stale .wasm files from src/
+    for (const f of readdirSync(precompiledSrcDir)) {
+      if (f.endsWith('.wasm')) rmSync(join(precompiledSrcDir, f));
+    }
+    copyFileSync(basicoWasm, join(precompiledSrcDir, 'main.wasm'));
+    console.log(`  (copied basico/wasm-out/main.wasm → src/main.wasm)`);
   }
 
   process.stdout.write(`\n--- ${dir} ---\n`);
