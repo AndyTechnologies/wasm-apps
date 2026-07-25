@@ -35,6 +35,7 @@ export class BuildCommand implements ICommand {
       shrinkLevel,
       sourceDir: args.sourceDir,
       outDir: args.outDir,
+      verbose: args.verbose || false,
     });
   }
 }

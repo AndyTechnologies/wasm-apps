@@ -289,18 +289,22 @@ async function linkNativeApp(
   config: WappConfig,
   target?: string,
   wasi?: boolean,
+  verbose = false,
 ): Promise<void> {
   logger.step('Linkeando ejecutable nativo...');
 
-  await createNativeApp({
-    inputPaths: wasmFiles,
-    output,
-    target: target || config.target,
-    entry,
-    wasi: wasi || config.wasi || false,
-    moduleMatching,
-    wasmtimePath: config.wasmtimePath,
-  });
+  await createNativeApp(
+    {
+      inputPaths: wasmFiles,
+      output,
+      target: target || config.target,
+      entry,
+      wasi: wasi || config.wasi || false,
+      moduleMatching,
+      wasmtimePath: config.wasmtimePath,
+    },
+    !verbose,
+  );
 
   logger.success(`Ejecutable creado: ${path.resolve(output)}`);
 }
@@ -317,6 +321,7 @@ export async function buildProject(options: {
   shrinkLevel?: number;
   sourceDir?: string;
   outDir?: string;
+  verbose?: boolean;
 }): Promise<void> {
   const rootDir = path.resolve(options.rootDir);
   const compilerOverrides: WappConfig['compiler'] = {};
@@ -373,14 +378,14 @@ export async function buildProject(options: {
   const { output, entry, moduleMatching } = resolveOutputPath(config, rootDir, outDir, options.entry, options.moduleMatching);
 
   ctx = await pipeline.runPhase(PipelinePhase.BeforeLink, ctx);
-  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, options.target, options.wasi);
+  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, options.target, options.wasi, options.verbose);
   ctx = await pipeline.runPhase(PipelinePhase.AfterLink, ctx);
 
   ctx = await pipeline.runPhase(PipelinePhase.AfterCodeGen, ctx);
   await pipeline.runPhase(PipelinePhase.AfterBundle, ctx);
 }
 
-async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string, outDir: string, wasi: boolean): Promise<void> {
+async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string, outDir: string, wasi: boolean, verbose = false): Promise<void> {
   await loadPlugins(config.plugins);
 
   let wasmFiles: string[];
@@ -395,7 +400,7 @@ async function buildOnce(config: WappConfig, rootDir: string, sourceDir: string,
   }
 
   const { output, entry, moduleMatching } = resolveOutputPath(config, rootDir, outDir, config.entry, config.moduleMatching);
-  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, config.target, wasi);
+  await linkNativeApp(wasmFiles, output, entry, moduleMatching, config, config.target, wasi, verbose);
 }
 
 export async function devCommand(options: {
@@ -407,6 +412,7 @@ export async function devCommand(options: {
   release?: boolean;
   sourceDir?: string;
   outDir?: string;
+  verbose?: boolean;
 }): Promise<void> {
   const rootDir = path.resolve(options.rootDir);
   const compilerOverrides: WappConfig['compiler'] = {};
@@ -445,7 +451,7 @@ export async function devCommand(options: {
   }
 
   logger.step('Build inicial...');
-  await buildOnce(config, rootDir, sourceDir, outDir, wasi);
+  await buildOnce(config, rootDir, sourceDir, outDir, wasi, options.verbose);
 
   logger.step(`Vigilando ${sourceDir} por cambios en archivos fuente...`);
   logger.detail('Esperando cambios... (Ctrl+C para salir)\n');
@@ -456,7 +462,7 @@ export async function devCommand(options: {
       const relativeName = path.relative(rootDir, changedFile);
       logger.step(`\nCambio detectado en ${relativeName}, recompilando...`);
       try {
-        await buildOnce(config, rootDir, sourceDir, outDir, wasi);
+        await buildOnce(config, rootDir, sourceDir, outDir, wasi, options.verbose);
       } catch (err: any) {
         logger.error(`Error: ${err.message}`);
       }

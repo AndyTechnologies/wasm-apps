@@ -123,7 +123,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Compiling native binary...');
 
-  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath });
+  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath }, !quiet);
 
   saveBuildManifest(inputPaths, outputPath, {
     entry,

@@ -205,7 +205,7 @@ describe('buildProject', () => {
     // Verify output wasm file was created
     expect(fs.existsSync(path.join(outDir, 'main.wasm'))).toBe(true);
     expect(createNativeApp).toHaveBeenCalledOnce();
-    expect(createNativeApp).toHaveBeenCalledWith(expect.objectContaining({ entry: '_start', wasi: false }));
+    expect(createNativeApp).toHaveBeenCalledWith(expect.objectContaining({ entry: '_start', wasi: false }), true);
   });
 
   it('passes wasi flag to createNativeApp', async () => {
@@ -216,7 +216,7 @@ describe('buildProject', () => {
       rootDir: tmpDir,
     });
 
-    expect(createNativeApp).toHaveBeenCalledWith(expect.objectContaining({ wasi: true }));
+    expect(createNativeApp).toHaveBeenCalledWith(expect.objectContaining({ wasi: true }), true);
   });
 
   it('throws when source dir does not exist', async () => {
