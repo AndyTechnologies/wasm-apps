@@ -4,7 +4,7 @@ import { logger, AsRuntime, ConfigError } from '@wasm-apps/types';
 import { glob } from 'glob';
 import path from 'node:path';
 import fs from 'node:fs';
-import { compileWasm } from './index.js';
+import { compileAssemblyScriptCore } from './index.js';
 
 function isWasmTsFile(file: string): boolean {
   return file.endsWith('.wasm.ts') || file.endsWith('.asm.ts') || file.endsWith('.asm');
@@ -47,15 +47,15 @@ async function compileSingleFile(file: string, options: CompileFileOptions): Pro
   const relativeName = path.relative(process.cwd(), file);
 
   try {
-    const result = await compileWasm({
-      fileName: file,
+    const result = await compileAssemblyScriptCore(
       sourceCode,
-      isDev: options.isDev,
-      sourceMap: options.sourceMap,
-      runtime: options.runtime,
-      optimizeLevel: options.optimizeLevel,
-      shrinkLevel: options.shrinkLevel,
-    });
+      file,
+      options.isDev,
+      options.runtime,
+      options.sourceMap,
+      options.optimizeLevel,
+      options.shrinkLevel,
+    );
 
     let baseName: string;
     if (file.endsWith('.wasm.ts')) {

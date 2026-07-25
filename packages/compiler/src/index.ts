@@ -3,13 +3,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { runExecFile } from './strategies/_utils.js';
 import { LRUCache, MAX_MEMORY_CACHE_SIZE } from './cache.js';
-import { compareHash, hashString, mergeAsConfig, resolveImportPath } from './utils.js';
+import { compareHash, hashString, mergeAsConfig } from './utils.js';
 import { getCached, saveToCache, computeKey } from './disk-cache.js';
 import type { CompileOptions, CompileResult } from '@wasm-apps/types';
 import { CompilerError } from '@wasm-apps/types';
 
 export { getCompileCacheInfo, clearCompileCache, deleteCacheEntry, computeToolchainKey } from './disk-cache.js';
-export { AssemblyScriptCompilerStrategy } from './assemblyscript-compiler-strategy.js';
 export { AssemblyScriptToolchainStrategy } from './strategies/assemblyscript-strategy.js';
 export { CppCompilerStrategy } from './strategies/cpp-strategy.js';
 export { RustCompilerStrategy } from './strategies/rust-strategy.js';
@@ -25,12 +24,6 @@ const PROJECT_ROOT = process.cwd();
 /** Limpia la caché en memoria (útil en tests). */
 export function clearMemoryCache(): void {
   MEMORY_CACHE.clear();
-}
-
-function isPathInsideProject(filePath: string): boolean {
-  const resolved = path.resolve(filePath);
-  const boundary = PROJECT_ROOT + path.sep;
-  return resolved === PROJECT_ROOT || resolved.startsWith(boundary);
 }
 
 /**
@@ -54,68 +47,57 @@ export function resolveAsc(): string {
   return 'asc'; // fallback — será resuelto via PATH
 }
 
+// ---------------------------------------------------------------------------
+// Core: invocación de asc sin caché, compartida entre compileWasm y el strategy
+// ---------------------------------------------------------------------------
+
+/** Resultado intermedio de compilar con asc. */
+export interface AscCoreResult {
+  wasmBytes: Uint8Array;
+  dtsContent: string;
+  bindingsJs: string;
+  sourceMap: string | null;
+  hash: string;
+}
+
 /**
- * Compila un archivo AssemblyScript a WASM usando la API original.
+ * Ejecuta `asc` (AssemblyScript CLI) con los argumentos adecuados y devuelve
+ * los archivos generados. No aplica caché — es la capa pura de spawn + I/O.
  *
- * @deprecated Since multi-toolchain refactor. Use `ToolchainRouter` with
- * `AssemblyScriptToolchainStrategy` instead. This function remains available
- * for backward compatibility but delegates through the ToolchainRouter internally.
+ * Usada tanto por `compileWasm()` (que añade caché encima) como por
+ * `AssemblyScriptToolchainStrategy.compile()` (que produce ToolchainResult).
  */
-export async function compileWasm(
-  options: CompileOptions = {
-    fileName: '',
-    sourceCode: '',
-    maxMemoryCacheSize: MAX_MEMORY_CACHE_SIZE,
-    ext: '.wasm.ts',
-    isDev: true,
-    runtime: 'incremental',
-    sourceMap: true,
-    optimizeLevel: 3,
-  },
-): Promise<CompileResult> {
-  const opts = { ...options };
-  const hash = hashString(opts.sourceCode);
-  const fileCache = new LRUCache<string, string>(opts.maxMemoryCacheSize ?? MAX_MEMORY_CACHE_SIZE);
-
-  const checkCache = (cached: CompileResult): boolean => compareHash(cached.hash, hash);
-  const memoryKey = hash;
-
-  if (MEMORY_CACHE.has(memoryKey)) {
-    const cached = MEMORY_CACHE.get(memoryKey)!;
-    if (checkCache(cached)) return cached;
-    MEMORY_CACHE.delete(memoryKey);
-  }
-
-  const cacheKey = computeKey(opts.sourceCode, opts);
-  const diskCached = getCached(cacheKey);
-  if (diskCached && compareHash(diskCached.hash, hash)) {
-    MEMORY_CACHE.set(memoryKey, diskCached);
-    return diskCached;
-  }
-
-  const target = opts.isDev ? 'debug' : 'release';
+export async function compileAssemblyScriptCore(
+  sourceCode: string,
+  fileName: string,
+  isDev: boolean,
+  runtime: string,
+  sourceMap: boolean,
+  optimizeLevel: number,
+  shrinkLevel?: number,
+): Promise<AscCoreResult> {
+  const hash = hashString(sourceCode);
+  const target = isDev ? 'debug' : 'release';
   const configOptions = mergeAsConfig({}, target);
 
-  // Build asc args
+  // Build asc CLI arguments
   const baseArgs: string[] = [];
 
-  if (opts.isDev) {
+  if (isDev) {
     baseArgs.push('--debug');
-    if (opts.sourceMap !== false) {
+    if (sourceMap) {
       baseArgs.push('--sourceMap');
     }
   } else {
     baseArgs.push('--optimize');
-    if (opts.optimizeLevel !== undefined) {
-      baseArgs.push('--optimizeLevel', opts.optimizeLevel.toString());
-    }
-    if (opts.shrinkLevel !== undefined) {
-      baseArgs.push('--shrinkLevel', opts.shrinkLevel.toString());
+    baseArgs.push('--optimizeLevel', optimizeLevel.toString());
+    if (shrinkLevel !== undefined && shrinkLevel > 0) {
+      baseArgs.push('--shrinkLevel', shrinkLevel.toString());
     }
     baseArgs.push('--noAssert');
   }
 
-  baseArgs.push('--runtime', opts.runtime || 'incremental', '--exportRuntime', '--bindings', 'raw');
+  baseArgs.push('--runtime', runtime, '--exportRuntime', '--bindings', 'raw');
 
   for (const [key, value] of Object.entries({ ...configOptions })) {
     if (typeof value === 'boolean') {
@@ -135,28 +117,25 @@ export async function compileWasm(
   let cleanupTmpDir = true;
 
   try {
-    const resolvedFileName = opts.fileName ? path.resolve(opts.fileName) : '';
+    const resolvedFileName = fileName ? path.resolve(fileName) : '';
     if (resolvedFileName && fs.existsSync(resolvedFileName) && fs.statSync(resolvedFileName).isFile()) {
-      // File exists on disk — compile from there for correct import resolution
       srcFile = resolvedFileName;
-      // Verify sourceCode matches disk content (should always be true in production flow)
       const diskContent = fs.readFileSync(srcFile, 'utf-8');
-      if (diskContent !== opts.sourceCode) {
-        // Source was transformed — write alongside project structure in temp dir
+      if (diskContent !== sourceCode) {
+        // Source fue transformada — escribir en temp dir con estructura de proyecto
         const relativePath = path.relative(PROJECT_ROOT, resolvedFileName);
         srcFile = path.join(tmpDir, relativePath);
         fs.mkdirSync(path.dirname(srcFile), { recursive: true });
-        fs.writeFileSync(srcFile, opts.sourceCode, 'utf-8');
+        fs.writeFileSync(srcFile, sourceCode, 'utf-8');
         cleanupTmpDir = true;
       } else {
-        // Source matches disk — don't clean up the temp dir since we're not using it for src
+        // Source coincide con disco — no limpiar tmpDir, no lo usamos para src
         cleanupTmpDir = false;
-        // But we still need the outFile to go to tmpDir
       }
     } else {
-      // Virtual file (unit tests, or non-existent path) — write to temp dir
+      // Archivo virtual (tests, o path inexistente) — escribir a temp dir
       srcFile = path.join(tmpDir, 'source.ts');
-      fs.writeFileSync(srcFile, opts.sourceCode, 'utf-8');
+      fs.writeFileSync(srcFile, sourceCode, 'utf-8');
     }
 
     baseArgs.unshift('--outFile', outFile);
@@ -169,11 +148,12 @@ export async function compileWasm(
 
     if (stderrStr.includes('ERROR') || stderrStr.includes('FAIL')) {
       throw new CompilerError(`Error en compilacion AssemblyScript:\n${stderrStr}`, {
-        fileName: opts.fileName,
+        fileName,
         stderr: stderrStr,
       });
     }
 
+    // Leer outputs generados por asc
     const outWasmPath = path.join(tmpDir, 'output.wasm');
     const outJsPath = path.join(tmpDir, 'output.js');
     const outDtsPath = path.join(tmpDir, 'output.d.ts');
@@ -182,7 +162,7 @@ export async function compileWasm(
     let wasmBytes: Uint8Array | null = null;
     let dtsContent: string | null = null;
     let bindingsJs: string | null = null;
-    let sourceMap: string | null = null;
+    let sourceMapContent: string | null = null;
 
     if (fs.existsSync(outWasmPath)) {
       wasmBytes = new Uint8Array(fs.readFileSync(outWasmPath));
@@ -194,34 +174,29 @@ export async function compileWasm(
       bindingsJs = fs.readFileSync(outJsPath, 'utf-8');
     }
     if (fs.existsSync(outSourceMapPath)) {
-      sourceMap = fs.readFileSync(outSourceMapPath, 'utf-8');
+      sourceMapContent = fs.readFileSync(outSourceMapPath, 'utf-8');
     }
 
     if (!wasmBytes || dtsContent === null || bindingsJs === null) {
       throw new CompilerError('No se generaron todos los archivos necesarios', {
-        fileName: opts.fileName,
+        fileName,
         hasWasm: !!wasmBytes,
         hasDts: dtsContent !== null,
         hasBindings: bindingsJs !== null,
       });
     }
 
-    const result: CompileResult = {
+    return {
       wasmBytes,
       dtsContent,
       bindingsJs,
-      sourceMap: sourceMap || undefined,
-      dependencies: [],
+      sourceMap: sourceMapContent,
       hash,
     };
-
-    MEMORY_CACHE.set(memoryKey, result);
-    saveToCache(cacheKey, result);
-    return result;
   } catch (err: any) {
     if (err instanceof CompilerError) throw err;
     throw new CompilerError(`Error compilando AssemblyScript:\n${err.stderr || err.message || err}`, {
-      fileName: opts.fileName,
+      fileName,
       stderr: err.stderr || err.message,
     });
   } finally {
@@ -229,4 +204,67 @@ export async function compileWasm(
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   }
+}
+
+/**
+ * Compila un archivo AssemblyScript a WASM.
+ *
+ * @deprecated Since multi-toolchain refactor. Usar `ToolchainRouter` con
+ * `AssemblyScriptToolchainStrategy` en lugar de llamar esta función directamente.
+ * Se mantiene para compatibilidad con el CLI legacy (packages/compiler/src/cli.ts).
+ * La implementación real está en `compileAssemblyScriptCore()`.
+ */
+export async function compileWasm(
+  options: CompileOptions = {
+    fileName: '',
+    sourceCode: '',
+    maxMemoryCacheSize: MAX_MEMORY_CACHE_SIZE,
+    ext: '.wasm.ts',
+    isDev: true,
+    runtime: 'incremental',
+    sourceMap: true,
+    optimizeLevel: 3,
+  },
+): Promise<CompileResult> {
+  const opts = { ...options };
+  const hash = hashString(opts.sourceCode);
+
+  // Memory cache
+  if (MEMORY_CACHE.has(hash)) {
+    const cached = MEMORY_CACHE.get(hash)!;
+    if (compareHash(cached.hash, hash)) return cached;
+    MEMORY_CACHE.delete(hash);
+  }
+
+  // Disk cache
+  const cacheKey = computeKey(opts.sourceCode, opts);
+  const diskCached = getCached(cacheKey);
+  if (diskCached && compareHash(diskCached.hash, hash)) {
+    MEMORY_CACHE.set(hash, diskCached);
+    return diskCached;
+  }
+
+  // Compile via core (sin caché)
+  const core = await compileAssemblyScriptCore(
+    opts.sourceCode,
+    opts.fileName || '',
+    opts.isDev ?? true,
+    opts.runtime || 'incremental',
+    opts.sourceMap !== false,
+    opts.optimizeLevel ?? 3,
+    opts.shrinkLevel,
+  );
+
+  const result: CompileResult = {
+    wasmBytes: core.wasmBytes,
+    dtsContent: core.dtsContent,
+    bindingsJs: core.bindingsJs,
+    sourceMap: core.sourceMap || undefined,
+    dependencies: [],
+    hash: core.hash,
+  };
+
+  MEMORY_CACHE.set(hash, result);
+  saveToCache(cacheKey, result);
+  return result;
 }

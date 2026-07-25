@@ -1,15 +1,12 @@
 import type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './toolchain-strategy.js';
-import { compileWasm, resolveAsc } from '../index.js';
+import { compileAssemblyScriptCore, resolveAsc } from '../index.js';
 import { runExecFile } from './_utils.js';
 
 /**
  * Estrategia de compilación para AssemblyScript (.wasm.ts / .wasm.mjs / .as).
  *
- * Mantiene compatibilidad total con la API compileWasm() original,
- * produciendo el mismo resultado que se obtenía antes del refactor multi-toolchain.
- *
- * AssemblyScript ya no es dependencia npm — se invoca via spawn como C++ y Rust.
- * El usuario debe tener `asc` (assemblyscript CLI) en su PATH.
+ * Invoce `asc` (AssemblyScript CLI) via spawn, como C++ y Rust.
+ * No depende de `compileWasm()` (que es la fachada legacy con caché).
  */
 export class AssemblyScriptToolchainStrategy implements ToolchainStrategy {
   readonly id = 'assemblyscript';
@@ -35,29 +32,29 @@ export class AssemblyScriptToolchainStrategy implements ToolchainStrategy {
   }
 
   /**
-   * Compila un fuente AssemblyScript a WASM usando la API compileWasm() existente.
+   * Compila un fuente AssemblyScript a WASM invocando `asc` directamente.
    */
   async compile(options: ToolchainCompileOptions): Promise<ToolchainResult> {
-    const result = await compileWasm({
-      fileName: options.fileName,
-      sourceCode: options.sourceCode,
-      isDev: !(options.compilerOptions?.release ?? false),
-      runtime: (options.compilerOptions?.runtime as any) ?? 'incremental',
-      sourceMap: options.compilerOptions?.sourceMap ?? true,
-      optimizeLevel: options.compilerOptions?.optimizeLevel ?? 3,
-      shrinkLevel: options.compilerOptions?.shrinkLevel ?? 0,
-    });
+    const core = await compileAssemblyScriptCore(
+      options.sourceCode,
+      options.fileName,
+      !(options.compilerOptions?.release ?? false),
+      (options.compilerOptions?.runtime as any) ?? 'incremental',
+      options.compilerOptions?.sourceMap ?? true,
+      options.compilerOptions?.optimizeLevel ?? 3,
+      options.compilerOptions?.shrinkLevel,
+    );
 
     return {
-      wasmBytes: result.wasmBytes,
+      wasmBytes: core.wasmBytes,
       fileName: options.fileName,
       toolchainId: 'assemblyscript',
       metadata: {
-        hash: result.hash,
-        dependencies: result.dependencies,
-        dtsContent: result.dtsContent,
-        bindingsJs: result.bindingsJs,
-        sourceMap: result.sourceMap,
+        hash: core.hash,
+        dependencies: [],
+        dtsContent: core.dtsContent,
+        bindingsJs: core.bindingsJs,
+        sourceMap: core.sourceMap,
       },
     };
   }
