@@ -57,9 +57,6 @@ actual-stdout.txt
 # Rust build artifacts (cargo target dirs)
 target/
 
-# Graphify knowledge graph
-graphify-out/
-
 # Scratch / notes
 *.todo
 todo.*

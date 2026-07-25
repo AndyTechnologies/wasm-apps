@@ -159,15 +159,6 @@ Configuración del proyecto (generado por `wapp init`):
 }
 ```
 
-## graphify
-
-Este proyecto tiene un grafo de conocimiento en `graphify-out/`. Para preguntas de código:
-
-1. Usar `codegraph_explore` MCP tool cuando esté disponible.
-2. Si no, `graphify query "<pregunta>"`, `graphify path "<A>" "<B>"`, `graphify explain "<concepto>"`.
-3. Después de modificar código: `graphify update .` (solo AST, sin costo de API).
-4. Existe `graphify-out/wiki/index.md` para navegación general.
-
 ## LLM Wiki (`wiki/`)
 
 Wiki persistente de documentación en markdown con cross-references estilo Obsidian (`[[page]]`).
