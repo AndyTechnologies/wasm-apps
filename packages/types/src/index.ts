@@ -1,4 +1,4 @@
-export { logger, colorizeByStatus, formatBytes } from './logger.js';
+export { logger, formatBytes } from './logger.js';
 import type { Logger } from './logger.js';
 export type { Logger };
 
@@ -386,13 +386,6 @@ export class CompilerError extends ToolchainError {
 export class LinkerError extends ToolchainError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'LINKER_ERROR', details);
-  }
-}
-
-/** Error lanzado por el toolchain Zig (sin usar, reservado para uso futuro). */
-export class ZigError extends ToolchainError {
-  constructor(message: string, details?: Record<string, unknown>) {
-    super(message, 'ZIG_ERROR', details);
   }
 }
 

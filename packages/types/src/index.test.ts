@@ -6,7 +6,6 @@ import {
   DownloadError,
   CMakeError,
   ConfigError,
-  ZigError,
   PipelinePhase,
   formatBytes,
   EXTENSION_TO_TOOLCHAIN,
@@ -102,13 +101,6 @@ describe('ConfigError', () => {
   it('crea con código CONFIG_ERROR', () => {
     const err = new ConfigError('config inválida');
     expect(err.code).toBe('CONFIG_ERROR');
-  });
-});
-
-describe('ZigError', () => {
-  it('crea con código ZIG_ERROR', () => {
-    const err = new ZigError('zig falló');
-    expect(err.code).toBe('ZIG_ERROR');
   });
 });
 

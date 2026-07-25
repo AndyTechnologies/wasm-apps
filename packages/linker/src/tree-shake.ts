@@ -239,6 +239,3 @@ export function treeShake(wasmBuffer: Buffer): Buffer {
 
   return reconstructBinary(updatedSections, rawWasm);
 }
-
-/** @deprecated Usa treeShake en su lugar. */
-export const treeShakeWasm = treeShake;

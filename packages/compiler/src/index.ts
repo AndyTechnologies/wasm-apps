@@ -8,7 +8,6 @@ import type { CompileOptions, CompileResult } from '@wasm-apps/types';
 import { CompilerError } from '@wasm-apps/types';
 
 export { getCompileCacheInfo, clearCompileCache, deleteCacheEntry, computeToolchainKey } from './disk-cache.js';
-export { CompilerCacheRepository } from './compiler-cache-repository.js';
 export { AssemblyScriptCompilerStrategy } from './assemblyscript-compiler-strategy.js';
 export { AssemblyScriptToolchainStrategy } from './strategies/assemblyscript-strategy.js';
 export { CppCompilerStrategy } from './strategies/cpp-strategy.js';

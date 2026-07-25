@@ -21,7 +21,6 @@ export { treeShake } from './tree-shake.js';
 export { pipeline, Pipeline } from './pipeline.js';
 export { loadPlugins } from './plugin-loader.js';
 export { PipelinePhase } from '@wasm-apps/types';
-export { treeShakeWasm } from './tree-shake.js';
 export { LinkerManifestRepository } from './linker-manifest-repository.js';
 export { DownloadCacheRepository } from './download-cache-repository.js';
 export { WasmtimeLinkerStrategy } from './wasmtime-linker-strategy.js';

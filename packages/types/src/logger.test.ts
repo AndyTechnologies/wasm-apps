@@ -1,19 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { colorizeByStatus, formatBytes } from './logger.js';
-
-describe('colorizeByStatus', () => {
-  it('returns success message', () => {
-    const result = colorizeByStatus(true, 'OK', 'FAIL');
-    expect(result).toContain('OK');
-    expect(result).not.toContain('FAIL');
-  });
-
-  it('returns failure message on fail', () => {
-    const result = colorizeByStatus(false, 'OK', 'FAIL');
-    expect(result).toContain('FAIL');
-    expect(result).not.toContain('OK');
-  });
-});
+import { formatBytes } from './logger.js';
 
 describe('formatBytes', () => {
   it('returns 0 B for zero', () => {

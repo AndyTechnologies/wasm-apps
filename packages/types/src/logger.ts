@@ -36,11 +36,6 @@ export const logger: Logger = {
   },
 };
 
-/** Retorna un string coloreado según un estado booleano. */
-export function colorizeByStatus(success: boolean, okMsg: string, failMsg: string): string {
-  return success ? pc.green(okMsg) : pc.red(failMsg);
-}
-
 /** Formatea un contador de bytes a un string legible (ej. "1.5 KB"). */
 export function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B';
