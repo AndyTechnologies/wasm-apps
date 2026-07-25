@@ -19,7 +19,7 @@ const CMAKE_JS_BIN = require.resolve('cmake-js/bin/cmake-js');
  * @param outputPath - Ruta absoluta donde se ubicará el binario
  * @param options - Opciones (target, wasmtimePath, etc.)
  */
-export async function compileCpp(cppSource: string, outputPath: string, options: NativeAppOptions, verbose = false): Promise<void> {
+export async function compileCpp(cppSource: string, outputPath: string, options: NativeAppOptions, verbose = false, extraLibs?: ExtraLib[]): Promise<void> {
   const TARGET_RE = /^[a-zA-Z0-9_-]+$/;
   if (options.target && !TARGET_RE.test(options.target)) {
     throw new ConfigError(`Invalid target "${options.target}" — only alphanumeric, underscores, and hyphens allowed`);
@@ -33,7 +33,7 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
     const cppFile = path.join(srcDir, 'main.cpp');
     await fs.promises.writeFile(cppFile, cppSource);
 
-    const cmakeContent = generateCMakeLists(options.wasmtimePath);
+    const cmakeContent = extraLibs ? generateCMakeListsWithExtras(options.wasmtimePath, extraLibs) : generateCMakeLists(options.wasmtimePath);
     await fs.promises.writeFile(path.join(buildDir, 'CMakeLists.txt'), cmakeContent);
 
     logger.detail('Compilando enlace nativo...');
@@ -92,6 +92,14 @@ function escapeCMakeString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$\{/g, '\\${');
 }
 
+export interface ExtraLib {
+  name: string;
+  includeDir: string;
+  libDir: string;
+  libs: string[];
+  frameworks?: string[];
+}
+
 /** Genera un CMakeLists.txt para el proyecto wasm-linker. */
 function generateCMakeLists(wasmtimePath?: string): string {
   return `cmake_minimum_required(VERSION 3.10)
@@ -109,6 +117,57 @@ add_executable(wasm-linker src/main.cpp)
 
 ${wasmtimePath ? 'target_link_libraries(wasm-linker wasmtime)' : 'target_link_libraries(wasm-linker wasmtime::wasmtime)'}
 `;
+}
+
+/**
+ * Genera un CMakeLists.txt con soporte para librerías extra (SDL3, RmlUI, GLAD, etc.).
+ *
+ * @param wasmtimePath - Ruta opcional a Wasmtime C-API
+ * @param extraLibs - Lista opcional de librerías extra con sus directorios de include/lib
+ */
+export function generateCMakeListsWithExtras(wasmtimePath?: string, extraLibs?: ExtraLib[]): string {
+  let cmake = `cmake_minimum_required(VERSION 3.10)
+project(wasm-linker LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+${wasmtimePath ? `set(WASMTIME_DIR "${escapeCMakeString(wasmtimePath)}")` : 'find_package(wasmtime REQUIRED)'}
+
+include_directories("${wasmtimePath ? '${WASMTIME_DIR}/include' : ''}")
+link_directories("${wasmtimePath ? '${WASMTIME_DIR}/lib' : ''}")
+`;
+
+  if (extraLibs && extraLibs.length > 0) {
+    for (const lib of extraLibs) {
+      cmake += `include_directories("${escapeCMakeString(lib.includeDir)}")\n`;
+      cmake += `link_directories("${escapeCMakeString(lib.libDir)}")\n`;
+    }
+  }
+
+  cmake += `\nadd_executable(wasm-linker src/main.cpp)\n\n`;
+
+  let linkLibs = wasmtimePath ? 'wasmtime' : 'wasmtime::wasmtime';
+  if (extraLibs && extraLibs.length > 0) {
+    for (const lib of extraLibs) {
+      for (const l of lib.libs) {
+        linkLibs += ` ${l}`;
+      }
+    }
+  }
+  cmake += `target_link_libraries(wasm-linker ${linkLibs})\n`;
+
+  if (extraLibs) {
+    for (const lib of extraLibs) {
+      if (lib.frameworks && lib.frameworks.length > 0) {
+        for (const fw of lib.frameworks) {
+          cmake += `target_link_libraries(wasm-linker "-framework ${fw}")\n`;
+        }
+      }
+    }
+  }
+
+  return cmake;
 }
 
 /** Encuentra el binario compilado en el directorio de salida de cmake-js. */
