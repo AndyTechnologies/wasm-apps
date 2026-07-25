@@ -1,0 +1,63 @@
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        if (event.type == SDL_EVENT_QUIT) { running = false; break; }
+
+        switch (event.type) {
+            case SDL_EVENT_MOUSE_MOTION:
+                rml_context->ProcessMouseMove(
+                    static_cast<int>(event.motion.x),
+                    static_cast<int>(event.motion.y),
+                    0
+                );
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                rml_context->ProcessMouseButtonDown(
+                    static_cast<int>(event.button.button),
+                    0
+                );
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                rml_context->ProcessMouseButtonUp(
+                    static_cast<int>(event.button.button),
+                    0
+                );
+                break;
+            case SDL_EVENT_MOUSE_WHEEL:
+                rml_context->ProcessMouseWheel(
+                    Rml::Vector2f(
+                        static_cast<float>(event.wheel.x),
+                        static_cast<float>(event.wheel.y)
+                    ),
+                    0
+                );
+                break;
+            case SDL_EVENT_KEY_DOWN:
+                rml_context->ProcessKeyDown(
+                    RmlSDL_SystemInterface_SDL::ConvertKey(event.key.keysym.sym),
+                    0
+                );
+                break;
+            case SDL_EVENT_KEY_UP:
+                rml_context->ProcessKeyUp(
+                    RmlSDL_SystemInterface_SDL::ConvertKey(event.key.keysym.sym),
+                    0
+                );
+                break;
+            case SDL_EVENT_TEXT_INPUT:
+                rml_context->ProcessTextInput(
+                    reinterpret_cast<const Rml::String&>(event.text.text)
+                );
+                break;
+            case SDL_EVENT_WINDOW_RESIZED:
+                rml_context->SetDimensions(
+                    Rml::Vector2i(
+                        static_cast<int>(event.window.data1),
+                        static_cast<int>(event.window.data2)
+                    )
+                );
+                break;
+            default:
+                break;
+        }
+    }
+    rml_context->Update();
