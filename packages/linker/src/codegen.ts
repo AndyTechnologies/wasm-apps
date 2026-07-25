@@ -1,5 +1,6 @@
 import os from 'node:os';
 import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo } from '@wasm-apps/types';
+import { LinkerError } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { renderTemplate } from './template-renderer.js';
 import type { NunjucksTemplateContext, TemplateModuleEntry, TemplateHostFunctionEntry, TemplateGlobalEntry, TemplateExportEntry } from './template-context.js';
@@ -67,7 +68,7 @@ function formatHexBytes(bytes: Buffer): string {
     }
     parts.push('    ' + byteParts.join(','));
   }
-  return parts.join(',\n');
+  return parts.join(',' + os.EOL);
 }
 
 function buildModuleBuffers(modules: ResolvedLink['order']): ModuleBuffer[] {
@@ -225,14 +226,14 @@ export function findEntryModule(link: ResolvedLink, entryPoint: string): string 
     const found = mod.module.exports.some((e) => e.name === entryPoint && e.kind === 'function');
     if (found) return `instance${mod.index}`;
   }
-  throw new Error(`No se encontro la funcion de entrada '${entryPoint}' en ningun modulo.`);
+  throw new LinkerError(`No se encontro la funcion de entrada '${entryPoint}' en ningun modulo.`);
 }
 
 export function validateEntryExport(link: ResolvedLink, entryPoint: string): void {
   for (const mod of link.order) {
     if (mod.module.exports.some((e) => e.name === entryPoint)) return;
   }
-  throw new Error(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
+  throw new LinkerError(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
 }
 
 export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string {

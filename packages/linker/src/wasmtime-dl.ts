@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import { LinkerError } from '@wasm-apps/types';
 
 export { downloadFile } from './downloader.js';
 export { extractArchive } from './extract.js';
@@ -16,7 +17,7 @@ function getWasmtimeTarget(platform: string, arch: string): string {
   if (platform === 'darwin' && arch === 'arm64') return 'aarch64-macos';
   if (platform === 'win32' && arch === 'x64') return 'x86_64-windows';
   if (platform === 'win32' && arch === 'arm64') return 'aarch64-windows';
-  throw new Error(`Unsupported platform: ${platform}-${arch}`);
+  throw new LinkerError(`Unsupported platform: ${platform}-${arch}`);
 }
 
 /**

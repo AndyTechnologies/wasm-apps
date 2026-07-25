@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './strategies/toolchain-strategy.js';
 import { UnsupportedExtensionError } from './errors.js';
 import { logger } from '@wasm-apps/types';
@@ -75,7 +76,7 @@ export class ToolchainRouter {
    *   'script.as' → '.as'
    */
   getExtension(filePath: string): string {
-    const basename = filePath.split('/').pop()?.split('\\').pop() ?? filePath;
+    const basename = path.basename(filePath);
     const wasmIndex = basename.lastIndexOf('.wasm');
     if (wasmIndex !== -1) {
       const suffix = basename.slice(wasmIndex);

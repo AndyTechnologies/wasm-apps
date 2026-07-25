@@ -22,7 +22,7 @@ export function hashString(input: string): string {
  * Si no encuentra alias, resuelve relativo al archivo fuente.
  */
 export function resolveImportPath(importPath: string, sourceFile: string, aliases: ResolvedAlias[]): string {
-  if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
+  if (!importPath.startsWith('.') && !path.isAbsolute(importPath)) {
     for (const alias of aliases) {
       const find = typeof alias.find === 'string' ? alias.find : alias.find.source;
       if (importPath.startsWith(find)) {
