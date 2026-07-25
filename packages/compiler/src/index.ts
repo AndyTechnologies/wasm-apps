@@ -96,38 +96,71 @@ export async function compileWasm(
   const target = opts.isDev ? 'debug' : 'release';
   const configOptions = mergeAsConfig({}, target);
 
+  // Build asc args
+  const baseArgs: string[] = [];
+
+  if (opts.isDev) {
+    baseArgs.push('--debug');
+    if (opts.sourceMap !== false) {
+      baseArgs.push('--sourceMap');
+    }
+  } else {
+    baseArgs.push('--optimize');
+    if (opts.optimizeLevel !== undefined) {
+      baseArgs.push('--optimizeLevel', opts.optimizeLevel.toString());
+    }
+    if (opts.shrinkLevel !== undefined) {
+      baseArgs.push('--shrinkLevel', opts.shrinkLevel.toString());
+    }
+    baseArgs.push('--noAssert');
+  }
+
+  baseArgs.push('--runtime', opts.runtime || 'incremental', '--exportRuntime', '--bindings', 'raw');
+
+  for (const [key, value] of Object.entries({ ...configOptions })) {
+    if (typeof value === 'boolean') {
+      if (value) baseArgs.push(`--${key}`);
+    } else {
+      baseArgs.push(`--${key}`, value.toString());
+    }
+  }
+
+  // Determine input and output paths.
+  // When fileName points to a real file on disk, compile from the original path
+  // so asc can resolve relative imports (e.g. `./math`). When it's a virtual path
+  // (unit tests), write source to a temp dir.
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asc-compile-'));
-  const srcFile = path.join(tmpDir, 'source.ts');
   const outFile = path.join(tmpDir, 'output.wasm');
+  let srcFile: string;
+  let cleanupTmpDir = true;
 
   try {
-    fs.writeFileSync(srcFile, opts.sourceCode, 'utf-8');
-
-    const baseArgs: string[] = [srcFile, '--runtime', opts.runtime || 'incremental', '--exportRuntime', '--bindings', 'raw', '--outFile', outFile];
-
-    if (opts.isDev) {
-      baseArgs.push('--debug');
-      if (opts.sourceMap !== false) {
-        baseArgs.push('--sourceMap');
+    const resolvedFileName = opts.fileName ? path.resolve(opts.fileName) : '';
+    if (resolvedFileName && fs.existsSync(resolvedFileName) && fs.statSync(resolvedFileName).isFile()) {
+      // File exists on disk — compile from there for correct import resolution
+      srcFile = resolvedFileName;
+      // Verify sourceCode matches disk content (should always be true in production flow)
+      const diskContent = fs.readFileSync(srcFile, 'utf-8');
+      if (diskContent !== opts.sourceCode) {
+        // Source was transformed — write alongside project structure in temp dir
+        const relativePath = path.relative(PROJECT_ROOT, resolvedFileName);
+        srcFile = path.join(tmpDir, relativePath);
+        fs.mkdirSync(path.dirname(srcFile), { recursive: true });
+        fs.writeFileSync(srcFile, opts.sourceCode, 'utf-8');
+        cleanupTmpDir = true;
+      } else {
+        // Source matches disk — don't clean up the temp dir since we're not using it for src
+        cleanupTmpDir = false;
+        // But we still need the outFile to go to tmpDir
       }
     } else {
-      baseArgs.push('--optimize');
-      if (opts.optimizeLevel !== undefined) {
-        baseArgs.push('--optimizeLevel', opts.optimizeLevel.toString());
-      }
-      if (opts.shrinkLevel !== undefined) {
-        baseArgs.push('--shrinkLevel', opts.shrinkLevel.toString());
-      }
-      baseArgs.push('--noAssert');
+      // Virtual file (unit tests, or non-existent path) — write to temp dir
+      srcFile = path.join(tmpDir, 'source.ts');
+      fs.writeFileSync(srcFile, opts.sourceCode, 'utf-8');
     }
 
-    for (const [key, value] of Object.entries({ ...configOptions })) {
-      if (typeof value === 'boolean') {
-        if (value) baseArgs.push(`--${key}`);
-      } else {
-        baseArgs.push(`--${key}`, value.toString());
-      }
-    }
+    baseArgs.unshift('--outFile', outFile);
+    baseArgs.unshift(srcFile);
 
     const ascCmd = resolveAsc();
     const { stderr } = await runExecFile(ascCmd, baseArgs);
@@ -192,7 +225,7 @@ export async function compileWasm(
       stderr: err.stderr || err.message,
     });
   } finally {
-    if (fs.existsSync(tmpDir)) {
+    if (cleanupTmpDir && fs.existsSync(tmpDir)) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   }
