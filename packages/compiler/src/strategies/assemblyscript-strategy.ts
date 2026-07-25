@@ -1,5 +1,5 @@
 import type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './toolchain-strategy.js';
-import { compileWasm } from '../index.js';
+import { compileWasm, resolveAsc } from '../index.js';
 import { runExecFile } from './_utils.js';
 
 /**
@@ -17,15 +17,16 @@ export class AssemblyScriptToolchainStrategy implements ToolchainStrategy {
 
   /**
    * Verifica si AssemblyScript está disponible en el sistema.
-   * Primero busca `asc` en PATH, luego intenta via npx.
+   * Busca `asc` en node_modules/.bin/asc, PATH global, o via npx.
    */
   async isAvailable(): Promise<boolean> {
+    const cmd = resolveAsc();
     try {
-      await runExecFile('which', ['asc'], { timeout: 5000 });
+      await runExecFile(cmd, ['--version'], { timeout: 10000 });
       return true;
     } catch {
       try {
-        await runExecFile('npx', ['asc', '--version'], { timeout: 10000 });
+        await runExecFile('npx', ['--yes', 'asc', '--version'], { timeout: 15000 });
         return true;
       } catch {
         return false;

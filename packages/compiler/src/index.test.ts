@@ -115,7 +115,7 @@ describe('compileWasm', () => {
 
     expect(vi.mocked(runExecFile)).toHaveBeenCalled();
     const [cmd, args] = vi.mocked(runExecFile).mock.calls[0];
-    expect(cmd).toBe('asc');
+    expect(cmd).toMatch(/node_modules[\\/]\.bin[\\/]asc$|^asc$/);
     expect(args).toContain('--debug');
     expect(args).toContain('--sourceMap');
   });
@@ -130,7 +130,7 @@ describe('compileWasm', () => {
     }).catch(() => {});
 
     const [cmd, args] = vi.mocked(runExecFile).mock.calls[0];
-    expect(cmd).toBe('asc');
+    expect(cmd).toMatch(/node_modules[\\/]\.bin[\\/]asc$|^asc$/);
     expect(args).toContain('--optimize');
     expect(args).toContain('--optimizeLevel');
     expect(args).toContain('2');

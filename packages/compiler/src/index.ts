@@ -34,6 +34,27 @@ function isPathInsideProject(filePath: string): boolean {
 }
 
 /**
+ * Resuelve el comando `asc` para compilar AssemblyScript.
+ * Busca en:
+ *   1. `node_modules/.bin/asc` desde PROJECT_ROOT hacia arriba (local pnpm/npm)
+ *   2. `asc` directo (PATH global o fallback)
+ * @returns La ruta/commando a ejecutar.
+ */
+export function resolveAsc(): string {
+  // Buscar en node_modules/.bin/asc subiendo desde PROJECT_ROOT
+  let dir = PROJECT_ROOT;
+  while (true) {
+    const candidate = path.join(dir, 'node_modules', '.bin', 'asc');
+    if (fs.existsSync(candidate)) return candidate;
+    if (process.platform === 'win32' && fs.existsSync(candidate + '.cmd')) return candidate + '.cmd';
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return 'asc'; // fallback — será resuelto via PATH
+}
+
+/**
  * Compila un archivo AssemblyScript a WASM usando la API original.
  *
  * @deprecated Since multi-toolchain refactor. Use `ToolchainRouter` with
@@ -108,7 +129,8 @@ export async function compileWasm(
       }
     }
 
-    const { stderr } = await runExecFile('asc', baseArgs);
+    const ascCmd = resolveAsc();
+    const { stderr } = await runExecFile(ascCmd, baseArgs);
 
     const stderrStr = stderr?.toString() || '';
 
