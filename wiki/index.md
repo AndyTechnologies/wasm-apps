@@ -4,24 +4,24 @@ Toolchain que compila AssemblyScript (`.wasm.ts`) a WebAssembly y lo enlaza en e
 
 ## Entidades
 
-| Página                                | Descripción                                        |
-| ------------------------------------- | -------------------------------------------------- |
-| [[overview\|Overview]]                | Síntesis del proyecto                              |
-| [[entities/compiler\|Compilador]]     | Compila AS → WASM via `assemblyscript/asc`         |
-| [[entities/linker\|Linker]]           | Enlaza WASM → ejecutable nativo con Wasmtime C-API |
-| [[entities/cli\|CLI (wapp)]]          | Orquestador unificado del pipeline                 |
-| [[entities/types\|Tipos Compartidos]] | Interfaces, errores, logger compartidos            |
+| Página                                | Descripción                                                   |
+| ------------------------------------- | ------------------------------------------------------------- |
+| [[overview\|Overview]]                | Síntesis del proyecto                                         |
+| [[entities/compiler\|Compilador]]     | ToolchainRouter multi-lenguaje (AS, C++, Rust, Precompilado)  |
+| [[entities/linker\|Linker]]           | Enlaza WASM → ejecutable nativo con Wasmtime C-API + Nunjucks |
+| [[entities/cli\|CLI (wapp)]]          | Orquestador unificado del pipeline                            |
+| [[entities/types\|Tipos Compartidos]] | Interfaces, errores, logger compartidos                       |
 
 ## Conceptos
 
-| Página                                                       | Descripción                                     |
-| ------------------------------------------------------------ | ----------------------------------------------- |
-| [[concepts/pipeline\|Pipeline]]                              | Arquitectura de tuberías (Stage<I,O>)           |
-| [[concepts/caching\|Caché Incremental]]                      | Tres capas de caché (compiler, build, download) |
-| [[concepts/plugin-system\|Sistema de Plugins]]               | Microkernel/Plugin via PluginManager            |
-| [[concepts/cross-compilation\|Compilación Cruzada]]          | Targets multi-plataforma                        |
-| [[concepts/host-functions\|Host Functions]]                  | stdlib nativa en C++                            |
-| [[concepts/architecture-patterns\|Patrones Arquitectónicos]] | 6 patrones formales                             |
+| Página                                                       | Descripción                                       |
+| ------------------------------------------------------------ | ------------------------------------------------- |
+| [[concepts/pipeline\|Pipeline]]                              | Arquitectura de tuberías (Stage<I,O>)             |
+| [[concepts/caching\|Caché Incremental]]                      | Tres capas de caché (compiler, build, download)   |
+| [[concepts/plugin-system\|Sistema de Plugins]]               | Microkernel/Plugin via PluginManager              |
+| [[concepts/cross-compilation\|Compilación Cruzada]]          | Targets multi-plataforma                          |
+| [[concepts/host-functions\|Host Functions]]                  | stdlib nativa en C++                              |
+| [[concepts/architecture-patterns\|Patrones Arquitectónicos]] | 8 patrones formales (Microkernel, Pipeline, etc.) |
 
 ## Fuentes (raw)
 

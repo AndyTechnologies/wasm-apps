@@ -1,27 +1,29 @@
 # Overview
 
-wasm-apps es una toolchain que transforma código AssemblyScript (`.wasm.ts`) en **ejecutables nativos autocontenidos** para Linux, macOS y Windows.
+wasm-apps es una toolchain que transforma código **AssemblyScript**, **C++** y **Rust** en **ejecutables nativos autocontenidos** para Linux, macOS y Windows.
 
 ## Pipeline
 
 ```
-.wasm.ts ──[compiler]──> .wasm ──[linker]──> binario nativo (ELF/PE/Mach-O)
+.wasm.ts|.wasm.cpp|.wasm.rs|.wasm ──[ToolchainRouter]──> .wasm ──[linker]──> binario nativo (ELF/PE/Mach-O)
 ```
 
-El pipeline sigue el patrón [[concepts/pipeline|Pipeline Architecture]] y usa [[concepts/caching|Caché Incremental]] en 3 capas para evitar trabajo repetido.
+El pipeline usa un **ToolchainRouter** (Microkernel + Strategy) para enrutar cada archivo fuente a su toolchain, y el linker genera C++ con **templates Nunjucks** + cmake-js + Wasmtime C-API. Usa [[concepts/caching|Caché Incremental]] en 3 capas.
 
 ## Componentes
 
-1. **Compiler** (`@wasm-apps/compiler`) — usa `assemblyscript/asc` como librería para compilar `.wasm.ts` a WebAssembly binario. Caché en dos niveles (LRU en memoria + disco).
-2. **Linker** (`@wasm-apps/linker`) — lee módulos `.wasm`, resuelve dependencias, genera C++ con Wasmtime C-API, compila con cmake-js. Soporta plugins, compilación cruzada, tree-shaking.
+1. **Compiler** (`@wasm-apps/compiler`) — ToolchainRouter con 4 estrategias: AssemblyScript (asc), C++ (clang++/CMake), Rust (cargo), Precompilado (magic bytes). Caché en dos niveles con clave extendida por toolchainId.
+2. **Linker** (`@wasm-apps/linker`) — lee módulos `.wasm`, resuelve dependencias, genera C++ con Nunjucks templates, compila con cmake-js. Soporta plugins, compilación cruzada, templates personalizados.
 3. **CLI** (`@wasm-apps/cli`) — orquestador `wapp` que coordina el pipeline completo con configuración via `wapp.json`. Ver [[entities/compiler|Compiler]], [[entities/linker|Linker]], [[entities/cli|CLI]], [[entities/types|Tipos Compartidos]].
 
 ## Diferenciadores
 
+- **Multi-lenguaje**: AssemblyScript, C++, Rust en un mismo pipeline
 - **Binarios autocontenidos**: sin dependencias de runtime WASM en despliegue
-- **Caché incremental**: tres capas (descargas, compilación, build)
+- **Caché incremental**: tres capas (descargas, compilación, build) con toolchain-aware keys
 - **Multiplataforma**: Linux, macOS, Windows con compilación cruzada
-- **Extensible**: 6 patrones arquitectónicos formales — ver [[concepts/architecture-patterns|Patrones Arquitectónicos]]
+- **Templates personalizables**: el código C++ generado se puede adaptar con templates Nunjucks propios
+- **Extensible**: 7 patrones arquitectónicos formales — ver [[concepts/architecture-patterns|Patrones Arquitectónicos]]
 
 ## Repositorio
 

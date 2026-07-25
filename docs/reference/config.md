@@ -17,7 +17,15 @@
     "runtime": "incremental",
     "optimizeLevel": 3,
     "shrinkLevel": 2,
-    "sourceMap": true
+    "sourceMap": true,
+    "toolchains": {
+      "assemblyscript": { "runtime": "minimal" },
+      "cpp": { "optimizeLevel": 2 },
+      "rust": { "release": true }
+    }
+  },
+  "linker": {
+    "templatePath": "./custom-templates"
   }
 }
 ```
@@ -28,13 +36,13 @@
 
 _string, por defecto: `"src"`_
 
-Directorio donde se buscan archivos `.wasm.ts`. Se escanea recursivamente.
+Directorio donde se buscan archivos fuente. Se escanea recursivamente para todas las extensiones soportadas: `.wasm.ts`, `.wasm.mjs`, `.as`, `.wasm.cpp`, `.wasm.cxx`, `.wasm.cc`, `.wasm.rs`, `.wasm`.
 
 ### outDir
 
 _string, por defecto: `"wasm-out"`_
 
-Directorio donde se escriben los archivos `.wasm` intermedios.
+Directorio donde se escriben los archivos `.wasm` intermedios con nombres `{base}.{toolchainId}.wasm`.
 
 ### output
 
@@ -59,7 +67,7 @@ _string, por defecto: `"file-name"`_
 
 _boolean, por defecto: `false`_
 
-Cuando es `true`, enlaza con la interfaz WASI en lugar de imports `env` directos.
+Cuando es `true`, enlaza con la interfaz WASI en lugar de imports `env` directos. **Requerido** para toolchains C++ y Rust que usen llamadas estándar (`printf`, `println!`, etc.).
 
 ### target
 
@@ -79,19 +87,19 @@ _array de objetos, opcional_
 
 Lista de destinos para compilación cruzada. Cada entrada define:
 
-| Campo    | Tipo    | Descripción                                   |
-| -------- | ------- | --------------------------------------------- |
-| `name`   | string  | Nombre identificador del destino              |
-| `triple` | string  | Tripleta de destino (ej. `aarch64-linux-gnu`) |
-| `output` | string  | Nombre del ejecutable de salida (opcional)    |
-| `entry`  | string  | Punto de entrada (opcional, hereda del raíz)  |
-| `wasi`   | boolean | Usar WASI en este destino (opcional)          |
+| Campo    | Tipo    | Descripción                      |
+| -------- | ------- | -------------------------------- |
+| `name`   | string  | Nombre identificador del destino |
+| `triple` | string  | Tripleta de destino              |
+| `output` | string  | Nombre del ejecutable (opcional) |
+| `entry`  | string  | Punto de entrada (opcional)      |
+| `wasi`   | boolean | Usar WASI (opcional)             |
 
 ### zigPath
 
 _string, opcional_
 
-Ruta al compilador Zig, usado como toolchain cross-compilador. Si no se especifica, se busca `zig` en el PATH.
+Ruta al compilador Zig, usado como toolchain cross-compilador.
 
 ### optimization
 
@@ -99,31 +107,57 @@ _object, opcional_
 
 Configuración de optimización del binario generado:
 
-| Campo   | Tipo   | Por defecto | Descripción                                                                  |
-| ------- | ------ | ----------- | ---------------------------------------------------------------------------- |
-| `level` | string | `"z"`       | Nivel de optimización: `z` (tamaño), `s` (menor tamaño), `0`-`3` (velocidad) |
+| Campo   | Tipo   | Por defecto | Descripción                                   |
+| ------- | ------ | ----------- | --------------------------------------------- |
+| `level` | string | `"z"`       | Nivel: `z` (tamaño), `s`, `0`-`3` (velocidad) |
 
 ### plugins
 
 _array de objetos, opcional_
 
-Lista de plugins del pipeline WASM. Cada entrada define:
-
-| Campo     | Tipo    | Descripción                                    |
-| --------- | ------- | ---------------------------------------------- |
-| `id`      | string  | Identificador único del plugin                 |
-| `enabled` | boolean | Si el plugin está activo                       |
-| `path`    | string  | Ruta al módulo del plugin (opcional)           |
-| `config`  | object  | Configuración específica del plugin (opcional) |
+Lista de plugins del pipeline. Ver `docs/USER_PLUGINS.md`.
 
 ### compiler
 
 _object_
 
-| Campo           | Tipo    | Por defecto     | Descripción                                             |
-| --------------- | ------- | --------------- | ------------------------------------------------------- |
-| `release`       | boolean | `false`         | Modo release (optimizado, sin sourcemaps)               |
-| `runtime`       | string  | `"incremental"` | Runtime de AS: `incremental`, `minimal`, `stub`, `full` |
-| `optimizeLevel` | number  | `3`             | Nivel de optimización 0-3                               |
-| `shrinkLevel`   | number  | `2`             | Nivel de reducción 0-2                                  |
-| `sourceMap`     | boolean | `true`          | Generar sourcemaps (deshabilitado en release)           |
+| Campo           | Tipo    | Por defecto     | Descripción                                   |
+| --------------- | ------- | --------------- | --------------------------------------------- |
+| `release`       | boolean | `false`         | Modo release (optimizado, sin sourcemaps)     |
+| `runtime`       | string  | `"incremental"` | Runtime de AS (solo AssemblyScript)           |
+| `optimizeLevel` | number  | `3`             | Nivel de optimización 0-3                     |
+| `shrinkLevel`   | number  | `2`             | Nivel de reducción 0-2                        |
+| `sourceMap`     | boolean | `true`          | Generar sourcemaps (deshabilitado en release) |
+
+#### compiler.toolchains
+
+_object, opcional_
+
+Overrides de configuración por toolchain. Cada clave (`assemblyscript`, `cpp`, `rust`, `precompiled`) acepta los mismos campos que `compiler`. Los valores se combinan con los globales:
+
+```json
+{
+  "compiler": {
+    "release": true,
+    "optimizeLevel": 3,
+    "toolchains": {
+      "cpp": { "optimizeLevel": 2 },
+      "rust": { "release": false }
+    }
+  }
+}
+```
+
+En este ejemplo:
+
+- AssemblyScript recibe `release: true, optimizeLevel: 3`
+- C++ recibe `release: true, optimizeLevel: 2` (override parcial)
+- Rust recibe `release: false, optimizeLevel: 3` (override parcial)
+
+### linker
+
+_object, opcional_
+
+| Campo          | Tipo   | Por defecto | Descripción                                             |
+| -------------- | ------ | ----------- | ------------------------------------------------------- |
+| `templatePath` | string | —           | Ruta a directorio con templates Nunjucks personalizados |

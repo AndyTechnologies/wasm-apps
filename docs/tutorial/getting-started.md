@@ -2,6 +2,8 @@
 
 En este tutorial escribirás un módulo AssemblyScript y lo compilarás en un ejecutable nativo autocontenido. No necesitas experiencia previa en WebAssembly.
 
+> **¿Preferís C++ o Rust?** wasm-apps también soporta [C++](../how-to/cross-compile.md) (`.wasm.cpp`) y [Rust](../reference/cli.md#wapp-orquestador) (`.wasm.rs`).
+
 ## Prerrequisitos
 
 - Node.js ≥ 22
@@ -28,22 +30,7 @@ cd mi-primera-app-wasm
 wapp init
 ```
 
-Esto crea un `wapp.json` con valores por defecto:
-
-```json
-{
-  "sourceDir": "src",
-  "outDir": "wasm-out",
-  "entry": "_start",
-  "moduleMatching": "file-name",
-  "compiler": {
-    "release": false,
-    "runtime": "incremental",
-    "optimizeLevel": 3,
-    "sourceMap": true
-  }
-}
-```
+Esto crea un `wapp.json` con valores por defecto.
 
 ## Paso 3 — Escribe algo de AssemblyScript
 
@@ -81,8 +68,9 @@ wapp build
 
 Qué sucede:
 
-1. El compilador encuentra `src/hello.wasm.ts` y lo compila a `wasm-out/hello.wasm`
-2. El linker lee el `.wasm`, genera funciones host en C++ y compila todo en un binario autocontenido
+1. El `ToolchainRouter` detecta `src/hello.wasm.ts` y lo enruta a la estrategia AssemblyScript
+2. El compilador (asc) produce `wasm-out/hello.wasm`
+3. El linker renderiza templates Nunjucks para generar C++, lo compila con cmake-js y produce un binario autocontenido
 
 ## Paso 6 — Ejecútalo
 
@@ -108,6 +96,7 @@ factorial(10) = 3628800
 
 ## Siguientes pasos
 
-- Aprende a [configurar tu proyecto](../how-to/configure-project.md)
-- Añade soporte WASI con `wapp build --wasi`
-- Compilación cruzada para otro destino: `wapp build --target aarch64-linux-gnu`
+- [Configurar tu proyecto](../how-to/configure-project.md) con toolchains específicos
+- Probar [C++](../how-to/cross-compile.md) con `wasi: true`
+- Compilación cruzada: `wapp build --target aarch64-linux-gnu`
+- Ver la [referencia completa del CLI](../reference/cli.md)

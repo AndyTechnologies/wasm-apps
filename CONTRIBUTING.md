@@ -5,7 +5,9 @@
 - Node.js >= 22
 - pnpm
 - CMake + Ninja (o Make)
-- Toolchain C++ (GCC, Clang, MSVC, o Zig)
+- Toolchain C++ (GCC, Clang, MSVC o Zig)
+- (opcional) Rust toolchain para tests de integración Rust
+- (opcional) clang++ para tests de integración C++
 
 ## Setup inicial
 
@@ -21,18 +23,16 @@ pnpm run linker setup
 
 ### Comandos disponibles
 
-| Comando                   | Descripción                           |
-| ------------------------- | ------------------------------------- |
-| `pnpm -r build`           | Compila todos los paquetes TypeScript |
-| `pnpm lint`               | Ejecuta ESLint + Prettier             |
-| `pnpm lint:fix`           | Corrige errores de linter y formato   |
-| `pnpm format`             | Formatea el código con Prettier       |
-| `pnpm test:unit`          | Ejecuta tests unitarios con Vitest    |
-| `pnpm test:integration`   | Ejecuta tests de integración          |
-| `pnpm check`              | Lint + typecheck + tests unitarios    |
-| `pnpm run cli build`      | Build completo del orquestador        |
-| `pnpm run compiler build` | Solo compilar AS a WASM               |
-| `pnpm run linker build`   | Solo linkear WASM a binario nativo    |
+| Comando                     | Descripción                                             |
+| --------------------------- | ------------------------------------------------------- |
+| `pnpm -r build`             | Compila todos los paquetes TypeScript                   |
+| `pnpm check`                | Prettier + build + vitest run                           |
+| `pnpm lint` / `pnpm format` | Prettier check / write                                  |
+| `pnpm test:unit`            | Tests unitarios (vitest)                                |
+| `pnpm test:integration`     | Build + ejecuta binarios de `examples/` multi-toolchain |
+| `pnpm run cli build`        | Build completo vía orquestador                          |
+| `pnpm run compiler build`   | Solo compilar fuentes a WASM                            |
+| `pnpm run linker build`     | Solo linkear WASM a binario nativo                      |
 
 ### Estructura del proyecto
 
@@ -41,9 +41,11 @@ wasm-apps/
 ├── packages/
 │   ├── types/          Tipos compartidos, logger, errores
 │   ├── cli/            Orquestador CLI (wapp)
-│   ├── compiler/       Compilador AS → WASM
-│   └── linker/         Linker WASM → ejecutable nativo
-├── examples/           Ejemplos .wasm.ts
+│   ├── compiler/       Compilador multi-toolchain (ToolchainRouter + strategies)
+│   │   └── src/strategies/  AssemblyScript, C++, Rust, Precompilado
+│   └── linker/         Linker WASM → ejecutable nativo (Nunjucks + Wasmtime)
+├── examples/           Ejemplos multi-lenguaje (.wasm.ts, .wasm.cpp, .wasm.rs)
+├── skills/             AI agent skills (ver AGENTS.md)
 ├── docs/               Documentación (formato Diátaxis)
 └── scripts/            Scripts auxiliares
 ```
@@ -58,6 +60,8 @@ Ver [AGENTS.md](./AGENTS.md) para las convenciones detalladas:
 - CLI commands en `snake-case`
 - Usar clases de error de `@wasm-apps/types`
 - Usar `logger` de `@wasm-apps/types` para toda salida al usuario
+- Ejecución de comandos con `execFile`/`execFileSync`, nunca shell
+- Rutas siempre con `path.join()`/`path.resolve()` (cross-platform)
 
 ## Pull requests
 
@@ -68,17 +72,21 @@ Ver [AGENTS.md](./AGENTS.md) para las convenciones detalladas:
 
 ## Testing
 
-No hay framework de testing formal para integración. El test actual build el proyecto y ejecuta el binario resultante:
+### Unit tests
 
 ```bash
-pnpm run test
+pnpm test:unit
 ```
 
-Para tests unitarios:
+Vitest con `globals: true` en `packages/*/src/**/*.test.ts`.
+
+### Integration tests
 
 ```bash
-pnpm run test:unit
+pnpm test:integration
 ```
+
+Compila y ejecuta ejemplos multi-toolchain (AS, C++, Rust) desde `examples/`. Necesita `pnpm run linker setup` previo.
 
 ## Reportar issues
 

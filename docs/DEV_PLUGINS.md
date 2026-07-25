@@ -84,9 +84,11 @@ interface PipelineContext {
 BeforeModuleCompile → AfterModuleCompile → BeforeCodeGen → AfterCodeGen → BeforeLink → AfterLink → AfterBundle
 ```
 
+> Nota: Los plugins actúan después de la compilación multi-toolchain. No interactúan con el `ToolchainRouter` ni las estrategias de compilación de lenguajes — solo con los módulos WASM ya compilados.
+
 | Fase                  | Contexto disponible      | Uso típico                                         |
 | --------------------- | ------------------------ | -------------------------------------------------- |
-| `BeforeModuleCompile` | `sourceFiles`            | Pre-procesar código fuente AS antes de compilar    |
+| `BeforeModuleCompile` | `sourceFiles`            | Pre-procesar código fuente antes de compilar WASM  |
 | `AfterModuleCompile`  | `sourceFiles`, `outDir`  | Inspeccionar/modificar WASM compilado              |
 | `BeforeCodeGen`       | `wasmModules`, `options` | Optimizar WASM antes de generar C++, cambiar flags |
 | `AfterCodeGen`        | `cppCode`                | Transformar el código C++ generado                 |
@@ -172,15 +174,15 @@ wapp.json
 
 Pipeline de build:
 
-  [BeforeModuleCompile]  → modificar source .wasm.ts
+  [BeforeModuleCompile]  → modificar source files
        ↓
-  Compilación AS (asc.main)
+  ToolchainRouter        → compila cada archivo con su estrategia (AS / C++ / Rust / .wasm)
        ↓
   [AfterModuleCompile]   → inspeccionar .wasm generado
        ↓
   [BeforeCodeGen]        → wasm-opt, cambiar flags
        ↓
-  Generación C++ (codegen)
+  Generación C++ (Nunjucks templates)
        ↓
   [AfterCodeGen]         → transformar .cpp
        ↓

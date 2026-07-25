@@ -1,18 +1,22 @@
 # wasm-apps
 
-Compila código **AssemblyScript** (`.wasm.ts`) a WebAssembly y lo enlaza en **ejecutables nativos autocontenidos** usando la C-API de Wasmtime.
+Compila código **AssemblyScript**, **C++** y **Rust** a WebAssembly y lo enlaza en **ejecutables nativos autocontenidos** usando la C-API de Wasmtime.
 
 📖 Documentación completa en [docs/](docs/index.md) (Diátaxis).
 
 ## Pipeline
 
 ```
-.wasm.ts  ──[compiler]──>  .wasm  ──[linker]──>  ejecutable nativo (ELF/PE/Mach-O)
+.wasm.ts|.wasm.cpp|.wasm.rs|.wasm  ──[ToolchainRouter]──>  .wasm  ──[Nunjucks + cmake-js]──>  ejecutable nativo (ELF/PE/Mach-O)
 ```
 
-- **compiler** — compila AssemblyScript (`.wasm.ts`) a WebAssembly binario mediante `assemblyscript/asc`
-- **linker** — lee los módulos `.wasm`, resuelve dependencias y genera código C++ que instancia los módulos con Wasmtime, luego compila con CMake + un toolchain C++ nativo o cross‑compilado
-- **orchestrator** (`wapp`) — CLI unificada que coordina el pipeline completo: descubre archivos fuente, ejecuta el compilador y el linker, y gestiona proyectos con `wapp.json`
+- **compiler** — enruta cada archivo fuente a su toolchain mediante `ToolchainRouter` (Microkernel + Strategy):
+  - **AssemblyScript** (`.wasm.ts`, `.wasm.mjs`, `.as`) vía `assemblyscript/asc`
+  - **C++** (`.wasm.cpp`, `.wasm.cxx`, `.wasm.cc`) vía clang++ / CMake
+  - **Rust** (`.wasm.rs`) vía cargo + `wasm32-unknown-unknown`
+  - **Precompilado** (`.wasm`) pasa-through con validación de magic bytes
+- **linker** — lee los módulos `.wasm`, resuelve dependencias y genera C++ con templates **Nunjucks**, luego compila con cmake-js + Wasmtime C-API
+- **orchestrator** (`wapp`) — CLI unificada que coordina el pipeline completo: descubre archivos fuente multi-extensión, los enruta por toolchain, y gestiona proyectos con `wapp.json`
 
 ## Requisitos
 
@@ -63,9 +67,11 @@ cd mi-proyecto
 
 Crea un archivo `wapp.json` con la configuración por defecto.
 
-### 1. Escribir código AssemblyScript
+### 1. Escribir código fuente
 
-Crea un archivo con extensión `.wasm.ts`:
+Crea un archivo con la extensión correspondiente a tu toolchain:
+
+**AssemblyScript** (`.wasm.ts`, `.wasm.mjs`, `.as`):
 
 ```typescript
 // examples/stdlib_test.wasm.ts
@@ -94,6 +100,30 @@ export function factorial(n: number): number {
 ```
 
 La función `_start` es el punto de entrada por defecto.
+
+**C++** (`.wasm.cpp`, `.wasm.cxx`, `.wasm.cc`):
+
+```cpp
+// examples/cpp-saludo/src/main.wasm.cpp
+extern "C" {
+void _start() {
+  // Usa printf vía WASI (wasi: true en wapp.json)
+  printf("¡Hola desde C++!\\n");
+}
+}
+```
+
+**Rust** (`.wasm.rs`):
+
+```rust
+// examples/rust-hello/src/main.wasm.rs
+#[no_mangle]
+pub extern "C" fn _start() {
+    println!("¡Hola desde Rust!");
+}
+```
+
+**Precompilado** (`.wasm`): copia archivos `.wasm` existentes directamente al `sourceDir` para que se incluyan sin recompilar.
 
 ### 2. Compilar y linkear (orquestador)
 
@@ -314,42 +344,75 @@ wasm-apps/
 │   ├── types/          # Tipos compartidos (TypeScript)
 │   ├── cli/            # Orquestador CLI (wapp)
 │   │   └── src/
-│   │       ├── index.ts    # API init/build/setup/cache
-│   │       └── cli.ts      # CLI init/build/setup/cache
-│   ├── compiler/       # Compilador AS → WASM
+│   │       ├── index.ts    # API buildProject (multi-toolchain)
+│   │       └── cli.ts      # CLI init/build/watch/setup/cache
+│   ├── compiler/       # Compilador multi-toolchain
 │   │   └── src/
-│   │       ├── index.ts    # API compileWasm()
-│   │       ├── cli.ts      # CLI build/watch
-│   │       ├── cache.ts    # LRU cache en memoria
-│   │       └── utils.ts    # Hashing, resolución de imports
+│   │       ├── index.ts                    # API (compileWasm @deprecated)
+│   │       ├── cli.ts                      # CLI build/watch
+│   │       ├── toolchain-router.ts         # Router Microkernel + Strategy
+│   │       ├── strategies/
+│   │       │   ├── assemblyscript-strategy.ts  # AS (asc)
+│   │       │   ├── cpp-strategy.ts             # C++ (clang++/CMake)
+│   │       │   ├── rust-strategy.ts            # Rust (cargo)
+│   │       │   ├── precompiled-strategy.ts     # .wasm passthrough
+│   │       │   └── toolchain-strategy.ts       # Interfaz base
+│   │       ├── assemblyscript-compiler-strategy.ts  # Legacy wrapper
+│   │       ├── cache.ts        # LRU cache en memoria
+│   │       ├── disk-cache.ts   # Caché en disco + computeToolchainKey
+│   │       ├── utils.ts        # Hashing, resolución de imports
+│   │       └── errors.ts       # UnsupportedExtensionError, etc.
 │   └── linker/         # Linker WASM → ejecutable nativo
 │       └── src/
-│           ├── index.ts    # API createNativeApp()
-│           ├── cli.ts      # CLI build/watch/setup/status/cache
-│           ├── codegen.ts  # Generación código C++ + host functions
-│           ├── linker.ts   # Resolución de dependencias (topological sort)
-│           ├── wasm-io.ts  # Parseo de módulos WASM + tipos de import
-│           ├── compiler.ts  # Compilación C++ con cmake-js
+│           ├── index.ts        # API createNativeApp()
+│           ├── cli.ts          # CLI build/watch/setup/status/cache
+│           ├── codegen.ts      # Generación C++ + buildTemplateContext
+│           ├── template-renderer.ts  # Render Nunjucks
+│           ├── template-context.ts   # Tipos NunjucksTemplateContext
+│           ├── linker.ts       # Resolución de dependencias
+│           ├── wasm-io.ts      # Parseo de módulos WASM
+│           ├── compiler.ts     # Compilación C++ con cmake-js
+│           ├── build-cache.ts  # Manifest + templateHash
 │           ├── wasmtime-dl.ts  # Descarga/cache de Wasmtime C-API
 │           ├── downloader.ts   # Download con reanudación
 │           ├── extract.ts      # Extracción de archivos (tar/unzip)
 │           ├── setup.ts        # Setup de dependencias
 │           └── cache.ts        # Gestión de caché en disco
+│       └── templates/          # Templates Nunjucks para C++
+│           ├── main.c.njk
+│           ├── _preamble.c.njk
+│           ├── _host-functions.c.njk
+│           ├── _module-buffers.c.njk
+│           └── ...
 ├── examples/
-│   ├── math.wasm.ts          # Ejemplo básico
-│   └── stdlib_test.wasm.ts   # Test completo de stdlib
+│   ├── math.wasm.ts            # Ejemplo AssemblyScript
+│   ├── stdlib_test.wasm.ts     # Test completo de stdlib
+│   ├── cpp-saludo/             # Ejemplo C++
+│   ├── rust-hello/             # Ejemplo Rust
+│   ├── custom-template/        # Ejemplo template Nunjucks personalizado
+│   └── plugin-*/               # Ejemplos de plugins
 └── pnpm-workspace.yaml
 ```
 
-## Cómo funciona el linker
+## Cómo funciona el pipeline
+
+### Compilador (ToolchainRouter)
+
+1. **Descubrimiento** — `wapp build` globea archivos con extensiones soportadas: `**/*.wasm.ts`, `**/*.wasm.cpp`, `**/*.wasm.rs`, `**/*.wasm`, etc.
+2. **Enrutamiento** — `ToolchainRouter.getExtension()` extrae el sufijo más largo (ej: `.wasm.cpp` gana contra `.wasm` genérico)
+3. **Estrategia** — Cada extensión se mapea a una `ToolchainStrategy` (AssemblyScript, C++, Rust, Precompilado)
+4. **Compilación** — La estrategia correspondiente compila el archivo a WebAssembly binario
+5. **Caché** — Cada resultado se cachea por `SHA-256(source + flags + toolchainId)`
+
+### Linker
 
 1. **Lectura** — Los módulos `.wasm` se parsean con `WebAssembly.Module` para obtener imports/exports
-2. **Resolución de dependencias** — Se construye un grafo de dependencias y se ordenan los módulos topológicamente
-3. **Generación de C++** — Se genera un archivo `.cpp` que:
-   - Incrusta los WASM como arrays de bytes
-   - Define cada función importada (`env.*`) como host function nativa
-   - Instancia los módulos en orden de dependencia
-   - Llama a la función de entrada (`_start`)
+2. **Resolución de dependencias** — Se construye un grafo y se ordenan topológicamente
+3. **Generación de C++ (Nunjucks)** — Se renderiza `main.c.njk` con contexto que incluye:
+   - Arrays de bytes de cada módulo WASM
+   - Funciones host nativas (`env.*`)
+   - Instanciación de módulos en orden de dependencia
+   - Llamada a la función de entrada (`_start`)
 4. **Compilación** — cmake-js + toolchain C++ producen el ejecutable nativo enlazado estáticamente con Wasmtime
 
 ## Contribuir
