@@ -22,7 +22,7 @@ export class ToolchainRouter {
    */
   register(strategy: ToolchainStrategy): void {
     if (this.strategies.has(strategy.id)) {
-      logger.warn(`Overwriting existing strategy "${strategy.id}"`);
+      logger.warn(`Sobrescribiendo estrategia existente "${strategy.id}"`);
     }
     this.strategies.set(strategy.id, strategy);
     this.rebuildExtensionMap();

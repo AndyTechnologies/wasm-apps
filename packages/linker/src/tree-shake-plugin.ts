@@ -24,7 +24,7 @@ const plugin: WasmPlugin = {
 
       if (totalRemoved > 0) {
         const pct = ((totalRemoved / totalOriginalSize) * 100).toFixed(1);
-        ctx.logger.info(`Tree-shaking: ${(totalRemoved / 1024).toFixed(1)}KB eliminados (${pct}%)`);
+        ctx.logger.detail(`Tree-shaking: ${(totalRemoved / 1024).toFixed(1)}KB eliminados (${pct}%)`);
       }
     });
   },
