@@ -284,4 +284,19 @@ export function registerBuiltinHostFunctions(registry: HostFunctionRegistry): vo
   registry.register('env', 'Reflect.set', (_params, _results) => `results[0] = Val(int32_t(0)); return std::monostate{};`);
   registry.register('env', 'Reflect.apply', (_params, _results) => `results[0] = Val(int32_t(0)); return std::monostate{};`);
   registry.register('env', 'String.fromCodePoint', (_params, _results) => `results[0] = Val(int32_t(0)); return std::monostate{};`);
+
+  // Filesystem access request — allows WASM modules to request access to paths
+  // under the configured mount roots. The _fs_allowed_roots global vector is
+  // populated at runtime from the mount configuration in main().
+  registry.register('env', 'request-path', (params, _results) => {
+    if (params.length >= 1) {
+      return `
+    int32_t pathPtr = args[0].i32();
+    std::string path = _readAsStringNT(caller, pathPtr);
+    int32_t fd = FsRuntime::requestPath(path, _fs_allowed_roots, "wasm-module");
+    results[0] = Val(fd);
+    return std::monostate{};`;
+    }
+    return `results[0] = Val(int32_t(-2)); return std::monostate{};`;
+  });
 }

@@ -56,4 +56,27 @@ describe('HostFunctionRegistry', () => {
     registry.clear();
     expect(registry.getAll()).toHaveLength(0);
   });
+
+  it('request-path generator produces valid C++ body', () => {
+    registry.register('env', 'request-path', (params, _results) => {
+      if (params.length >= 1) {
+        return `
+    int32_t pathPtr = args[0].i32();
+    std::string path = _readAsStringNT(caller, pathPtr);
+    int32_t fd = FsRuntime::requestPath(path, _fs_allowed_roots, "wasm-module");
+    results[0] = Val(fd);
+    return std::monostate{};`;
+      }
+      return `results[0] = Val(int32_t(-2)); return std::monostate{};`;
+    });
+
+    const generator = registry.get('env', 'request-path');
+    expect(generator).toBeDefined();
+
+    const body = generator!(['i32'], ['i32']);
+    expect(body).toContain('FsRuntime::requestPath');
+    expect(body).toContain('_fs_allowed_roots');
+    expect(body).toContain('_readAsStringNT');
+    expect(body).toContain('results[0] = Val(fd)');
+  });
 });

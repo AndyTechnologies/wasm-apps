@@ -302,6 +302,7 @@ async function linkNativeApp(
       wasi: wasi || config.wasi || false,
       moduleMatching,
       wasmtimePath: config.wasmtimePath,
+      mounts: config.mounts,
     },
     !verbose,
   );
