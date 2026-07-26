@@ -6,10 +6,8 @@
 #include <RmlUi/Debugger.h>
 #include <RmlUi_GL3/GL3RenderInterface.h>
 #include <RmlUi_SDL/SDL3SystemInterface.h>
-{% endif %}
 
-{% if rmlui.enabled %}
-  {% include "_rmlui-setup.c.njk" %}
+{% include "_rmlui-state.c.njk" %}
 {% endif %}
 
 {% for module in modules -%}
@@ -50,7 +48,41 @@ int main(int argc, char *argv[]) {
     wasi_config.inherit_stderr();
     _check_result(ctx.set_wasi(std::move(wasi_config)), "set_wasi");
     _check_result(linker.define_wasi(), "define_wasi");
-    {% endif %}{% for func in hostFunctions %}
+    {% endif %}
+
+{% if rmlui.enabled %}
+    // ── SDL3 + OpenGL 3 + RmlUI initialization ─────────────────────
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    _rmluiWindow = SDL_CreateWindow("{{ rmlui.window.title }}",
+        {{ rmlui.window.width }}, {{ rmlui.window.height }},
+        SDL_WINDOW_OPENGL{% if rmlui.window.resizable %} | SDL_WINDOW_RESIZABLE{% endif %});
+    _rmluiGlContext = SDL_GL_CreateContext(_rmluiWindow);
+
+    gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
+
+    _rmluiSystemInterface = new RmlSDL_SystemInterface_SDL(_rmluiWindow);
+    Rml::SetSystemInterface(_rmluiSystemInterface);
+
+    _rmluiRenderInterface = new RmlGL3_RenderInterface_GL3();
+    Rml::SetRenderInterface(_rmluiRenderInterface);
+
+    Rml::Initialise();
+
+    {% if rmlui.debugger %}
+    Rml::Debugger::Initialise();
+    {% endif %}
+
+    // Load default fonts
+    Rml::LoadFontFace("LatoLatin-Regular.ttf", false);
+    Rml::LoadFontFace("LatoLatin-Bold.ttf", false);
+    Rml::LoadFontFace("LatoLatin-Italic.ttf", false);
+    Rml::LoadFontFace("NotoEmoji-Regular.ttf", false);
+{% endif %}
+
+    {% for func in hostFunctions %}
   {
     auto ty = {{ func.funcTypeCpp }};
     _check_result(linker.define(ctx, "{{ func.escapedModule }}", "{{ func.escapedName }}",
@@ -79,18 +111,18 @@ int main(int argc, char *argv[]) {
   auto entry_func = std::get<Func>(*entry_exp);
 
 {% if rmlui.enabled %}
-  bool running = true;
-  while (running) {
-    {% include "_rmlui-event-loop.c.njk" %}
+  // ── Main interactive loop ─────────────────────────────────────────
+  while (_rmluiRunning) {
+    RmlUI_ProcessSdlEvents();
     auto result = entry_func.call(ctx, {});
     if (!result) {
       std::cerr << "Error llamando a {{ escapedEntryFunctionName }}" << std::endl;
-      running = false;
+      _rmluiRunning = false;
       break;
     }
-    {% include "_rmlui-render.c.njk" %}
+    RmlUI_Render();
   }
-  {% include "_rmlui-cleanup.c.njk" %}
+  RmlUI_Shutdown();
 {% else %}
   auto result = entry_func.call(ctx, {});
   if (!result) {

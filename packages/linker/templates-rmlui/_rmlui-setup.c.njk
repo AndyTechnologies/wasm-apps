@@ -1,28 +1,27 @@
 // SDL3 + OpenGL 3 + RmlUI initialization
+// Assumes _rmluiWindow, _rmluiGlContext, etc. are file-scope statics
+// declared via _rmlui-state.c.njk (included before main).
 SDL_Init(SDL_INIT_VIDEO);
 SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-SDL_Window* window = SDL_CreateWindow("{{ rmlui.window.title }}",
+_rmluiWindow = SDL_CreateWindow("{{ rmlui.window.title }}",
     {{ rmlui.window.width }}, {{ rmlui.window.height }},
     SDL_WINDOW_OPENGL{% if rmlui.window.resizable %} | SDL_WINDOW_RESIZABLE{% endif %});
-SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+_rmluiGlContext = SDL_GL_CreateContext(_rmluiWindow);
 
 gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
 
-auto* system_interface = new RmlSDL_SystemInterface_SDL(window);
-Rml::SetSystemInterface(system_interface);
+_rmluiSystemInterface = new RmlSDL_SystemInterface_SDL(_rmluiWindow);
+Rml::SetSystemInterface(_rmluiSystemInterface);
 
-auto* render_interface = new RmlGL3_RenderInterface_GL3();
-Rml::SetRenderInterface(render_interface);
+_rmluiRenderInterface = new RmlGL3_RenderInterface_GL3();
+Rml::SetRenderInterface(_rmluiRenderInterface);
 
 Rml::Initialise();
 
-Rml::Context* rml_context = Rml::CreateContext("main",
-    Rml::Vector2i({{ rmlui.window.width }}, {{ rmlui.window.height }}));
-
 {% if rmlui.debugger %}
-Rml::Debugger::Initialise(rml_context);
+Rml::Debugger::Initialise();
 {% endif %}
 
 // Load default fonts
