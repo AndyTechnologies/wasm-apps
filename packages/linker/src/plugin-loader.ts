@@ -10,6 +10,7 @@ const DEFAULT_PLUGINS: PluginConfig[] = [
   { id: 'stdlib-plugin', enabled: true, config: {} },
   { id: 'size-optimizer-plugin', enabled: true, config: {} },
   { id: 'tree-shake-plugin', enabled: true, config: {} },
+  { id: 'rmlui-plugin', enabled: false, config: {} },
 ];
 
 function createContext(cfg: PluginConfig): PluginContext {
@@ -61,6 +62,12 @@ export async function loadPlugins(pluginConfigs?: PluginConfig[]): Promise<void>
     if (cfg.id === 'tree-shake-plugin') {
       const { default: treeShakePlugin } = await import('./tree-shake-plugin.js');
       registerPlugin(treeShakePlugin, context);
+      continue;
+    }
+
+    if (cfg.id === 'rmlui-plugin') {
+      const { default: rmluiPlugin } = await import('./rmlui-plugin.js');
+      registerPlugin(rmluiPlugin, context);
       continue;
     }
 
