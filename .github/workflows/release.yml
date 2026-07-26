@@ -30,7 +30,7 @@ jobs:
 
       - name: Install & Build
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           pnpm -r build
 
       - name: Publish changed packages
