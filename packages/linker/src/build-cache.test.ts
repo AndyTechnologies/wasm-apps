@@ -142,6 +142,93 @@ describe('build-cache', () => {
       expect(result).toBe(false);
     });
 
+    it('returns false when mountsHash differs', async () => {
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+          mountsHash: 'abc123',
+        },
+        tmpDir,
+      );
+
+      const result = await isBuildUpToDate(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+          mountsHash: 'def456',
+        },
+        tmpDir,
+      );
+      expect(result).toBe(false);
+    });
+
+    it('returns true when mountsHash matches', async () => {
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+          mountsHash: 'abc123',
+        },
+        tmpDir,
+      );
+
+      const result = await isBuildUpToDate(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+          mountsHash: 'abc123',
+        },
+        tmpDir,
+      );
+      expect(result).toBe(true);
+    });
+
+    it('saves mountsHash in manifest when provided', () => {
+      saveBuildManifest(
+        [wasmFile],
+        outputFile,
+        {
+          entry: '_start',
+          target: 'native',
+          wasi: false,
+          moduleMatching: 'file-name',
+          wasmtimePath: '',
+          wasmtimeVersion: '27.0.0',
+          mountsHash: 'mounts-hash-value',
+        },
+        tmpDir,
+      );
+
+      const manifestPath = path.join(tmpDir, '.wapp_build', 'build-manifest.json');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      expect(manifest.options.mountsHash).toBe('mounts-hash-value');
+    });
+
     it('returns false when wasm file changes', async () => {
       saveBuildManifest(
         [wasmFile],

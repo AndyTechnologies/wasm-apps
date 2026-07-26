@@ -72,6 +72,7 @@ interface BuildManifestOptions {
   wasmtimePath: string;
   wasmtimeVersion: string;
   templateHash: string;
+  mountsHash?: string;
 }
 
 interface BuildManifest {
@@ -141,6 +142,7 @@ export async function isBuildUpToDate(
     wasmtimePath?: string;
     wasmtimeVersion: string;
     templateHash?: string;
+    mountsHash?: string;
   },
   rootDir?: string,
 ): Promise<boolean> {
@@ -159,6 +161,8 @@ export async function isBuildUpToDate(
   if (manifest.options.wasmtimeVersion !== options.wasmtimeVersion) return false;
 
   if (options.templateHash !== undefined && manifest.options.templateHash !== options.templateHash) return false;
+
+  if (options.mountsHash !== undefined && manifest.options.mountsHash !== options.mountsHash) return false;
 
   if (manifest.wasmFiles.length !== wasmFiles.length) return false;
   for (let i = 0; i < wasmFiles.length; i++) {
@@ -186,6 +190,7 @@ export function saveBuildManifest(
     wasmtimePath?: string;
     wasmtimeVersion: string;
     templateHash?: string;
+    mountsHash?: string;
   },
   rootDir?: string,
 ): void {
@@ -206,6 +211,7 @@ export function saveBuildManifest(
       wasmtimePath: options.wasmtimePath || '',
       wasmtimeVersion: options.wasmtimeVersion,
       templateHash: options.templateHash || '',
+      mountsHash: options.mountsHash || '',
     },
     outputHash: fileHash(output),
     createdAt: new Date().toISOString(),

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -64,8 +65,20 @@ function resolveWasmtimePath(wasmtimePath?: string): string | undefined {
   return path.join(cacheDir, entries[0]);
 }
 
+function computeMountsHash(mounts?: Array<{ host: string; guest: string }>): string {
+  if (!mounts || mounts.length === 0) return '';
+  const hash = crypto.createHash('sha256');
+  for (const m of mounts) {
+    hash.update(m.host);
+    hash.update('\0');
+    hash.update(m.guest);
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
 export async function createNativeApp(options: NativeAppOptions, quiet = false): Promise<string> {
-  const { inputPaths, output, entry, wasi, moduleMatching } = options;
+  const { inputPaths, output, entry, wasi, moduleMatching, mounts } = options;
 
   const outputPath = path.resolve(output);
   const { parseWasmModule } = await import('./wasm-io.js');
@@ -79,6 +92,8 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
   const defaultTemplateDir = path.resolve(__dirname, '../templates');
   const templateHash = computeTemplateHash(defaultTemplateDir);
 
+  const mountsHash = computeMountsHash(mounts);
+
   if (!quiet) {
     const cacheOk = await isBuildUpToDate(inputPaths, outputPath, {
       entry,
@@ -88,6 +103,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
       wasmtimePath: resolvedWasmtimePath,
       wasmtimeVersion,
       templateHash,
+      mountsHash,
     });
     if (cacheOk) {
       logger.success(`Build up-to-date: ${outputPath}`);
@@ -119,7 +135,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Generating C++ source...');
 
-  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined, options.templatePath);
+  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined, options.templatePath, mounts);
 
   if (!quiet) logger.step('Compiling native binary...');
 
@@ -133,6 +149,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
     wasmtimePath: resolvedWasmtimePath,
     wasmtimeVersion,
     templateHash,
+    mountsHash,
   });
 
   if (!quiet) logger.success(`Built: ${outputPath}`);
