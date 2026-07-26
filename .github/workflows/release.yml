@@ -42,7 +42,7 @@ jobs:
             PUBLISHED_VER=$(pnpm view "$NAME" version 2>/dev/null || echo "0.0.0")
             if [ "$VERSION" != "$PUBLISHED_VER" ]; then
               echo "Publishing $NAME@$VERSION (was $PUBLISHED_VER)"
-              (cd "$pkg" && pnpm publish --provenance --access public)
+              (cd "$pkg" && pnpm publish --no-git-checks --provenance --access public)
               PUBLISHED=$((PUBLISHED + 1))
             else
               echo "Skipping $NAME@$VERSION (already published)"
