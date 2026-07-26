@@ -1,5 +1,5 @@
 import os from 'node:os';
-import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo } from '@wasm-apps/types';
+import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo, MountEntry } from '@wasm-apps/types';
 import { LinkerError } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { renderTemplate } from './template-renderer.js';
@@ -134,7 +134,13 @@ function buildHostFunctionList(
  * Construye un NunjucksTemplateContext a partir de los parámetros de generateCCode.
  * Esto reemplaza las funciones generatePreamble/generateStringReader/etc.
  */
-function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): NunjucksTemplateContext {
+function buildTemplateContext(
+  link: ResolvedLink,
+  entryPoint: string,
+  wasi: boolean,
+  importFuncTypes?: WasmImportFuncType[],
+  mounts?: MountEntry[],
+): NunjucksTemplateContext {
   const modules = link.order;
   const moduleBuffers = buildModuleBuffers(modules);
   const neededGlobals = buildNeededGlobals(modules);
@@ -239,6 +245,7 @@ function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: bool
     hostFunctions: templateHostFunctions,
     globals: templateGlobals,
     rmlui,
+    mounts: mounts || [],
   };
 }
 
@@ -257,7 +264,14 @@ export function validateEntryExport(link: ResolvedLink, entryPoint: string): voi
   throw new LinkerError(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
 }
 
-export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], templatePath?: string): string {
-  const context = buildTemplateContext(link, entryPoint, wasi, importFuncTypes);
+export function generateCCode(
+  link: ResolvedLink,
+  entryPoint: string,
+  wasi: boolean,
+  importFuncTypes?: WasmImportFuncType[],
+  templatePath?: string,
+  mounts?: MountEntry[],
+): string {
+  const context = buildTemplateContext(link, entryPoint, wasi, importFuncTypes, mounts);
   return renderTemplate(context, templatePath);
 }

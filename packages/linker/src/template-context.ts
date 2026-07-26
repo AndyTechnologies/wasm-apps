@@ -113,6 +113,8 @@ export interface NunjucksTemplateContext {
     enabled: boolean;
     window: { title: string; width: number; height: number; resizable: boolean };
     debugger: boolean;
-    resources: { searchPaths: string[]; defaultFont?: string };
+    resources: { searchPaths: string[] };
   };
+  /** Montajes de directorios host → guest WASI. */
+  mounts: Array<{ host: string; guest: string }>;
 }

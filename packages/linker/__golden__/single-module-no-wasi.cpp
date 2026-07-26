@@ -12,6 +12,7 @@
 #ifdef _MSC_VER
 #include <intrin.h>
 #endif
+#include "fs-runtime.h"
 
 #ifdef _MSC_VER
 static inline int _wasm_clz32(uint32_t x) {
@@ -56,6 +57,7 @@ static T _check_trap(wasmtime::TrapResult<T>&& r, const char* what) {
 
 static std::mt19937 _wasm_rng(std::random_device{}());
 static std::unordered_map<std::string, std::chrono::steady_clock::time_point> _wasm_timers;
+static std::vector<std::string> _fs_allowed_roots;
 static std::string _readAsString(Caller& caller, int32_t ptr) {
   if (ptr <= 0) return "";
   auto mem = caller.get_export("memory");
@@ -129,6 +131,9 @@ int main(int argc, char *argv[]) {
     Store store(engine);
     auto ctx = store.context();
     Linker linker(engine);
+    
+    // Filesystem access runtime — populate allowed roots from mount configuration
+    _fs_allowed_roots.clear();
     
 
   auto mod0 = Module::compile(engine, Span<uint8_t>(const_cast<uint8_t*>(wasm_bytes_0), wasm_len_0));
