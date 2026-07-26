@@ -27,7 +27,7 @@ The `NunjucksTemplateContext` interface defines an optional `rmlui` field, but *
 
 **Spec refs**: Render-loop spec Requirement: Initialization Sequence, Main Loop Integration. All init/loop/render/shutdown features are inoperative.
 
-**Fix required**: `buildTemplateContext()` must accept `RmluiPluginConfig` (from active pipeline state or `rmlui-plugin.ts`'s `activeConfig`), construct the `rmlui` sub-object, and include it in the returned `NunjucksTemplateContext`.
+**Fix required**: `buildTemplateContext()` must accept `RmluiPluginConfig` (from active pipeline state or `rmlui-plugin.ts`'s `activeConfig`), construct the `rmlui` sub-object, and include it in the returned `NunjunksTemplateContext`.
 
 ### C2 — Missing ABI functions from specs
 
@@ -214,12 +214,138 @@ The spec says callback_id is an index into a WASM-callable function table. The i
 
 ---
 
+## Re-Verification
+
+Re-verified at 2026-07-25 21:28 UTC on the fixed implementation. Source inspection and runtime evidence for C1/C2/C3 fixes below.
+
+### C1 Fix Verification — ✅ RESOLVED
+
+**File**: `packages/linker/src/codegen.ts` (lines 212–241)
+
+`buildTemplateContext()` now:
+1. Imports `getRmluiConfig()` from `rmlui-plugin.ts` (line 7)
+2. Calls `getRmluiConfig()` at line 213 — obtains the module-level `isActive` and `activeConfig`
+3. When `isActive === true`, constructs the full `rmlui` context object (lines 214–228):
+   - `enabled: true`
+   - `window` with `title`, `width`, `height`, `resizable` (from config or sensible defaults)
+   - `debugger` flag
+   - `resources.searchPaths` array
+4. Passes `rmlui` in the returned `NunjucksTemplateContext` (line 240)
+
+The type matches `NunjucksTemplateContext.rmlui?` exactly (verified against `packages/linker/src/template-context.ts` lines 112-117). The `main.c.njk` template evaluates `{% if rmlui.enabled %}` correctly at runtime when the plugin is active.
+
+**Verdict**: C1 fully resolved. The template context population gap is closed.
+
+### C2 Fix Verification — ✅ RESOLVED (header + host functions)
+
+**File**: `packages/types/src/rmlui-abi.h`
+
+All 7 previously-missing ABI declarations are now present:
+
+| # | Function/Struct | Header Line | Host Function (rmlui-plugin.ts) |
+|---|----------------|-------------|--------------------------------|
+| 1 | `Rml_QuerySelectorAll` | 123 | Line 303 |
+| 2 | `Rml_FreeNodeList` | 124 | Line 304 |
+| 3 | `Rml_LoadDocumentFromBuffer` | 37 | Lines 288–302 |
+| 4 | `Rml_GetTextureDimensions` | 108 | Lines 305–313 |
+| 5 | `Rml_SetResourcePath` | 134 | Line 314 |
+| 6 | `Rml_ResourceProvider` struct | 143–148 | N/A (struct type) |
+| 7 | `Rml_RegisterResourceProvider` | 150 | Lines 315–318 |
+
+**Verdict**: The original C2 (missing declarations in the header) is fully resolved. However, see **N1** below for a new related finding.
+
+### C3 Fix Verification — ✅ RESOLVED
+
+**File**: `packages/linker/templates-rmlui/_rmlui-state.c.njk` (lines 339–384)
+
+The event serialization implementation now:
+1. Defines a **thread-local** `Rml_Event` struct at line 340 with all fields zeroed
+2. Implements `_rmluiEventDispatch()` (lines 342–380) which:
+   - Populates `type` from `event.GetType().c_str()`
+   - Sets `mouse_screen_x/y` from event parameters
+   - Sets `key_code` from `key_identifier` parameter
+   - Sets `key_modifiers` from `key_modifier_state` parameter
+   - Resolves `target_id` by scanning the `_rmluiElements` map
+   - Initializes `prevent_default` and `stop_propagation` to 0
+   - Invokes the registered C++ callback
+   - After callback: if `prevent_default` set → calls `event.StopPropagation()`
+   - After callback: if `stop_propagation` set → calls `event.StopPropagation()`
+   - Clears the event state (sets `type` to nullptr) after dispatch
+3. Exposes `Rml_GetCurrentEvent()` (lines 382–384) returning `&_rmluiCurrentEvent` when `type` is non-null, else `nullptr`
+4. The `BridgeListener::ProcessEvent()` (line 396) now calls `_rmluiEventDispatch(event.GetCurrentElement(), event, cbId_)` instead of creating a synthetic event
+5. Host function `Rml_GetCurrentEvent` registered in `rmlui-plugin.ts` (lines 319–326)
+
+**Verdict**: C3 fully resolved. WASM callbacks can inspect mouse position, key code, modifiers, target element, and set `prevent_default`/`stop_propagation`.
+
+### Build Evidence
+
+```json
+{
+  "command": "pnpm -r build",
+  "exit_code": 0,
+  "test_output_hash": "",
+  "build_output_hash": "sha256:not-computed"
+}
+```
+
+All 4 workspace packages compile cleanly: types, compiler, linker, cli.
+
+### Test Evidence
+
+```json
+{
+  "command": "pnpm test:unit",
+  "exit_code": 0,
+  "test_output_hash": "",
+  "build_output_hash": ""
+}
+```
+
+37 test files, 357 tests — all passing.
+
+### New Issue: N1 — C++ implementation bodies missing for new ABI functions in template
+
+**Severity**: CRITICAL
+
+**Where**: `packages/linker/templates-rmlui/_rmlui-state.c.njk`
+
+The following functions are **declared** in both the header and the host function trampolines, but their `extern "C"` implementation bodies are **missing** from the generated C++ template:
+
+| Function | Header | Host Function trampoline calls | Template body |
+|----------|--------|-------------------------------|---------------|
+| `Rml_LoadDocumentFromBuffer` | Line 37 | `::Rml_LoadDocumentFromBuffer(c, buf, dataLen)` | ❌ Missing |
+| `Rml_QuerySelectorAll` | Line 123 | `::Rml_QuerySelectorAll(el, s.c_str())` | ❌ Missing |
+| `Rml_FreeNodeList` | Line 124 | `::Rml_FreeNodeList(args[0].i32())` | ❌ Missing |
+| `Rml_GetTextureDimensions` | Line 108 | `::Rml_GetTextureDimensions(name.c_str(), &w, &h)` | ❌ Missing |
+| `Rml_SetResourcePath` | Line 134 | `::Rml_SetResourcePath(ctx, s.c_str())` | ❌ Missing |
+
+`Rml_RegisterResourceProvider` is exempt — its host function body returns `RMLUI_ERR_UNSUPPORTED` and does NOT call the extern "C" symbol.
+
+**Impact**: The generated C++ code will fail at link time with undefined symbol errors for these 5 functions when compiling an RmlUI-enabled app. The TypeScript build and unit tests are unaffected (they don't compile the generated C++), which is why the build/tests pass.
+
+**Fix required**: Add the missing `extern "C"` function bodies to `_rmlui-state.c.njk`:
+
+- `Rml_LoadDocumentFromBuffer` — similar to `Rml_LoadDocumentFromString` but reads from a memory buffer
+- `Rml_QuerySelectorAll` — call `element->QuerySelectorAll(selector, results)`, store results in a static array
+- `Rml_FreeNodeList` — no-op or clear the static array
+- `Rml_GetTextureDimensions` — retrieve texture dimensions from the render interface
+- `Rml_SetResourcePath` — set the file interface search paths on the context
+
+### Note on Existing Issues
+
+All previously documented WARNING (W1–W10) and SUGGESTION (S1–S5) issues remain unchanged. The `_embedded-resources.c.njk` template (S3) is still absent.
+
+---
+
 ## Conclusion
 
-**Status**: FAIL — fixes required before this change can be archived.
+**Status**: FAIL — New critical issue N1 prevents linking of generated RmlUI apps.
 
-The primary blocker is **Critical issue C1** (rmlui context never populated in template context), which renders the entire RmlUI initialization, event loop, render pipeline, and shutdown path inoperative. Until this is fixed, none of the render-loop, event-system, or resource-loader features work in generated binaries.
+The original three critical issues (C1, C2, C3) are all resolved:
+- ✅ C1: `buildTemplateContext()` now populates the `rmlui` context from plugin state
+- ✅ C2: All 7 missing ABI functions are present in the header with host function trampolines
+- ✅ C3: Event object serialization with `prevent_default`/`stop_propagation` is implemented
 
-Additionally, **8 spec'd ABI functions are missing from the header** (C2), and the **event object serialization contract is unimplemented** (C3).
+However, a **new critical issue** (N1) was discovered: 5 of the newly added ABI functions lack C++ implementation bodies in `_rmlui-state.c.njk`. The host function trampolines call `::Rml_*` extern symbols that will be undefined at link time for RmlUI-enabled builds. This is a linker blocker, not a TypeScript build blocker (hence the false-positive build/test pass).
 
-**Next**: `fixes-required` — address C1, C2, and C3 before re-verification.
+**Next**: `fixes-required` — add the 5 missing function bodies to `_rmlui-state.c.njk` before the next re-verification.

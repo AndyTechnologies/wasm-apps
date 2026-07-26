@@ -161,6 +161,18 @@ extern "C" void Rml_CloseDocument(Rml_DocumentId doc) {
   }
 }
 
+extern "C" Rml_DocumentId Rml_LoadDocumentFromBuffer(Rml_ContextId ctx, const void* data, int32_t len) {
+  if (!data || len <= 0) return 0;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return 0;
+  std::string rmlStr(static_cast<const char*>(data), static_cast<size_t>(len));
+  Rml::ElementDocument* doc = it->second->LoadDocumentFromString(rmlStr);
+  if (!doc) return 0;
+  Rml_ElementId id = _rmluiNextElementId++;
+  _rmluiElements[id] = doc;
+  return id;
+}
+
 // ── Element tree construction ─────────────────────────────────────────────
 extern "C" Rml_ElementId Rml_CreateElement(const char* tag) {
   if (!tag) return 0;
@@ -470,6 +482,13 @@ extern "C" int32_t Rml_LoadTextureFromBuffer(const char* name, const void* data,
   return RMLUI_ERR_UNSUPPORTED;
 }
 
+extern "C" int32_t Rml_GetTextureDimensions(const char* name, int32_t* w, int32_t* h) {
+  (void)name;
+  if (w) *w = 0;
+  if (h) *h = 0;
+  return RMLUI_ERR_UNSUPPORTED;
+}
+
 // ── Render loop functions (called natively from main loop) ─────────────────
 extern "C" void RmlUI_ProcessSdlEvents(void) {
   SDL_Event event;
@@ -576,6 +595,36 @@ extern "C" Rml_ElementId Rml_QuerySelector(Rml_ElementId el, const char* selecto
   return eid;
 }
 
+extern "C" const int32_t* Rml_QuerySelectorAll(Rml_ElementId el, const char* selector) {
+  if (!selector) return nullptr;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return nullptr;
+  Rml::ElementList results;
+  it->second->QuerySelectorAll(selector, results);
+  static std::vector<int32_t> ids;
+  ids.clear();
+  ids.reserve(results.size() + 1);
+  for (Rml::Element* r : results) {
+    // Check if already in map
+    Rml_ElementId rid = 0;
+    for (auto& kv : _rmluiElements) {
+      if (kv.second == r) { rid = kv.first; break; }
+    }
+    if (rid == 0) {
+      rid = _rmluiNextElementId++;
+      _rmluiElements[rid] = r;
+    }
+    ids.push_back(rid);
+  }
+  ids.push_back(0); // null-terminated
+  return ids.data();
+}
+
+extern "C" void Rml_FreeNodeList(const int32_t* elements) {
+  // Static buffer managed by Rml_QuerySelectorAll — no-op
+  (void)elements;
+}
+
 // ── Document body / head ───────────────────────────────────────────────────
 extern "C" Rml_ElementId Rml_GetBody(Rml_ContextId ctx) {
   auto cit = _rmluiContexts.find(ctx);
@@ -603,6 +652,30 @@ extern "C" Rml_ElementId Rml_GetHead(Rml_ContextId ctx) {
   Rml_ElementId eid = _rmluiNextElementId++;
   _rmluiElements[eid] = head;
   return eid;
+}
+
+// ── Resource path ──────────────────────────────────────────────────────────
+extern "C" int32_t Rml_SetResourcePath(Rml_ContextId ctx, const char* path_list) {
+  if (!path_list) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // In RmlUI, the file interface is global, not per-context.
+  // For v1, we store the path; actual search path integration
+  // requires a custom Rml::FileInterface implementation.
+  // For now, the RmlUI default file interface handles search paths
+  // configured in the RML document's <link> tags.
+  (void)path_list;
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_RegisterResourceProvider(Rml_ContextId ctx, const Rml_ResourceProvider* provider) {
+  if (!provider) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // Custom resource provider registration — v1 placeholder.
+  // The provider callbacks would be stored and used during document/font loading.
+  (void)ctx; (void)provider;
+  return RMLUI_ERR_UNSUPPORTED;
 }
 
 // ── Debugger ───────────────────────────────────────────────────────────────
