@@ -1,9 +1,13 @@
 name: Release
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.6.0)'
+        required: true
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -13,11 +17,44 @@ permissions:
 
 jobs:
   release:
-    if: >
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'Release v'))
-      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      - name: Validate version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "❌ La versión '$VERSION' no cumple X.Y.Z"
+              exit 1
+            fi
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "✅ Workflow manual: versión $VERSION"
+          else
+            TAG="${{ github.ref_name }}"
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "❌ El tag '$TAG' no cumple vX.Y.Z"
+              exit 1
+            fi
+            VERSION="${TAG#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "✅ Tag válido: $TAG → versión $VERSION"
+          fi
+
+      - name: Verify CI passed for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${{ github.sha }}"
+          echo "Verificando CI en commit $SHA..."
+          CONCLUSION=$(gh run list --commit "$SHA" --workflow "CI" \
+            --json conclusion --jq '.[0].conclusion // "pending"' --limit 1)
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "❌ CI no pasó para este commit (conclusion=$CONCLUSION)"
+            exit 1
+          fi
+          echo "✅ CI pasó correctamente"
+
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
         with:
@@ -33,43 +70,37 @@ jobs:
           pnpm install --no-frozen-lockfile
           pnpm -r build
 
-      - name: Publish changed packages
+      - name: Set version from tag
         run: |
-          PUBLISHED=0
+          VERSION="${{ steps.version.outputs.version }}"
+          for pkg in packages/*/; do
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('${pkg}package.json'));
+              p.version = '$VERSION';
+              fs.writeFileSync('${pkg}package.json', JSON.stringify(p, null, 2) + '\n');
+            "
+          done
+          echo "✅ Versión $VERSION seteada en todos los packages"
+
+      - name: Publish to npm
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
           for pkg in packages/*/; do
             NAME=$(node -p "require('./${pkg}package.json').name")
-            VERSION=$(node -p "require('./${pkg}package.json').version")
-            PUBLISHED_VER=$(pnpm view "$NAME" version 2>/dev/null || echo "0.0.0")
-            if [ "$VERSION" != "$PUBLISHED_VER" ]; then
-              echo "Publishing $NAME@$VERSION (was $PUBLISHED_VER)"
-              (cd "$pkg" && pnpm publish --no-git-checks --provenance --access public)
-              PUBLISHED=$((PUBLISHED + 1))
-            else
-              echo "Skipping $NAME@$VERSION (already published)"
-            fi
+            echo "📦 Publicando $NAME@$VERSION ..."
+            (cd "$pkg" && pnpm publish --no-git-checks --provenance --access public)
+            echo "✅ Publicado $NAME@$VERSION"
           done
-          if [ "$PUBLISHED" -eq 0 ]; then
-            >&2 echo "ERROR: No packages had version changes"
-            exit 1
-          fi
-          echo "Published $PUBLISHED package(s)"
-
-      - name: Get version
-        id: version
-        run: |
-          VERSION=$(node -p "require('./packages/cli/package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "✅ Todos los packages publicados"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists, skipping release"
-            exit 0
-          fi
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --generate-notes \
             --target "${{ github.sha }}"
+          echo "✅ GitHub Release v$VERSION creada"
