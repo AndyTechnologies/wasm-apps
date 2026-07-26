@@ -4,6 +4,7 @@ import { LinkerError } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { renderTemplate } from './template-renderer.js';
 import type { NunjucksTemplateContext, TemplateModuleEntry, TemplateHostFunctionEntry, TemplateGlobalEntry, TemplateExportEntry } from './template-context.js';
+import { getRmluiConfig } from './rmlui-plugin.js';
 
 const VALTYPE_TO_CPP: Record<string, string> = {
   i32: 'ValType::i32()',
@@ -208,6 +209,24 @@ function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: bool
     });
   }
 
+  // Check if RmlUI plugin is active and populate the rmlui template context
+  const rmluiState = getRmluiConfig();
+  const rmlui = rmluiState.isActive
+    ? {
+        enabled: true,
+        window: {
+          title: rmluiState.config.window?.title ?? 'Wasm App',
+          width: rmluiState.config.window?.width ?? 1024,
+          height: rmluiState.config.window?.height ?? 768,
+          resizable: rmluiState.config.window?.resizable ?? true,
+        },
+        debugger: rmluiState.config.debugger ?? false,
+        resources: {
+          searchPaths: rmluiState.config.resources?.searchPaths ?? [],
+        },
+      }
+    : undefined;
+
   return {
     moduleName: 'wasm-linker',
     entryPoint: entryModule,
@@ -218,6 +237,7 @@ function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: bool
     modules: templateModules,
     hostFunctions: templateHostFunctions,
     globals: templateGlobals,
+    rmlui,
   };
 }
 

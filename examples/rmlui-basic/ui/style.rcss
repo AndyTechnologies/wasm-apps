@@ -1,0 +1,60 @@
+/* style.rcss — RmlUI stylesheet for the basic example */
+
+body {
+  font-family: "LatoLatin-Regular";
+  font-size: 14px;
+  color: #333;
+  background: #f5f5f5;
+  padding: 20px;
+}
+
+h1 {
+  font-family: "LatoLatin-Bold";
+  font-size: 24px;
+  color: #1a73e8;
+  margin-bottom: 10px;
+}
+
+p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+code {
+  font-family: "Courier New", monospace;
+  background: #e8e8e8;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+button {
+  font-family: "LatoLatin-Regular";
+  font-size: 14px;
+  padding: 8px 16px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 10px 0;
+}
+
+button:hover {
+  background: #1557b0;
+}
+
+.wasm-greeting {
+  color: #0d7c3f;
+  font-weight: bold;
+  font-family: "LatoLatin-Italic";
+  margin-top: 15px;
+}
+
+#output {
+  margin-top: 10px;
+  padding: 8px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  min-height: 20px;
+}

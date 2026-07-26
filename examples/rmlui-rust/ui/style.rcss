@@ -1,0 +1,48 @@
+/* style.rcss — RmlUI stylesheet for the Rust example */
+
+body {
+  font-family: "LatoLatin-Regular";
+  font-size: 14px;
+  color: #222;
+  background: #fafafa;
+  padding: 24px;
+}
+
+h1 {
+  font-family: "LatoLatin-Bold";
+  font-size: 22px;
+  color: #b7410e;
+  margin-bottom: 12px;
+}
+
+p {
+  margin: 6px 0;
+  line-height: 1.6;
+}
+
+code {
+  font-family: "Courier New", monospace;
+  background: #eee;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+em {
+  font-family: "LatoLatin-Italic";
+  color: #555;
+}
+
+#content-area {
+  margin-top: 16px;
+  padding: 12px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.wasm-greeting {
+  color: #b7410e;
+  font-weight: bold;
+  font-family: "LatoLatin-Italic";
+  margin-top: 12px;
+}

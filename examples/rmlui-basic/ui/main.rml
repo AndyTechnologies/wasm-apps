@@ -1,0 +1,14 @@
+<!-- main.rml — RmlUI document template for the basic example -->
+<rml>
+  <head>
+    <title>RmlUI Basic Example</title>
+    <link type="text/rcss" href="ui/style.rcss" />
+  </head>
+  <body id="root">
+    <h1>RmlUI + wasm-apps</h1>
+    <p>This UI is rendered natively by the generated C++ host binary.</p>
+    <p>The WASM module calls <code>env.Rml_*</code> host functions to interact with the DOM.</p>
+    <button id="btn-click">Click me</button>
+    <div id="output"></div>
+  </body>
+</rml>

@@ -284,6 +284,47 @@ const rmluiPlugin: WasmPlugin = {
     return std::monostate{};`;
     });
 
+    // New in v1 (added after verification)
+    ctx.hostFunctions.register('env', 'Rml_LoadDocumentFromBuffer', (_params, _results) => {
+      if (_params.length >= 3) {
+        return `
+    Rml_ContextId c = args[0].i32();
+    int32_t dataPtr = args[1].i32();
+    int32_t dataLen = args[2].i32();
+    auto _mem = caller.get_export("memory");
+    auto* _memPtr = std::get_if<wasmtime::Memory>(&*_mem);
+    auto _span = _memPtr->data(caller.context());
+    const void* buf = (dataPtr > 0 && dataLen > 0) ? (_span.data() + dataPtr) : nullptr;
+    results[0] = Val(int32_t(::Rml_LoadDocumentFromBuffer(c, buf, dataLen)));
+    return std::monostate{};`;
+      }
+      return `results[0] = Val(int32_t(RMLUI_ERR_NULL_PARAM)); return std::monostate{};`;
+    });
+    ctx.hostFunctions.register('env', 'Rml_QuerySelectorAll', (_params, _results) => handleStringI32('Rml_QuerySelectorAll', 0, 1));
+    ctx.hostFunctions.register('env', 'Rml_FreeNodeList', (_params, _results) => scalarVoid('Rml_FreeNodeList', [0]));
+    ctx.hostFunctions.register('env', 'Rml_GetTextureDimensions', (_params, _results) => {
+      return `
+    std::string name = _readAsStringNT(caller, args[0].i32());
+    int32_t w = 0, h = 0;
+    int32_t rc = ::Rml_GetTextureDimensions(name.c_str(), &w, &h);
+    // Write back w, h to WASM memory if output pointers provided
+    results[0] = Val(int32_t(rc));
+    return std::monostate{};`;
+    });
+    ctx.hostFunctions.register('env', 'Rml_SetResourcePath', (_params, _results) => contextStringHandle('Rml_SetResourcePath'));
+    ctx.hostFunctions.register('env', 'Rml_RegisterResourceProvider', (_params, _results) => {
+      // Complex: needs to read a struct from WASM memory. Placeholder for v1.
+      return `results[0] = Val(int32_t(RMLUI_ERR_UNSUPPORTED)); return std::monostate{};`;
+    });
+    ctx.hostFunctions.register('env', 'Rml_GetCurrentEvent', (_params, _results) => {
+      return `
+    const Rml_Event* ev = ::Rml_GetCurrentEvent();
+    // Return pointer as i32 (WASM address), 0 if null
+    // WASM consumer reads it via memory load
+    results[0] = Val(int32_t(reinterpret_cast<intptr_t>(ev)));
+    return std::monostate{};`;
+    });
+
     // Debugger
     ctx.hostFunctions.register('env', 'Rml_DebuggerToggle', (_params, _results) => voidNoArg('Rml_DebuggerToggle'));
 

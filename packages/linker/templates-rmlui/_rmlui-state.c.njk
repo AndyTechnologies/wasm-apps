@@ -335,11 +335,52 @@ extern "C" int32_t Rml_SetStyle(Rml_ElementId el, const char* css_text) {
 }
 
 // ── Events ────────────────────────────────────────────────────────────────
+
+/** Thread-local current event for Rml_GetCurrentEvent(). */
+static thread_local Rml_Event _rmluiCurrentEvent = {nullptr, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0, 0}};
+
 static void _rmluiEventDispatch(Rml::Element* element, const Rml::Event& event, Rml_CallbackId cbId) {
+  // Populate the thread-local event struct with real event data
+  _rmluiCurrentEvent.type = event.GetType().c_str();
+  _rmluiCurrentEvent.target_id = 0; // resolved below
+  _rmluiCurrentEvent.mouse_screen_x = event.GetParameter<int>("mouse_screen_x", 0);
+  _rmluiCurrentEvent.mouse_screen_y = event.GetParameter<int>("mouse_screen_y", 0);
+  _rmluiCurrentEvent.key_code = event.GetParameter<int>("key_identifier", 0);
+  _rmluiCurrentEvent.key_modifiers = event.GetParameter<int>("key_modifier_state", 0);
+  _rmluiCurrentEvent.prevent_default = 0;
+  _rmluiCurrentEvent.stop_propagation = 0;
+
+  // Resolve target element ID
+  Rml::Element* target = event.GetTargetElement();
+  if (target) {
+    for (const auto& pair : _rmluiElements) {
+      if (pair.second == target) {
+        _rmluiCurrentEvent.target_id = pair.first;
+        break;
+      }
+    }
+  }
+
   auto cit = _rmluiCallbacks.find(cbId);
   if (cit != _rmluiCallbacks.end()) {
     cit->second();
   }
+
+  // Apply prevent_default / stop_propagation from callback
+  if (_rmluiCurrentEvent.prevent_default) {
+    const_cast<Rml::Event&>(event).StopPropagation();
+  }
+  if (_rmluiCurrentEvent.stop_propagation) {
+    const_cast<Rml::Event&>(event).StopPropagation();
+  }
+
+  // Clear current event
+  _rmluiCurrentEvent.type = nullptr;
+  _rmluiCurrentEvent.target_id = 0;
+}
+
+extern "C" const Rml_Event* Rml_GetCurrentEvent(void) {
+  return _rmluiCurrentEvent.type ? &_rmluiCurrentEvent : nullptr;
 }
 
 extern "C" int32_t Rml_AddEventListener(Rml_ElementId el, const char* event, Rml_CallbackId cb_id) {
@@ -351,8 +392,8 @@ extern "C" int32_t Rml_AddEventListener(Rml_ElementId el, const char* event, Rml
     Rml_CallbackId cbId_;
   public:
     explicit BridgeListener(Rml_CallbackId id) : cbId_(id) {}
-    void ProcessEvent(Rml::Event& /*event*/) override {
-      _rmluiEventDispatch(nullptr, Rml::Event("__bridge__", 0, Rml::Dictionary(), true, 0), cbId_);
+    void ProcessEvent(Rml::Event& event) override {
+      _rmluiEventDispatch(event.GetCurrentElement(), event, cbId_);
     }
     void OnDetach(Rml::Element* /*element*/) override {
       delete this;
