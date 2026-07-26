@@ -18,7 +18,7 @@ export class WasmtimeLinkerStrategy implements ILinkerStrategy {
     }
 
     const resolved = resolveDependencies(modules, options.moduleMatching);
-    const cpp = generateCCode(resolved, options.entry, options.wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined);
+    const cpp = generateCCode(resolved, options.entry, options.wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined, options.templatePath);
     await compileCpp(cpp, outputPath, options);
 
     return outputPath;

@@ -213,6 +213,7 @@ export class NativeAppBuilder {
       wasi: this.wasi,
       moduleMatching: this.moduleMatching,
       wasmtimePath: resolvedWasmtimePath,
+      templatePath: this.templateDir,
     };
 
     const result = await this.linkerStrategy.link(this.resolvedModules, nativeOptions);

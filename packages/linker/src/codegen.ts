@@ -236,7 +236,7 @@ export function validateEntryExport(link: ResolvedLink, entryPoint: string): voi
   throw new LinkerError(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
 }
 
-export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string {
+export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], templatePath?: string): string {
   const context = buildTemplateContext(link, entryPoint, wasi, importFuncTypes);
-  return renderTemplate(context);
+  return renderTemplate(context, templatePath);
 }

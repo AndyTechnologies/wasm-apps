@@ -119,7 +119,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Generating C++ source...');
 
-  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined);
+  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined, options.templatePath);
 
   if (!quiet) logger.step('Compiling native binary...');
 

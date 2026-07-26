@@ -4,7 +4,7 @@ import { generateCCode } from './codegen.js';
 export class DefaultCodegenStrategy implements ICodegenStrategy {
   readonly name = 'default';
 
-  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string {
-    return generateCCode(link, entryPoint, wasi, importFuncTypes);
+  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], templatePath?: string): string {
+    return generateCCode(link, entryPoint, wasi, importFuncTypes, templatePath);
   }
 }

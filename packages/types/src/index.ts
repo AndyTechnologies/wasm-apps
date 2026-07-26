@@ -238,7 +238,7 @@ export interface ILinkerStrategy {
 /** Estrategia de generación de código C++. */
 export interface ICodegenStrategy {
   readonly name: string;
-  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string;
+  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], templatePath?: string): string;
 }
 
 // ──────────────────────────────────────────
