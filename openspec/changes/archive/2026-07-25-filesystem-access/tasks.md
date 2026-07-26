@@ -2,14 +2,14 @@
 
 ## Review Workload Forecast
 
-| Field | Value |
-|-------|-------|
-| Estimated changed lines | ~600-800 |
-| 800-line budget risk | Medium |
-| Chained PRs recommended | No |
-| Suggested split | Single PR |
-| Delivery strategy | auto-forecast |
-| Chain strategy | pending |
+| Field                   | Value         |
+| ----------------------- | ------------- |
+| Estimated changed lines | ~600-800      |
+| 800-line budget risk    | Medium        |
+| Chained PRs recommended | No            |
+| Suggested split         | Single PR     |
+| Delivery strategy       | auto-forecast |
+| Chain strategy          | pending       |
 
 Decision needed before apply: No
 Chained PRs recommended: No
