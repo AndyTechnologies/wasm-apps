@@ -4,12 +4,13 @@ Compila AssemblyScript, C++ y Rust a WebAssembly y lo enlaza en ejecutables nati
 
 ## Secciones
 
-| Sección                                 | Qué encontrarás                                        |
-| --------------------------------------- | ------------------------------------------------------ |
-| [Tutorial](tutorial/getting-started.md) | Crea tu primera app nativa WebAssembly desde cero      |
-| [Guías prácticas](how-to/)              | Soluciones paso a paso para tareas comunes             |
-| [Referencia](reference/)                | Flags de CLI, opciones de configuración, firmas de API |
-| [Explicación](explanation/)             | Arquitectura, decisiones de diseño, cómo funciona      |
+| Sección                                   | Qué encontrarás                                        |
+| ----------------------------------------- | ------------------------------------------------------ |
+| [Tutorial](tutorial/getting-started.md)   | Crea tu primera app nativa WebAssembly desde cero      |
+| [Guías prácticas](how-to/)                | Soluciones paso a paso para tareas comunes             |
+| [Publicar una release](how-to/release.md) | Cómo publicar una nueva versión a npm y GitHub         |
+| [Referencia](reference/)                  | Flags de CLI, opciones de configuración, firmas de API |
+| [Explicación](explanation/)               | Arquitectura, decisiones de diseño, cómo funciona      |
 
 ## Ejemplos
 
