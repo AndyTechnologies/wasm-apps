@@ -8,6 +8,7 @@
 #include <RmlUi_SDL/SDL3SystemInterface.h>
 
 {% include "_rmlui-state.c.njk" %}
+{% include "_embedded-resources.c.njk" %}
 {% endif %}
 
 {% for module in modules -%}
@@ -62,6 +63,7 @@ int main(int argc, char *argv[]) {
     _rmluiGlContext = SDL_GL_CreateContext(_rmluiWindow);
 
     gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
+    SDL_GL_MakeCurrent(_rmluiWindow, _rmluiGlContext);
 
     _rmluiSystemInterface = new RmlSDL_SystemInterface_SDL(_rmluiWindow);
     Rml::SetSystemInterface(_rmluiSystemInterface);
@@ -76,10 +78,14 @@ int main(int argc, char *argv[]) {
     {% endif %}
 
     // Load default fonts
+{% if rmlui.resources.defaultFont %}
+    Rml::LoadFontFace("{{ rmlui.resources.defaultFont }}", false);
+{% else %}
     Rml::LoadFontFace("LatoLatin-Regular.ttf", false);
     Rml::LoadFontFace("LatoLatin-Bold.ttf", false);
     Rml::LoadFontFace("LatoLatin-Italic.ttf", false);
     Rml::LoadFontFace("NotoEmoji-Regular.ttf", false);
+{% endif %}
 {% endif %}
 
     {% for func in hostFunctions %}
@@ -114,6 +120,7 @@ int main(int argc, char *argv[]) {
   // ── Main interactive loop ─────────────────────────────────────────
   while (_rmluiRunning) {
     RmlUI_ProcessSdlEvents();
+    RmlUI_Update();
     auto result = entry_func.call(ctx, {});
     if (!result) {
       std::cerr << "Error llamando a {{ escapedEntryFunctionName }}" << std::endl;

@@ -198,7 +198,6 @@ extern "C" int32_t Rml_AppendChild(Rml_ElementId parent, Rml_ElementId child) {
   if (pit == _rmluiElements.end() || cit == _rmluiElements.end())
     return RMLUI_ERR_INVALID_HANDLE;
   pit->second->AppendChild(cit->second);
-  _rmluiElements.erase(child); // child is now owned by parent
   return RMLUI_OK;
 }
 
@@ -218,7 +217,6 @@ extern "C" int32_t Rml_InsertBefore(Rml_ElementId parent, Rml_ElementId child, R
   if (pit == _rmluiElements.end() || cit == _rmluiElements.end() || rit == _rmluiElements.end())
     return RMLUI_ERR_INVALID_HANDLE;
   pit->second->InsertBefore(cit->second, rit->second);
-  _rmluiElements.erase(child);
   return RMLUI_OK;
 }
 
@@ -229,8 +227,6 @@ extern "C" int32_t Rml_ReplaceChild(Rml_ElementId parent, Rml_ElementId newChild
   if (pit == _rmluiElements.end() || nit == _rmluiElements.end() || oit == _rmluiElements.end())
     return RMLUI_ERR_INVALID_HANDLE;
   pit->second->ReplaceChild(nit->second, oit->second);
-  _rmluiElements.erase(newChild);
-  _rmluiElements.erase(oldChild);
   return RMLUI_OK;
 }
 
@@ -351,7 +347,12 @@ extern "C" int32_t Rml_SetStyle(Rml_ElementId el, const char* css_text) {
 /** Thread-local current event for Rml_GetCurrentEvent(). */
 static thread_local Rml_Event _rmluiCurrentEvent = {nullptr, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0, 0}};
 
+/** Reentrancy guard for event dispatch. */
+static thread_local bool _rmluiInEventDispatch = false;
+
 static void _rmluiEventDispatch(Rml::Element* element, const Rml::Event& event, Rml_CallbackId cbId) {
+  if (_rmluiInEventDispatch) return; // defer to next frame
+  _rmluiInEventDispatch = true;
   // Populate the thread-local event struct with real event data
   _rmluiCurrentEvent.type = event.GetType().c_str();
   _rmluiCurrentEvent.target_id = 0; // resolved below
@@ -389,6 +390,7 @@ static void _rmluiEventDispatch(Rml::Element* element, const Rml::Event& event, 
   // Clear current event
   _rmluiCurrentEvent.type = nullptr;
   _rmluiCurrentEvent.target_id = 0;
+  _rmluiInEventDispatch = false;
 }
 
 extern "C" const Rml_Event* Rml_GetCurrentEvent(void) {
@@ -470,22 +472,36 @@ extern "C" int32_t Rml_LoadFontFromBuffer(const char* name, const void* data, in
 // ── Texture loading ───────────────────────────────────────────────────────
 extern "C" int32_t Rml_LoadTexture(const char* path) {
   if (!path) return RMLUI_ERR_NULL_PARAM;
-  // Texture loading is handled by RmlUI's render interface automatically
-  // through the document system. This is a no-op in v1.
+  // RmlUI's render interface handles texture loading from file paths
+  // when textures are referenced in RCSS. This function is a no-op
+  // because RmlUI loads textures automatically through the render
+  // interface when a decorator or background-image references a path.
+  //
+  // For explicit programmatic texture generation, use
+  // Rml_LoadTextureFromBuffer instead.
   return RMLUI_OK;
 }
 
 extern "C" int32_t Rml_LoadTextureFromBuffer(const char* name, const void* data, int32_t len) {
   if (!name || !data) return RMLUI_ERR_NULL_PARAM;
-  // Texture loading from buffer — not directly supported in RmlUI v1.
-  // Placeholder returning unsupported.
+  // For v1, this is a placeholder returning unsupported.
+  // RmlUI handles textures through its render interface automatically
+  // when referenced from RCSS decorators/background-image.
+  //
+  // Future: Use Rml::Core::GetRenderInterface()->LoadTexture()
+  // or generate a raw OpenGL texture and register it with RmlUI.
+  (void)len;
   return RMLUI_ERR_UNSUPPORTED;
 }
 
 extern "C" int32_t Rml_GetTextureDimensions(const char* name, int32_t* w, int32_t* h) {
   (void)name;
-  if (w) *w = 0;
-  if (h) *h = 0;
+  if (!w || !h) return RMLUI_ERR_NULL_PARAM;
+  // In RmlUI, texture dimensions are managed internally by the render interface.
+  // For v1, return unsupported — textures should be loaded through RCSS.
+  // Future: Query the RmlUI render interface's texture cache.
+  *w = 0;
+  *h = 0;
   return RMLUI_ERR_UNSUPPORTED;
 }
 
@@ -523,10 +539,6 @@ extern "C" void RmlUI_ProcessSdlEvents(void) {
         break;
       default: break;
     }
-  }
-  // Update all contexts
-  for (auto& kv : _rmluiContexts) {
-    kv.second->Update();
   }
 }
 

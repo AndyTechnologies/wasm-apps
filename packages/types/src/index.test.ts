@@ -190,6 +190,42 @@ describe('WasmArtifact with toolchainId', () => {
   });
 });
 
+describe('MountEntry', () => {
+  it('serializa y deserializa correctamente', () => {
+    const entry = { host: '/home/user/data', guest: '/data' };
+    const json = JSON.stringify(entry);
+    const parsed = JSON.parse(json);
+    expect(parsed.host).toBe('/home/user/data');
+    expect(parsed.guest).toBe('/data');
+  });
+
+  it('acepta guest paths con múltiples segmentos', () => {
+    const entry: Record<string, string> = { host: './assets', guest: '/app/assets' };
+    expect(entry.guest).toBe('/app/assets');
+  });
+});
+
+describe('PermissionDecision', () => {
+  it('tiene los tres valores esperados', () => {
+    expect(PermissionDecision.AllowOnce).toBe('AllowOnce');
+    expect(PermissionDecision.AllowForever).toBe('AllowForever');
+    expect(PermissionDecision.Deny).toBe('Deny');
+  });
+});
+
+describe('WappConfig with mounts', () => {
+  it('acepta mounts opcional en WappConfig', () => {
+    const config: WappConfig = {
+      mounts: [
+        { host: '/home/user/data', guest: '/data' },
+        { host: './config', guest: '/etc/app' },
+      ],
+    };
+    expect(config.mounts).toHaveLength(2);
+    expect(config.mounts![0].guest).toBe('/data');
+  });
+});
+
 describe('WappConfig with toolchains and linker', () => {
   it('accepts compiler.toolchains with toolchain overrides', () => {
     const config: WappConfig = {

@@ -223,6 +223,7 @@ function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: bool
         debugger: rmluiState.config.debugger ?? false,
         resources: {
           searchPaths: rmluiState.config.resources?.searchPaths ?? [],
+          defaultFont: rmluiState.config.resources?.defaultFont,
         },
       }
     : undefined;

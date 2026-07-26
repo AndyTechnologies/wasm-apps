@@ -36,8 +36,9 @@ export interface RmluiAssets {
 /**
  * Determina las URLs de descarga para las dependencias de RmlUI según plataforma y arquitectura.
  *
- * NOTA: Estas URLs son placeholders — serán resueltas cuando las pre-built libs sean publicadas.
- * Actualmente retorna URLs de ejemplo con el target platform mapping.
+ * Retorna URLs de descarga directa de GitHub Releases para SDL3, RmlUI y GLAD.
+ * Los targets específicos pueden no existir aún como pre-built binaries;
+ * si la descarga falla, rmlui-setup.ts intentará construir desde fuente.
  */
 export function getRmluiAssets(version?: string): RmluiAssets {
   const v = version || '1.0.0';

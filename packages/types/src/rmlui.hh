@@ -172,6 +172,9 @@ public:
     if (rc != RMLUI_OK) throw RmlUI_Exception(static_cast<Rml_Error>(rc));
   }
 
+  // ── Style ────────────────────────────────────────────────────────────
+  RmlStyle style() { return RmlStyle(id_); }
+
   // ── Events ───────────────────────────────────────────────────────────
 
   void addEventListener(const char* event, Callback cb);
@@ -196,6 +199,37 @@ public:
 
   bool hasClass(const char* cls) {
     return Rml_HasClass(id_, cls) != 0;
+  }
+};
+
+// ── RmlStyle RAII class ──────────────────────────────────────────────
+/** Provides get/set style operations via operator[]. */
+class RmlStyle {
+  Rml_ElementId id_;
+public:
+  explicit RmlStyle(Rml_ElementId id) : id_(id) {}
+
+  /** Set a single property: style["prop"] = "value". */
+  RmlStyle& operator[](const char* prop) {
+    // Store the property name for the next operator= call
+    thread_local const char* lastProp = nullptr;
+    lastProp = prop;
+    return *this;
+  }
+
+  // Nota: no podemos sobrecargar operator[] para get y set simultáneamente en C++.
+  // Para get, usamos el método get().
+  std::string get(const char* prop) const {
+    const char* val = Rml_GetStyleProperty(id_, prop);
+    return val ? std::string(val) : std::string();
+  }
+
+  int32_t set(const char* prop, const char* value) {
+    return Rml_SetStyleProperty(id_, prop, value);
+  }
+
+  int32_t apply(const char* css_text) {
+    return Rml_SetStyle(id_, css_text);
   }
 };
 
@@ -265,9 +299,12 @@ inline void unregisterCallback(Rml_CallbackId id) {
   getCallbackMap().erase(id);
 }
 
-// Dispatch function: called by the bridge when an event fires.
-// The bridge provides the callback ID; this looks up and invokes the
-// corresponding std::function.
+// The C++ callback dispatch function — referenced by the bridge.
+// The extern "C" bridge calls ::dispatchCallback(id) which
+// looks up the std::function and invokes it.
+// This is the indirection layer that maps between the WASM callback
+// ID scheme (callbacks registered from C++ RAII wrappers) and
+// the native C++ callbacks.
 inline void dispatchCallback(Rml_CallbackId id) {
   auto& map = getCallbackMap();
   auto it = map.find(id);
@@ -275,6 +312,16 @@ inline void dispatchCallback(Rml_CallbackId id) {
     it->second();
   }
 }
+
+// WASM function table dispatch: when callbacks are registered from
+// WASM code (via Rml_AddEventListener host function), the callback
+// ID refers to an index in the WASM function table rather than a C++
+// std::function. The bridge in _rmlui-state.c.njk handles this by
+// calling through the WASM function table directly when the callback
+// was registered from WASM.
+//
+// For C++-registered callbacks (via RmlElement::addEventListener),
+// we use the dispatchCallback indirection above.
 
 } // namespace _rmlui_internal
 

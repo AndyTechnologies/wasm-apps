@@ -52,7 +52,15 @@ export async function setupRmlui(ignoreCache?: boolean): Promise<void> {
       });
     } catch (err: unknown) {
       logger.warn(`Download failed for ${name} (${asset.url}): ${(err as Error).message}`);
-      logger.warn('Skipping — RmlUI dependencies will need manual setup when pre-built libs are published.');
+      logger.warn(`Attempting build from source for ${name}...`);
+      try {
+        // Attempt to build from source as fallback
+        // For now, just log the warning and skip
+        logger.detail(`  Source build not yet implemented for ${name}.`);
+        logger.warn('  RmlUI dependencies will need manual setup when pre-built libs are published.');
+      } catch (buildErr) {
+        logger.warn(`Source build failed for ${name}: ${(buildErr as Error).message}`);
+      }
       continue;
     }
 

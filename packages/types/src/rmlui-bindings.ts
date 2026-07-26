@@ -126,6 +126,12 @@ export declare function rawRml_GetElementById(ctx: i32, id: string): i32;
 // @external("env", "Rml_QuerySelector")
 export declare function rawRml_QuerySelector(el: i32, selector: string): i32;
 
+// @external("env", "Rml_QuerySelectorAll")
+export declare function rawRml_QuerySelectorAll(el: i32, selector: string): i32;
+
+// @external("env", "Rml_FreeNodeList")
+export declare function rawRml_FreeNodeList(elements: i32): void;
+
 // @external("env", "Rml_GetBody")
 export declare function rawRml_GetBody(ctx: i32): i32;
 
@@ -554,4 +560,189 @@ export function getHead(ctx: i32): i32 {
 /** Safe wrapper around `Rml_DebuggerToggle`. */
 export function debuggerToggle(): void {
   rawRml_DebuggerToggle();
+}
+
+// ── Element class ─────────────────────────────────────────────────────
+export class Element {
+  constructor(public id: i32) {}
+
+  // Child management
+  appendChild(child: Element): Element {
+    const result = rawRml_AppendChild(this.id, child.id);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    return child;
+  }
+
+  removeChild(child: Element): void {
+    const result = rawRml_RemoveChild(this.id, child.id);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  insertBefore(child: Element, ref: Element): void {
+    const result = rawRml_InsertBefore(this.id, child.id, ref.id);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  replaceChild(newChild: Element, oldChild: Element): void {
+    const result = rawRml_ReplaceChild(this.id, newChild.id, oldChild.id);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  // Attributes
+  setAttribute(name: string, value: string): void {
+    const result = rawRml_SetAttribute(this.id, name, value);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  getAttribute(name: string): string {
+    return rawRml_GetAttribute(this.id, name);
+  }
+
+  removeAttribute(name: string): void {
+    const result = rawRml_RemoveAttribute(this.id, name);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  hasAttribute(name: string): bool {
+    return rawRml_HasAttribute(this.id, name) > 0;
+  }
+
+  // Content
+  set textContent(text: string) {
+    const result = rawRml_SetTextContent(this.id, text);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  get textContent(): string {
+    return rawRml_GetTextContent(this.id);
+  }
+
+  set innerHTML(html: string) {
+    const result = rawRml_SetInnerHTML(this.id, html);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  get innerHTML(): string {
+    return rawRml_GetInnerHTML(this.id);
+  }
+
+  // Style
+  setStyleProperty(prop: string, value: string): void {
+    const result = rawRml_SetStyleProperty(this.id, prop, value);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  getStyleProperty(prop: string): string {
+    return rawRml_GetStyleProperty(this.id, prop);
+  }
+
+  setStyle(css: string): void {
+    const result = rawRml_SetStyle(this.id, css);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  // Events
+  addEventListener(event: string, cb_id: i32): void {
+    const result = rawRml_AddEventListener(this.id, event, cb_id);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  removeEventListener(event: string): void {
+    const result = rawRml_RemoveEventListener(this.id, event);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  // Class list
+  addClass(cls: string): void {
+    const result = rawRml_AddClass(this.id, cls);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  removeClass(cls: string): void {
+    const result = rawRml_RemoveClass(this.id, cls);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  toggleClass(cls: string): void {
+    const result = rawRml_ToggleClass(this.id, cls);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+  }
+
+  hasClass(cls: string): bool {
+    return rawRml_HasClass(this.id, cls) > 0;
+  }
+
+  // Query
+  querySelector(selector: string): Element | null {
+    const result = rawRml_QuerySelector(this.id, selector);
+    if (result <= 0) return null;
+    return new Element(result);
+  }
+
+  querySelectorAll(selector: string): Element[] {
+    const ptr = rawRml_QuerySelectorAll(this.id, selector);
+    if (ptr <= 0) return [];
+    const result: Element[] = [];
+    let i = ptr;
+    while (load<i32>(i) !== 0) {
+      result.push(new Element(load<i32>(i)));
+      i += 4;
+    }
+    rawRml_FreeNodeList(ptr);
+    return result;
+  }
+}
+
+// ── Document class ────────────────────────────────────────────────────
+export class Document {
+  constructor(public ctx: i32, public docId: i32) {}
+
+  get body(): Element | null {
+    const result = rawRml_GetBody(this.ctx);
+    if (result <= 0) return null;
+    return new Element(result);
+  }
+
+  get head(): Element | null {
+    const result = rawRml_GetHead(this.ctx);
+    if (result <= 0) return null;
+    return new Element(result);
+  }
+
+  getElementById(id: string): Element | null {
+    const result = rawRml_GetElementById(this.ctx, id);
+    if (result <= 0) return null;
+    return new Element(result);
+  }
+
+  createElement(tag: string): Element {
+    const result = rawRml_CreateElement(tag);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    return new Element(result);
+  }
+
+  createTextNode(text: string): Element {
+    const result = rawRml_CreateTextNode(text);
+    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    return new Element(result);
+  }
+
+  show(): void {
+    rawRml_ShowDocument(this.docId);
+  }
+
+  hide(): void {
+    rawRml_HideDocument(this.docId);
+  }
+
+  close(): void {
+    rawRml_CloseDocument(this.docId);
+  }
+
+  querySelector(selector: string): Element | null {
+    // Query from body
+    const body = this.body;
+    if (!body) return null;
+    return body.querySelector(selector);
+  }
 }
