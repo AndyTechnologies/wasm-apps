@@ -108,4 +108,11 @@ export interface NunjucksTemplateContext {
   hostFunctions: TemplateHostFunctionEntry[];
   /** Lista de globales a definir. */
   globals: TemplateGlobalEntry[];
+  /** Configuración opcional de RmlUI para el ciclo de renderizado interactivo. */
+  rmlui?: {
+    enabled: boolean;
+    window: { title: string; width: number; height: number; resizable: boolean };
+    debugger: boolean;
+    resources: { searchPaths: string[] };
+  };
 }

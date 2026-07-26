@@ -1,0 +1,32 @@
+// SDL3 + OpenGL 3 + RmlUI initialization
+SDL_Init(SDL_INIT_VIDEO);
+SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+SDL_Window* window = SDL_CreateWindow("{{ rmlui.window.title }}",
+    {{ rmlui.window.width }}, {{ rmlui.window.height }},
+    SDL_WINDOW_OPENGL{% if rmlui.window.resizable %} | SDL_WINDOW_RESIZABLE{% endif %});
+SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+
+gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
+
+auto* system_interface = new RmlSDL_SystemInterface_SDL(window);
+Rml::SetSystemInterface(system_interface);
+
+auto* render_interface = new RmlGL3_RenderInterface_GL3();
+Rml::SetRenderInterface(render_interface);
+
+Rml::Initialise();
+
+Rml::Context* rml_context = Rml::CreateContext("main",
+    Rml::Vector2i({{ rmlui.window.width }}, {{ rmlui.window.height }}));
+
+{% if rmlui.debugger %}
+Rml::Debugger::Initialise(rml_context);
+{% endif %}
+
+// Load default fonts
+Rml::LoadFontFace("LatoLatin-Regular.ttf", false);
+Rml::LoadFontFace("LatoLatin-Bold.ttf", false);
+Rml::LoadFontFace("LatoLatin-Italic.ttf", false);
+Rml::LoadFontFace("NotoEmoji-Regular.ttf", false);

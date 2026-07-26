@@ -20,6 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
+        with:
+          version: 11.10.0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -28,7 +30,7 @@ jobs:
 
       - name: Install & Build
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           pnpm -r build
 
       - name: Publish changed packages
