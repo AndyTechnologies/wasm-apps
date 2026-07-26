@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
-import type { NativeAppOptions } from '@wasm-apps/types';
+import type { NativeAppOptions, ExtraLib } from '@wasm-apps/types';
 import { CMakeError, LinkerError, ConfigError, logger } from '@wasm-apps/types';
 
 const require = createRequire(import.meta.url);
@@ -90,14 +90,6 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
 
 function escapeCMakeString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$\{/g, '\\${');
-}
-
-export interface ExtraLib {
-  name: string;
-  includeDir: string;
-  libDir: string;
-  libs: string[];
-  frameworks?: string[];
 }
 
 /** Genera un CMakeLists.txt para el proyecto wasm-linker. */

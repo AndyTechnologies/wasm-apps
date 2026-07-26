@@ -32,6 +32,21 @@ export interface WasmModuleInfo {
   importFuncTypes?: WasmImportFuncType[];
 }
 
+/** Configuración del plugin RmlUI para ventanas, debugger y recursos. */
+export interface RmluiPluginConfig {
+  window?: {
+    title?: string;
+    width?: number;
+    height?: number;
+    resizable?: boolean;
+  };
+  debugger?: boolean;
+  resources?: {
+    searchPaths?: string[];
+    defaultFont?: string;
+  };
+}
+
 /** Estrategia para emparejar imports WASM con exports de otros módulos. */
 export type ModuleMatchingStrategy = 'name-only' | 'file-name';
 
@@ -77,6 +92,16 @@ export interface NativeAppOptions {
   moduleMatching: ModuleMatchingStrategy;
   zigPath?: string;
   wasmtimePath?: string;
+  templatePath?: string;
+}
+
+/** Una librería extra para incluir en la compilación CMake (por ejemplo SDL3, RmlUI, GLAD). */
+export interface ExtraLib {
+  name: string;
+  includeDir: string;
+  libDir: string;
+  libs: string[];
+  frameworks?: string[];
 }
 
 /** Variante del runtime de AssemblyScript. */
