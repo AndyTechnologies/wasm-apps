@@ -1,0 +1,18 @@
+<rml>
+<head>
+  <title>RmlUI DOM API Demo</title>
+  <link type="text/rcss" href="ui/style.rcss"/>
+</head>
+<body id="main-content">
+  <h1>RmlUI DOM API Demo</h1>
+  <div id="content-area">
+    <p class="intro">This paragraph demonstrates querySelector.</p>
+    <p class="item">Item 1</p>
+    <p class="item">Item 2</p>
+    <p class="item">Item 3</p>
+  </div>
+  <div id="output-area">
+    <p>Output will appear here via DOM API.</p>
+  </div>
+</body>
+</rml>

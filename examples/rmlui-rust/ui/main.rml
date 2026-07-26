@@ -1,15 +1,13 @@
-<!-- main.rml — RmlUI document template for the Rust example -->
 <rml>
-  <head>
-    <title>RmlUI Rust Example</title>
-    <link type="text/rcss" href="ui/style.rcss" />
-  </head>
-  <body id="root">
-    <h1>RmlUI + Rust + wasm-apps</h1>
-    <p>This UI renders natively. The WASM module is written in Rust.</p>
-    <p>The Rust code calls <em>env.Rml_*</em> functions via <code>extern "C"</code> FFI.</p>
-    <div id="content-area">
-      <p>RmlUI handles layout, styling, and interaction.</p>
-    </div>
-  </body>
+<head>
+  <title>RmlUI Rust Example</title>
+  <link type="text/rcss" href="ui/style.rcss"/>
+</head>
+<body id="main">
+  <h1>Hello from Rust WASM!</h1>
+  <p>This document is rendered using RmlUI + SDL3 + OpenGL 3.</p>
+  <div id="output">
+    <p>Status: Initialized</p>
+  </div>
+</body>
 </rml>
