@@ -2,6 +2,21 @@ export { logger, formatBytes } from './logger.js';
 import type { Logger } from './logger.js';
 export type { Logger };
 
+/** Entrada de montaje de directorio host → guest WASI. */
+export interface MountEntry {
+  /** Ruta en el sistema host (resuelta relativa a wapp.json al build). */
+  host: string;
+  /** Ruta virtual WASI (e.g. "/data"). */
+  guest: string;
+}
+
+/** Decisión de permiso para acceso a filesystem. */
+export enum PermissionDecision {
+  AllowOnce = 'AllowOnce',
+  AllowForever = 'AllowForever',
+  Deny = 'Deny',
+}
+
 /** Una entrada de exportación WASM. */
 export interface WasmExport {
   name: string;
@@ -93,6 +108,7 @@ export interface NativeAppOptions {
   zigPath?: string;
   wasmtimePath?: string;
   templatePath?: string;
+  mounts?: MountEntry[];
 }
 
 /** Una librería extra para incluir en la compilación CMake (por ejemplo SDL3, RmlUI, GLAD). */
@@ -274,6 +290,7 @@ export interface WappConfig {
   moduleMatching?: ModuleMatchingStrategy;
   target?: string;
   targets?: CrossCompileTarget[];
+  mounts?: MountEntry[];
   zigPath?: string;
   wasmtimePath?: string;
   compiler?: {

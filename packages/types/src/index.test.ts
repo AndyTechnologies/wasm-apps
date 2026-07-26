@@ -9,8 +9,9 @@ import {
   PipelinePhase,
   formatBytes,
   EXTENSION_TO_TOOLCHAIN,
+  PermissionDecision,
 } from './index.js';
-import type { ToolchainId, WasmArtifact, WappConfig } from './index.js';
+import type { ToolchainId, WasmArtifact, WappConfig, MountEntry } from './index.js';
 
 describe('formatBytes', () => {
   it('formatea 0 bytes', () => {
