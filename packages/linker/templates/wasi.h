@@ -8,26 +8,27 @@
 extern "C" {
 #endif
 
-// Raw WASI syscall declarations (weak linkage for override)
-__attribute__((weak)) int32_t __wasi_fd_write(int32_t fd, const void *iovs, size_t iovs_len, size_t *nwritten);
-__attribute__((weak)) int32_t __wasi_fd_read(int32_t fd, const void *iovs, size_t iovs_len, size_t *nread);
-__attribute__((weak)) int32_t __wasi_fd_close(int32_t fd);
-__attribute__((weak)) int32_t __wasi_fd_seek(int32_t fd, int64_t offset, int32_t whence, uint64_t *newoffset);
-__attribute__((weak)) int32_t __wasi_fd_prestat_get(int32_t fd, void *buf);
-__attribute__((weak)) int32_t __wasi_fd_prestat_dir_name(int32_t fd, char *buf, size_t len);
-__attribute__((weak)) int32_t __wasi_fd_readdir(int32_t fd, void *buf, size_t len, uint64_t cookie, size_t *nread);
-__attribute__((weak)) int32_t __wasi_path_open(int32_t fd, int32_t dirflags, const char *path, size_t path_len, uint32_t oflags, uint64_t fs_rights_base, uint64_t fs_rights_inheriting, int32_t fdflags, int32_t *opened_fd);
-__attribute__((weak)) int32_t __wasi_path_filestat_get(int32_t fd, int32_t flags, const char *path, size_t path_len, void *buf);
-__attribute__((weak)) int32_t __wasi_path_unlink_file(int32_t fd, const char *path, size_t path_len);
-__attribute__((weak)) int32_t __wasi_path_create_directory(int32_t fd, const char *path, size_t path_len);
-__attribute__((weak)) int32_t __wasi_environ_get(char **environ, char *environ_buf);
-__attribute__((weak)) int32_t __wasi_environ_sizes_get(size_t *count, size_t *buf_size);
-__attribute__((weak)) void __wasi_proc_exit(int32_t code);
-__attribute__((weak)) int32_t __wasi_clock_time_get(int32_t id, uint64_t precision, uint64_t *time);
+// Raw WASI syscall declarations (imported from wasi_snapshot_preview1)
+#define WASI_IMPORT(name) __attribute__((__import_module__("wasi_snapshot_preview1"), __import_name__(name)))
+WASI_IMPORT("fd_write")    int32_t __wasi_fd_write(int32_t fd, const void *iovs, size_t iovs_len, size_t *nwritten);
+WASI_IMPORT("fd_read")     int32_t __wasi_fd_read(int32_t fd, const void *iovs, size_t iovs_len, size_t *nread);
+WASI_IMPORT("fd_close")    int32_t __wasi_fd_close(int32_t fd);
+WASI_IMPORT("fd_seek")     int32_t __wasi_fd_seek(int32_t fd, int64_t offset, int32_t whence, uint64_t *newoffset);
+WASI_IMPORT("fd_prestat_get")    int32_t __wasi_fd_prestat_get(int32_t fd, void *buf);
+WASI_IMPORT("fd_prestat_dir_name") int32_t __wasi_fd_prestat_dir_name(int32_t fd, char *buf, size_t len);
+WASI_IMPORT("fd_readdir")  int32_t __wasi_fd_readdir(int32_t fd, void *buf, size_t len, uint64_t cookie, size_t *nread);
+WASI_IMPORT("path_open")   int32_t __wasi_path_open(int32_t fd, int32_t dirflags, const char *path, size_t path_len, uint32_t oflags, uint64_t fs_rights_base, uint64_t fs_rights_inheriting, int32_t fdflags, int32_t *opened_fd);
+WASI_IMPORT("path_filestat_get")  int32_t __wasi_path_filestat_get(int32_t fd, int32_t flags, const char *path, size_t path_len, void *buf);
+WASI_IMPORT("path_unlink_file")   int32_t __wasi_path_unlink_file(int32_t fd, const char *path, size_t path_len);
+WASI_IMPORT("path_create_directory") int32_t __wasi_path_create_directory(int32_t fd, const char *path, size_t path_len);
+WASI_IMPORT("environ_get")  int32_t __wasi_environ_get(char **environ, char *environ_buf);
+WASI_IMPORT("environ_sizes_get") int32_t __wasi_environ_sizes_get(size_t *count, size_t *buf_size);
+WASI_IMPORT("proc_exit")   void __wasi_proc_exit(int32_t code);
+WASI_IMPORT("clock_time_get") int32_t __wasi_clock_time_get(int32_t id, uint64_t precision, uint64_t *time);
 
 // WASI types for compatibility
 typedef struct { size_t pr_name_len; } __wasi_prestat_t;
-typedef struct { uint64_t buf; size_t buf_len; } __wasi_iovec_t;
+typedef struct { uint32_t buf; uint32_t buf_len; } __wasi_iovec_t; // WASM32 ABI: 8-byte ciovec/iovec
 typedef struct {
   uint64_t st_dev; uint64_t st_ino; uint32_t st_filetype;
   uint32_t st_nlink; uint64_t st_size; uint64_t st_atim;
@@ -45,13 +46,13 @@ namespace wasi {
 // ── Stdout/stderr ──────────────────────────────────
 
 inline void stdout_write(const char *data, size_t len) {
-  __wasi_iovec_t iov = { (uint64_t)(uintptr_t)data, len };
+  __wasi_iovec_t iov = { (uint32_t)(uintptr_t)data, (uint32_t)len };
   size_t written = 0;
   __wasi_fd_write(1, &iov, 1, &written);
 }
 
 inline void stderr_write(const char *data, size_t len) {
-  __wasi_iovec_t iov = { (uint64_t)(uintptr_t)data, len };
+  __wasi_iovec_t iov = { (uint32_t)(uintptr_t)data, (uint32_t)len };
   size_t written = 0;
   __wasi_fd_write(2, &iov, 1, &written);
 }
@@ -65,14 +66,14 @@ inline void stdout_write_str(const char *s) {
 // ── Low-level I/O ──────────────────────────────────
 
 inline int fd_write(int fd, const char *data, size_t len) {
-  __wasi_iovec_t iov = { (uint64_t)(uintptr_t)data, len };
+  __wasi_iovec_t iov = { (uint32_t)(uintptr_t)data, (uint32_t)len };
   size_t written = 0;
   int err = __wasi_fd_write(fd, &iov, 1, &written);
   return err ? -err : (int)written;
 }
 
 inline int fd_read(int fd, char *buf, size_t len) {
-  __wasi_iovec_t iov = { (uint64_t)(uintptr_t)buf, len };
+  __wasi_iovec_t iov = { (uint32_t)(uintptr_t)buf, (uint32_t)len };
   size_t nread = 0;
   int err = __wasi_fd_read(fd, &iov, 1, &nread);
   return err ? -err : (int)nread;
