@@ -108,3 +108,6 @@ pub fn file_exists(dir_fd: i32, path: &[u8]) -> bool {
     let mut buf: __wasi_filestat_t = unsafe { core::mem::zeroed() };
     unsafe { __wasi_path_filestat_get(dir_fd, 0, path.as_ptr(), path.len(), &mut buf) == 0 }
 }
+
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! { loop {} }

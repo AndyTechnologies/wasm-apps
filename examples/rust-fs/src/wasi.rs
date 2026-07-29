@@ -113,3 +113,28 @@ pub fn file_exists(dir_fd: i32, path: &[u8]) -> bool {
     let mut buf: __wasi_filestat_t = unsafe { core::mem::zeroed() };
     unsafe { __wasi_path_filestat_get(dir_fd, 0, path.as_ptr(), path.len(), &mut buf) == 0 }
 }
+
+// ── Global allocator (needed for Vec/Box in no_std) ──
+use core::alloc::{GlobalAlloc, Layout};
+use core::cell::UnsafeCell;
+
+struct BumpAlloc(UnsafeCell<[u8; 131072]>, UnsafeCell<usize>);
+unsafe impl Sync for BumpAlloc {}
+unsafe impl GlobalAlloc for BumpAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let size = layout.size();
+        let align = layout.align();
+        let ptr = (*self.0.get()).as_mut_ptr();
+        let off = *self.1.get();
+        let aligned = (off + align - 1) & !(align - 1);
+        if aligned + size > 131072 { return core::ptr::null_mut(); }
+        *self.1.get() = aligned + size;
+        ptr.add(aligned)
+    }
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+}
+#[global_allocator]
+static ALLOC: BumpAlloc = BumpAlloc(UnsafeCell::new([0u8; 131072]), UnsafeCell::new(0));
+
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo) -> ! { loop {} }
