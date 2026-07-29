@@ -1,10 +1,12 @@
 // Rust WASM example using high-level Console API
 #![no_std]
 
+mod wasi;
+
 mod console;
 
 #[panic_handler]
-fn panic(_: &core::panic::PanickInfo) -> ! {
+fn panic(_: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 

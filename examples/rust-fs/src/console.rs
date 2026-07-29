@@ -1,7 +1,7 @@
 // Console API local copy for examples
 #![allow(non_snake_case, non_camel_case_types, dead_code)]
 
-mod wasi;
+use crate::wasi;
 
 pub fn log(msg: &str) -> Result<usize, i32> {
     let n1 = wasi::stdout_str(msg).map_err(|e| e.0)?;

@@ -1,15 +1,25 @@
 // WASI mid-level wrapper local copy for examples
 #![allow(non_snake_case, non_camel_case_types, dead_code)]
 
+#[link(wasm_import_module = "wasi_snapshot_preview1")]
 extern "C" {
+    #[link_name = "fd_write"]
     fn __wasi_fd_write(fd: i32, iovs: *const __wasi_iovec_t, iovs_len: usize, nwritten: *mut usize) -> i32;
+    #[link_name = "fd_read"]
     fn __wasi_fd_read(fd: i32, iovs: *const __wasi_iovec_t, iovs_len: usize, nread: *mut usize) -> i32;
+    #[link_name = "fd_close"]
     fn __wasi_fd_close(fd: i32) -> i32;
+    #[link_name = "fd_prestat_get"]
     fn __wasi_fd_prestat_get(fd: i32, buf: *mut __wasi_prestat_t) -> i32;
+    #[link_name = "fd_prestat_dir_name"]
     fn __wasi_fd_prestat_dir_name(fd: i32, buf: *mut u8, len: usize) -> i32;
+    #[link_name = "path_open"]
     fn __wasi_path_open(fd: i32, dirflags: i32, path: *const u8, path_len: usize, oflags: u32, fs_rights_base: u64, fs_rights_inheriting: u64, fdflags: i32, opened_fd: *mut i32) -> i32;
+    #[link_name = "path_filestat_get"]
     fn __wasi_path_filestat_get(fd: i32, flags: i32, path: *const u8, path_len: usize, buf: *mut __wasi_filestat_t) -> i32;
+    #[link_name = "path_unlink_file"]
     fn __wasi_path_unlink_file(fd: i32, path: *const u8, path_len: usize) -> i32;
+    #[link_name = "path_create_directory"]
     fn __wasi_path_create_directory(fd: i32, path: *const u8, path_len: usize) -> i32;
 }
 

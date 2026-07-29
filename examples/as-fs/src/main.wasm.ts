@@ -24,5 +24,7 @@ export function _start(): void {
         store<i32>(iovsAddr, 1, 4);
         store<i32>(iovsAddr, 0, 8);
         wasiFdWrite(1, iovsAddr, 1, nwritten);
+    } else {
+        log("(no mounted dir)");
     }
 }
