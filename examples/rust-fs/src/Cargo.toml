@@ -1,0 +1,9 @@
+[package]
+name = "rust-fs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rust_fs"
+crate-type = ["cdylib"]
+path = "main.wasm.rs"
