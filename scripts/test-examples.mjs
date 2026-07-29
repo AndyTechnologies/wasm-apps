@@ -17,6 +17,9 @@ const exampleDirs = [
   'precompiled',
   'multi-toolchain',
   'custom-template',
+  'mounts-demo',
+  'rust-fs',
+  'as-fs',
 ];
 
 /**
@@ -61,6 +64,9 @@ const requiresToolchain = {
   'rust-hello': ['rust'],
   'multi-toolchain': ['cpp'],
   'custom-template': [],
+  'mounts-demo': ['cpp'],
+  'rust-fs': ['rust'],
+  'as-fs': [],
   // precompiled depends on basico's build output (AssemblyScript WASM)
   precompiled: [],
 };
