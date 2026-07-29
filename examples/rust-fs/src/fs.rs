@@ -1,7 +1,9 @@
 // FS API local copy for examples
 #![allow(non_snake_case, non_camel_case_types, dead_code)]
 
-mod wasi;
+use alloc::vec::Vec;
+use alloc::vec;
+use crate::wasi;
 
 struct ResolvedPath {
     dir_fd: i32,

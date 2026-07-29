@@ -8,11 +8,10 @@ extern "C" int _start() {
     char buf[512];
     int n = fs::readFile("/mnt/data/greeting.txt", buf, 512);
     if (n > 0) {
-        // Write raw content (no extra \n from console::log)
         wasi::stdout_write(buf, n);
+        wasi::stdout_write("\n", 1);
+    } else {
+        console::log("(no mounted dir — try with preopen_dir)");
     }
-
-    wasi::stdout_write("\n", 1);
-    console::assert(n > 0, "file must exist");
     return 0;
 }

@@ -1,16 +1,26 @@
 // WASI mid-level wrapper local copy for examples
 #![allow(non_snake_case, non_camel_case_types, dead_code)]
 
+#[link(wasm_import_module = "wasi_snapshot_preview1")]
 extern "C" {
-    fn __wasi_fd_write(fd: i32, iovs: *const __wasi_iovec_t, iovs_len: usize, nwritten: *mut usize) -> i32;
-    fn __wasi_fd_read(fd: i32, iovs: *const __wasi_iovec_t, iovs_len: usize, nread: *mut usize) -> i32;
-    fn __wasi_fd_close(fd: i32) -> i32;
-    fn __wasi_fd_prestat_get(fd: i32, buf: *mut __wasi_prestat_t) -> i32;
-    fn __wasi_fd_prestat_dir_name(fd: i32, buf: *mut u8, len: usize) -> i32;
-    fn __wasi_path_open(fd: i32, dirflags: i32, path: *const u8, path_len: usize, oflags: u32, fs_rights_base: u64, fs_rights_inheriting: u64, fdflags: i32, opened_fd: *mut i32) -> i32;
-    fn __wasi_path_filestat_get(fd: i32, flags: i32, path: *const u8, path_len: usize, buf: *mut __wasi_filestat_t) -> i32;
-    fn __wasi_path_unlink_file(fd: i32, path: *const u8, path_len: usize) -> i32;
-    fn __wasi_path_create_directory(fd: i32, path: *const u8, path_len: usize) -> i32;
+    #[link_name = "fd_write"]
+    pub fn __wasi_fd_write(fd: i32, iovs: *const __wasi_iovec_t, iovs_len: usize, nwritten: *mut usize) -> i32;
+    #[link_name = "fd_read"]
+    pub fn __wasi_fd_read(fd: i32, iovs: *const __wasi_iovec_t, iovs_len: usize, nread: *mut usize) -> i32;
+    #[link_name = "fd_close"]
+    pub fn __wasi_fd_close(fd: i32) -> i32;
+    #[link_name = "fd_prestat_get"]
+    pub fn __wasi_fd_prestat_get(fd: i32, buf: *mut __wasi_prestat_t) -> i32;
+    #[link_name = "fd_prestat_dir_name"]
+    pub fn __wasi_fd_prestat_dir_name(fd: i32, buf: *mut u8, len: usize) -> i32;
+    #[link_name = "path_open"]
+    pub fn __wasi_path_open(fd: i32, dirflags: i32, path: *const u8, path_len: usize, oflags: u32, fs_rights_base: u64, fs_rights_inheriting: u64, fdflags: i32, opened_fd: *mut i32) -> i32;
+    #[link_name = "path_filestat_get"]
+    pub fn __wasi_path_filestat_get(fd: i32, flags: i32, path: *const u8, path_len: usize, buf: *mut __wasi_filestat_t) -> i32;
+    #[link_name = "path_unlink_file"]
+    pub fn __wasi_path_unlink_file(fd: i32, path: *const u8, path_len: usize) -> i32;
+    #[link_name = "path_create_directory"]
+    pub fn __wasi_path_create_directory(fd: i32, path: *const u8, path_len: usize) -> i32;
 }
 
 #[repr(C)]
@@ -22,6 +32,10 @@ pub struct __wasi_filestat_t { pub st_dev: u64, pub st_ino: u64, pub st_filetype
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WasiError(pub i32);
+
+impl From<WasiError> for i32 {
+    fn from(e: WasiError) -> i32 { e.0 }
+}
 
 pub fn stdout_write(data: &[u8]) -> Result<usize, WasiError> {
     let iov = __wasi_iovec_t { buf: data.as_ptr(), buf_len: data.len() };
