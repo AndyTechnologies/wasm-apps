@@ -2,13 +2,80 @@ import type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from
 import { CompilerError } from '@wasm-apps/types';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { runExecFile } from './_utils.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/** Directorio del crate vendido `wasm_apps_bindings` (copiado a dist por el build). */
+const BINDINGS_RUST_DIR = path.resolve(__dirname, '..', 'bindings', 'rust');
+
+/**
+ * Escapa un path para usarlo como valor TOML: `\` → `\\` y `"` → `\"`
+ * (necesario para rutas win32 dentro de `path = "..."`).
+ */
+export function escapeTomlPathValue(p: string): string {
+  return p.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * Inyecta `wasm_apps_bindings = { path = "<bindingsDir>" }` en el manifest.
+ *
+ * String-based (sin parser TOML): inserta la línea al final de la sección
+ * `[dependencies]` existente, o crea la sección al final del archivo si falta.
+ * Detecta EOL (CRLF-aware), preserva el contenido previo byte a byte y es
+ * idempotente (si la dep ya está, no toca nada).
+ */
+export function injectBindingsDependency(manifest: string, bindingsDir: string, isWin32 = false): string {
+  // Idempotence guard: ya inyectado → no-op
+  if (/^\s*wasm_apps_bindings\s*=/m.test(manifest)) return manifest;
+
+  const depLine = `wasm_apps_bindings = { path = "${isWin32 ? escapeTomlPathValue(bindingsDir) : bindingsDir}" }`;
+  const eol = manifest.includes('\r\n') ? '\r\n' : '\n';
+
+  const section = /^[ \t]*\[dependencies\][ \t]*(?:#.*)?$/m.exec(manifest);
+  if (!section) {
+    // Sin [dependencies]: crear la sección al final del archivo
+    const separator = manifest.length > 0 && !manifest.endsWith(eol) ? eol : '';
+    return manifest + separator + `[dependencies]${eol}${depLine}${eol}`;
+  }
+
+  // Fin del header incluyendo su EOL: la dep va tras la última línea no vacía
+  const headerEol = /(?:\r\n|\n|\r)/.exec(manifest.slice(section.index + section[0].length));
+  const headerEnd = headerEol && headerEol.index === 0 ? section.index + section[0].length + headerEol[0].length : section.index + section[0].length;
+
+  const nextHeader = /^[ \t]*\[[^\]]*\]/gm;
+  nextHeader.lastIndex = headerEnd;
+  const next = nextHeader.exec(manifest);
+  const sectionEnd = next ? next.index : manifest.length;
+
+  // Recorrer las líneas de la sección y quedarse con el final de la última no vacía
+  let lastContentEnd = headerEnd;
+  let lastContentHadEol = headerEnd > section.index + section[0].length;
+  const lineRe = /[^\r\n]*(?:\r\n|\n|\r|$)/g;
+  lineRe.lastIndex = headerEnd;
+  let line: RegExpExecArray | null;
+  while ((line = lineRe.exec(manifest)) !== null) {
+    if (line.index >= sectionEnd) break;
+    const raw = line[0];
+    if (raw.trim().length > 0) {
+      lastContentEnd = line.index + raw.length;
+      lastContentHadEol = /(?:\r\n|\n|\r)$/.test(raw);
+    }
+    if (line.index + raw.length >= sectionEnd) break;
+  }
+  const insertAt = Math.min(lastContentEnd, sectionEnd);
+  const insert = lastContentHadEol ? `${depLine}${eol}` : `${eol}${depLine}${eol}`;
+
+  return manifest.slice(0, insertAt) + insert + manifest.slice(insertAt);
+}
 
 /**
  * Estrategia de compilación para Rust (.wasm.rs).
  *
- * Si existe Cargo.toml en el directorio del fuente, lo usa directamente.
+ * Si existe Cargo.toml en el directorio del fuente, lo usa directamente
+ * (inyecta la dep del crate vendido y restaura los bytes tras compilar).
  * Si no, crea un Cargo.toml temporal con `crate-type = ["cdylib"]`.
  *
  * Ejecuta `cargo build --target wasm32-unknown-unknown` y busca el .wasm
@@ -48,17 +115,27 @@ export class RustCompilerStrategy implements ToolchainStrategy {
   async compile(options: ToolchainCompileOptions): Promise<ToolchainResult> {
     const sourceDir = path.dirname(path.resolve(options.fileName));
     const cargoTomlPath = path.join(sourceDir, 'Cargo.toml');
+    const cargoLockPath = path.join(sourceDir, 'Cargo.lock');
     const hasCargoToml = fs.existsSync(cargoTomlPath);
+    const isWin32 = process.platform === 'win32';
 
     const release = options.compilerOptions?.release ?? false;
     const buildProfile = release ? 'release' : 'debug';
 
-    // If no Cargo.toml, create a temporary one with cdylib crate type
-    let createdTempCargo = false;
-    if (!hasCargoToml) {
-      const tempCargoContent = this.generateTempCargoToml(options.fileName);
+    // Existing manifest: backup bytes (Cargo.toml + Cargo.lock si existen) → inyectar (D3)
+    let backupToml: Buffer | null = null;
+    let backupLock: Buffer | null = null;
+    if (hasCargoToml) {
+      backupToml = fs.readFileSync(cargoTomlPath);
+      if (fs.existsSync(cargoLockPath)) {
+        backupLock = fs.readFileSync(cargoLockPath);
+      }
+      const injected = injectBindingsDependency(backupToml.toString('utf-8'), BINDINGS_RUST_DIR, isWin32);
+      fs.writeFileSync(cargoTomlPath, injected, 'utf-8');
+    } else {
+      // No Cargo.toml: crear uno temporal con cdylib + dep del crate vendido (REQ-2)
+      const tempCargoContent = this.generateTempCargoToml(options.fileName, BINDINGS_RUST_DIR, isWin32);
       fs.writeFileSync(cargoTomlPath, tempCargoContent, 'utf-8');
-      createdTempCargo = true;
     }
 
     try {
@@ -102,8 +179,17 @@ export class RustCompilerStrategy implements ToolchainStrategy {
         stderr: err.stderr ?? err.message,
       });
     } finally {
-      // Clean up temp Cargo.toml if we created one
-      if (createdTempCargo && fs.existsSync(cargoTomlPath)) {
+      if (hasCargoToml) {
+        // Restaurar byte-clean aunque falle el build (D3)
+        if (backupToml) fs.writeFileSync(cargoTomlPath, backupToml);
+        if (backupLock) {
+          fs.writeFileSync(cargoLockPath, backupLock);
+        } else {
+          // Cargo pudo crear un Cargo.lock que no existía: eliminarlo
+          fs.rmSync(cargoLockPath, { force: true });
+        }
+      } else if (fs.existsSync(cargoTomlPath)) {
+        // Limpiar el Cargo.toml temporal que creamos
         try {
           fs.rmSync(cargoTomlPath, { force: true });
         } catch {
@@ -133,21 +219,24 @@ export class RustCompilerStrategy implements ToolchainStrategy {
   /**
    * Genera un Cargo.toml temporal para compilar un archivo .wasm.rs suelto.
    * El nombre del crate deriva del nombre del archivo fuente.
+   * Incluye la dep del crate vendido bajo `[dependencies]` (REQ-2).
    */
-  private generateTempCargoToml(sourceFile: string): string {
+  generateTempCargoToml(sourceFile: string, bindingsDir: string, isWin32 = false): string {
     const crateName = path
       .basename(sourceFile)
       .replace(/\.wasm\.rs$/i, '')
       .replace(/[^a-zA-Z0-9_]/g, '_');
-    return `[package]
+    const manifest = `[package]
 name = "${crateName || 'wasm_crate'}"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
+path = "${path.basename(sourceFile)}"
 
 [dependencies]
 `;
+    return injectBindingsDependency(manifest, bindingsDir, isWin32);
   }
 }
