@@ -15,7 +15,7 @@
     "compiler": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-bindings.mjs",
     "dev": "tsc --watch",
     "start": "node ./dist/cli.js"
   },
