@@ -3,9 +3,14 @@ import { CompilerError } from '@wasm-apps/types';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { runExecFile } from './_utils.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const BINARIES = ['em++', 'clang++'] as const;
+const BINDINGS_DIR = path.resolve(__dirname, '..', 'bindings');
 
 /**
  * Estrategia de compilación para C++ (.wasm.cpp / .wasm.cxx / .wasm.cc).
@@ -62,6 +67,7 @@ export class CppCompilerStrategy implements ToolchainStrategy {
     try {
       // Configure
       const cmakeArgs = ['-S', sourceDir, '-B', buildDir];
+      cmakeArgs.push(`-DCMAKE_CXX_FLAGS=-I${BINDINGS_DIR}`);
       if (!release) {
         cmakeArgs.push('-DCMAKE_BUILD_TYPE=Debug');
       } else {
@@ -115,7 +121,7 @@ export class CppCompilerStrategy implements ToolchainStrategy {
         clangArgs.push('-O0', '-g');
       }
 
-      clangArgs.push('--target=wasm32', '-nostdlib', '-Wl,--no-entry', '-Wl,--export-all', '-o', wasmOutput, sourceFile);
+      clangArgs.push(`-I${BINDINGS_DIR}`, '--target=wasm32', '-nostdlib', '-Wl,--no-entry', '-Wl,--export-all', '-o', wasmOutput, sourceFile);
 
       const { stderr } = await runExecFile('clang++', clangArgs, { timeout: this.execTimeout });
 

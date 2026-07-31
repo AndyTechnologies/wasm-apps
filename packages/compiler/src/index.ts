@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { runExecFile } from './strategies/_utils.js';
 import { LRUCache, MAX_MEMORY_CACHE_SIZE } from './cache.js';
 import { compareHash, hashString, mergeAsConfig } from './utils.js';
@@ -17,6 +18,10 @@ export { ToolchainRouter } from './toolchain-router.js';
 export { UnsupportedExtensionError, ToolchainNotInstalledError } from './errors.js';
 export type { ToolchainStrategy, ToolchainCompileOptions, ToolchainResult } from './strategies/toolchain-strategy.js';
 export { TOOLCHAIN_STRATEGY_VERSION } from './strategies/toolchain-strategy.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const BINDINGS_DIR = path.resolve(__dirname, 'bindings');
 
 const MEMORY_CACHE = new LRUCache<string, CompileResult>();
 const PROJECT_ROOT = process.cwd();
@@ -97,7 +102,7 @@ export async function compileAssemblyScriptCore(
     baseArgs.push('--noAssert');
   }
 
-  baseArgs.push('--runtime', runtime, '--exportRuntime', '--bindings', 'raw');
+  baseArgs.push('--runtime', runtime, '--exportRuntime', '--bindings', 'raw', '--path', BINDINGS_DIR);
 
   for (const [key, value] of Object.entries({ ...configOptions })) {
     if (typeof value === 'boolean') {
