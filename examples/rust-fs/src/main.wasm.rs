@@ -1,9 +1,9 @@
 // Rust WASM example using high-level Console + FS API
 #![no_std]
 extern crate alloc;
-mod wasi;
-mod console;
-mod fs;
+use wasm_apps_bindings::{console, fs, wasi, wasm_setup};
+
+wasm_setup!();
 
 #[no_mangle]
 pub extern "C" fn _start() {
