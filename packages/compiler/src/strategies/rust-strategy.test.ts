@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RustCompilerStrategy } from './rust-strategy.js';
+import { RustCompilerStrategy, escapeTomlPathValue, injectBindingsDependency } from './rust-strategy.js';
 import { CompilerError } from '@wasm-apps/types';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -271,6 +271,173 @@ describe('RustCompilerStrategy', () => {
       const resolved = path.resolve(traversalPath);
       expect(resolved).not.toContain('..');
       expect(path.isAbsolute(resolved)).toBe(true);
+    });
+  });
+
+  describe('escapeTomlPathValue', () => {
+    it('escapes backslashes in win32 paths', () => {
+      expect(escapeTomlPathValue('C:\\apps\\wasm-apps\\bindings\\rust')).toBe('C:\\\\apps\\\\wasm-apps\\\\bindings\\\\rust');
+    });
+
+    it('escapes double quotes', () => {
+      expect(escapeTomlPathValue('a"b')).toBe('a\\"b');
+    });
+
+    it('leaves posix paths unchanged', () => {
+      expect(escapeTomlPathValue('/home/user/wasm-apps/bindings/rust')).toBe('/home/user/wasm-apps/bindings/rust');
+    });
+  });
+
+  describe('injectBindingsDependency', () => {
+    it('appends the dep last in an existing [dependencies] section, prior content byte-identical', () => {
+      const manifest = '[package]\nname = "demo"\nversion = "0.1.0"\n\n[dependencies]\nserde = "1"\n\n[features]\ndefault = []\n';
+      const result = injectBindingsDependency(manifest, '/abs/bindings/rust');
+
+      expect(result).toBe(
+        '[package]\nname = "demo"\nversion = "0.1.0"\n\n[dependencies]\nserde = "1"\nwasm_apps_bindings = { path = "/abs/bindings/rust" }\n\n[features]\ndefault = []\n',
+      );
+    });
+
+    it('appends after the last non-blank line when the section has trailing blank lines', () => {
+      const manifest = '[dependencies]\nserde = "1"\n\n\n[features]\ndefault = []\n';
+      const result = injectBindingsDependency(manifest, '/abs/bindings/rust');
+
+      expect(result).toBe('[dependencies]\nserde = "1"\nwasm_apps_bindings = { path = "/abs/bindings/rust" }\n\n\n[features]\ndefault = []\n');
+    });
+
+    it('creates [dependencies] at EOF when the section is missing', () => {
+      const manifest = '[package]\nname = "demo"\nversion = "0.1.0"\n\n[features]\ndefault = []\n';
+      const result = injectBindingsDependency(manifest, '/abs/bindings/rust');
+
+      expect(result).toBe(
+        '[package]\nname = "demo"\nversion = "0.1.0"\n\n[features]\ndefault = []\n[dependencies]\nwasm_apps_bindings = { path = "/abs/bindings/rust" }\n',
+      );
+    });
+
+    it('creates the section at EOF even when the file has no trailing newline', () => {
+      const manifest = '[package]\nname = "demo"';
+      const result = injectBindingsDependency(manifest, '/abs/bindings/rust');
+
+      expect(result).toBe('[package]\nname = "demo"\n[dependencies]\nwasm_apps_bindings = { path = "/abs/bindings/rust" }\n');
+    });
+
+    it('is idempotent — injecting twice is a no-op', () => {
+      const manifest = '[dependencies]\nfoo = "1"\n';
+      const once = injectBindingsDependency(manifest, '/abs/bindings/rust');
+
+      expect(injectBindingsDependency(once, '/abs/bindings/rust')).toBe(once);
+    });
+
+    it('preserves CRLF line endings', () => {
+      const manifest = '[package]\r\nname = "demo"\r\n\r\n[dependencies]\r\nserde = "1"\r\n';
+      const result = injectBindingsDependency(manifest, '/abs/bindings/rust');
+
+      expect(result).toBe('[package]\r\nname = "demo"\r\n\r\n[dependencies]\r\nserde = "1"\r\nwasm_apps_bindings = { path = "/abs/bindings/rust" }\r\n');
+      expect(result.includes('\r')).toBe(true);
+    });
+
+    it('escapes backslashes in the path value when isWin32 is true', () => {
+      const result = injectBindingsDependency('[dependencies]\n', 'C:\\apps\\wasm-apps\\bindings\\rust', true);
+
+      expect(result).toBe('[dependencies]\nwasm_apps_bindings = { path = "C:\\\\apps\\\\wasm-apps\\\\bindings\\\\rust" }\n');
+    });
+
+    it('keeps backslashes as-is when isWin32 is false', () => {
+      const result = injectBindingsDependency('[dependencies]\n', 'C:\\apps\\wasm-apps\\bindings\\rust', false);
+
+      expect(result).toBe('[dependencies]\nwasm_apps_bindings = { path = "C:\\apps\\wasm-apps\\bindings\\rust" }\n');
+    });
+  });
+
+  describe('generateTempCargoToml', () => {
+    it('includes [dependencies] with an absolute bindings/rust path dep (REQ-2)', () => {
+      const toml = strategy.generateTempCargoToml(path.join(tmpDir, 'demo.wasm.rs'), '/abs/path/bindings/rust');
+
+      expect(toml).toContain('[dependencies]\nwasm_apps_bindings = { path = "/abs/path/bindings/rust" }\n');
+    });
+
+    it('points [lib] path at the source file so cargo can find it', () => {
+      const toml = strategy.generateTempCargoToml(path.join(tmpDir, 'demo.wasm.rs'), '/abs/path/bindings/rust');
+
+      expect(toml).toContain('[lib]\ncrate-type = ["cdylib"]\npath = "demo.wasm.rs"\n');
+    });
+  });
+
+  describe('compile with existing Cargo.toml — manifest lifecycle (D3)', () => {
+    const originalToml = '[package]\nname = "demo"\nversion = "0.1.0"\n\n[dependencies]\nserde = "1"\n';
+    const originalLock = '# This file is automatically @generated by Cargo.\nversion = 3\n';
+
+    it('injects the dep before building and restores Cargo.toml + Cargo.lock bytes after success', async () => {
+      const sourcePath = path.join(tmpDir, 'lifecycle.wasm.rs');
+      fs.writeFileSync(sourcePath, 'fn main() {}');
+      fs.writeFileSync(path.join(tmpDir, 'Cargo.toml'), originalToml);
+      fs.writeFileSync(path.join(tmpDir, 'Cargo.lock'), originalLock);
+      createMockWasmOutput(tmpDir, false);
+
+      let manifestAtBuildTime = '';
+      vi.mocked(execFile).mockImplementation(async () => {
+        manifestAtBuildTime = fs.readFileSync(path.join(tmpDir, 'Cargo.toml'), 'utf-8');
+        return { stdout: '', stderr: '' };
+      });
+
+      const result = await strategy.compile({
+        sourceCode: 'fn main() {}',
+        fileName: sourcePath,
+        compilerOptions: { release: false },
+      });
+
+      // Injection happened before cargo ran
+      expect(manifestAtBuildTime).toContain('wasm_apps_bindings = { path = ');
+      // Manifest and lock restored byte-for-byte after the build
+      expect(fs.readFileSync(path.join(tmpDir, 'Cargo.toml'), 'utf-8')).toBe(originalToml);
+      expect(fs.readFileSync(path.join(tmpDir, 'Cargo.lock'), 'utf-8')).toBe(originalLock);
+      expect(result.wasmBytes).toBeInstanceOf(Uint8Array);
+    });
+
+    it('restores the original manifest after a build failure', async () => {
+      const sourcePath = path.join(tmpDir, 'lifecycle-fail.wasm.rs');
+      fs.writeFileSync(sourcePath, 'fn broken() {');
+      fs.writeFileSync(path.join(tmpDir, 'Cargo.toml'), originalToml);
+
+      let manifestAtBuildTime = '';
+      vi.mocked(execFile).mockImplementation(async () => {
+        // The injected manifest is what cargo would have seen
+        manifestAtBuildTime = fs.readFileSync(path.join(tmpDir, 'Cargo.toml'), 'utf-8');
+        throw new Error('cargo build failed');
+      });
+
+      await expect(
+        strategy.compile({
+          sourceCode: 'fn broken() {',
+          fileName: sourcePath,
+          compilerOptions: { release: false },
+        }),
+      ).rejects.toThrow(CompilerError);
+
+      // Injection ran (file was modified) and finally restored the original bytes
+      expect(manifestAtBuildTime).toContain('wasm_apps_bindings = { path = ');
+      expect(fs.readFileSync(path.join(tmpDir, 'Cargo.toml'), 'utf-8')).toBe(originalToml);
+    });
+
+    it('removes the Cargo.lock that the build created when none existed before', async () => {
+      const sourcePath = path.join(tmpDir, 'lifecycle-lock.wasm.rs');
+      fs.writeFileSync(sourcePath, 'fn main() {}');
+      fs.writeFileSync(path.join(tmpDir, 'Cargo.toml'), originalToml);
+      createMockWasmOutput(tmpDir, false);
+
+      vi.mocked(execFile).mockImplementation(async () => {
+        // cargo creates the lockfile during the build
+        fs.writeFileSync(path.join(tmpDir, 'Cargo.lock'), originalLock);
+        return { stdout: '', stderr: '' };
+      });
+
+      await strategy.compile({
+        sourceCode: 'fn main() {}',
+        fileName: sourcePath,
+        compilerOptions: { release: false },
+      });
+
+      expect(fs.existsSync(path.join(tmpDir, 'Cargo.lock'))).toBe(false);
     });
   });
 });

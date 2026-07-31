@@ -56,6 +56,8 @@ actual-stdout.txt
 
 # Rust build artifacts (cargo target dirs)
 target/
+# Vendored crate: lockfile es generado por cargo check/build (lib, no se commitea)
+packages/compiler/src/bindings/rust/Cargo.lock
 
 # Scratch / notes
 *.todo
