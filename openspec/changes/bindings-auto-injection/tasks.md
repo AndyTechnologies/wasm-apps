@@ -52,14 +52,14 @@ Threat matrix: all rows N/A (design) — no RED-test tasks.
 
 ## Phase 4: Example Migrations (REQ-5)
 
-- [ ] 4.1 rust-hello `src/main.wasm.rs`: `use wasm_apps_bindings::{console, wasm_setup};` + `wasm_setup!()` (D5: MUST invoke — rlib refs alloc/panic machinery); drop `mod wasi; mod console;`; delete `console.rs`, `wasi.rs`
-- [ ] 4.2 rust-fs `src/main.wasm.rs`: `use wasm_apps_bindings::{console, fs, wasi, wasm_setup};` + `wasm_setup!()`; keep `extern crate alloc;`; delete `console.rs`, `wasi.rs`, `fs.rs`
+- [x] 4.1 rust-hello `src/main.wasm.rs`: `use wasm_apps_bindings::{console, wasm_setup};` + `wasm_setup!()` (D5: MUST invoke — rlib refs alloc/panic machinery); drop `mod wasi; mod console;`; delete `console.rs`, `wasi.rs`
+- [x] 4.2 rust-fs `src/main.wasm.rs`: `use wasm_apps_bindings::{console, fs, wasi, wasm_setup};` + `wasm_setup!()`; keep `extern crate alloc;`; delete `console.rs`, `wasi.rs`, `fs.rs`
 - [ ] 4.3 as-fs: delete `src/console.ts`, `src/fs.ts` (path injection already shipped)
 - [ ] 4.4 cpp-saludo: delete `src/console.h`, `src/wasi.h` (`-I` injection shipped)
 - [ ] 4.5 mounts-demo: delete `src/console.h`, `src/fs.h`, `src/wasi.h`
 
 ## Phase 5: Locks + Full Verification
 
-- [ ] 5.1 Regenerate `examples/{rust-hello,rust-fs}/src/Cargo.lock` (gains wasm_apps_bindings, talc 5.0.4, lock_api, allocator-api2)
+- [x] 5.1 Regenerate `examples/{rust-hello,rust-fs}/src/Cargo.lock` (gains wasm_apps_bindings, talc 5.0.4, lock_api, allocator-api2)
 - [ ] 5.2 `pnpm -r build` + unit suite green (REQ-6 scenario)
 - [ ] 5.3 `node scripts/test-examples.mjs`: all 5 examples build+run with zero local copies; rust-fs runs on talc (REQ-4 scenario)
