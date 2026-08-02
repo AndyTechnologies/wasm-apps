@@ -66,6 +66,26 @@ export interface AscCoreResult {
 }
 
 /**
+ * Reescribe imports bare de bindings (`console`, `fs`, `wasi`) a rutas relativas
+ * al directorio del fuente. asc 0.28 NO resuelve bare imports vía `--path`
+ * (solo busca `~lib/<name>` en la stdlib, que secuestra `console` y `wasi`),
+ * por lo que los nombres de bindings se convierten a imports relativos con
+ * extensión `.ts` desde `sourceDir`.
+ */
+export function rewriteBindingImports(sourceCode: string, bindingsDir: string, sourceDir: string): string {
+  const importPathFor = (name: string): string => {
+    let rel = path.relative(sourceDir, path.join(bindingsDir, `${name}.ts`));
+    rel = rel.split(path.sep).join('/');
+    if (!rel.startsWith('.')) rel = `./${rel}`;
+    return rel;
+  };
+  return sourceCode.replace(
+    /(from\s+)(['"])(console|fs|wasi)\2/g,
+    (_match: string, prefix: string, quote: string, name: string) => `${prefix}${quote}${importPathFor(name)}${quote}`,
+  );
+}
+
+/**
  * Ejecuta `asc` (AssemblyScript CLI) con los argumentos adecuados y devuelve
  * los archivos generados. No aplica caché — es la capa pura de spawn + I/O.
  *
@@ -126,12 +146,17 @@ export async function compileAssemblyScriptCore(
     if (resolvedFileName && fs.existsSync(resolvedFileName) && fs.statSync(resolvedFileName).isFile()) {
       srcFile = resolvedFileName;
       const diskContent = fs.readFileSync(srcFile, 'utf-8');
-      if (diskContent !== sourceCode) {
+      // ¿Hay imports bare de bindings que reescribir? Comparar contra el rewrite
+      // desde el directorio real del fuente (el disco nunca contiene la forma reescrita).
+      const rewrittenFromDisk = rewriteBindingImports(sourceCode, BINDINGS_DIR, path.dirname(resolvedFileName));
+      if (diskContent !== rewrittenFromDisk) {
         // Source fue transformada — escribir en temp dir con estructura de proyecto
         const relativePath = path.relative(PROJECT_ROOT, resolvedFileName);
         srcFile = path.join(tmpDir, relativePath);
         fs.mkdirSync(path.dirname(srcFile), { recursive: true });
-        fs.writeFileSync(srcFile, sourceCode, 'utf-8');
+        // Reescribir contra la ubicación FINAL en temp: asc resuelve imports
+        // relativos desde el directorio del fuente compilado.
+        fs.writeFileSync(srcFile, rewriteBindingImports(sourceCode, BINDINGS_DIR, path.dirname(srcFile)), 'utf-8');
         cleanupTmpDir = true;
       } else {
         // Source coincide con disco — no limpiar tmpDir, no lo usamos para src
@@ -140,7 +165,7 @@ export async function compileAssemblyScriptCore(
     } else {
       // Archivo virtual (tests, o path inexistente) — escribir a temp dir
       srcFile = path.join(tmpDir, 'source.ts');
-      fs.writeFileSync(srcFile, sourceCode, 'utf-8');
+      fs.writeFileSync(srcFile, rewriteBindingImports(sourceCode, BINDINGS_DIR, path.dirname(srcFile)), 'utf-8');
     }
 
     baseArgs.unshift('--outFile', outFile);
