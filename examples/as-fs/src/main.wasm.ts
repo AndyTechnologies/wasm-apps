@@ -1,6 +1,6 @@
-// AS WASM example using high-level Console + FS API
-import { log } from './console';
-import { readFile } from './fs';
+// AS WASM example using high-level Console + FS API (bindings via --path)
+import { log } from 'console';
+import { readFile } from 'fs';
 
 export function _start(): void {
   log('Opening file...');
