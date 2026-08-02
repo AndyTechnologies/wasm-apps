@@ -130,15 +130,19 @@ export class RustCompilerStrategy implements ToolchainStrategy {
       if (fs.existsSync(cargoLockPath)) {
         backupLock = fs.readFileSync(cargoLockPath);
       }
-      const injected = injectBindingsDependency(backupToml.toString('utf-8'), BINDINGS_RUST_DIR, isWin32);
-      fs.writeFileSync(cargoTomlPath, injected, 'utf-8');
-    } else {
-      // No Cargo.toml: crear uno temporal con cdylib + dep del crate vendido (REQ-2)
-      const tempCargoContent = this.generateTempCargoToml(options.fileName, BINDINGS_RUST_DIR, isWin32);
-      fs.writeFileSync(cargoTomlPath, tempCargoContent, 'utf-8');
     }
 
     try {
+      if (hasCargoToml) {
+        // Inyectar la dep del crate vendido (REQ-3). Dentro del try: si el write
+        // falla (ENOSPC/EACCES), el finally restaura el manifest original (D3).
+        const injected = injectBindingsDependency(backupToml!.toString('utf-8'), BINDINGS_RUST_DIR, isWin32);
+        fs.writeFileSync(cargoTomlPath, injected, 'utf-8');
+      } else {
+        // No Cargo.toml: crear uno temporal con cdylib + dep del crate vendido (REQ-2)
+        const tempCargoContent = this.generateTempCargoToml(options.fileName, BINDINGS_RUST_DIR, isWin32);
+        fs.writeFileSync(cargoTomlPath, tempCargoContent, 'utf-8');
+      }
       // Build with cargo
       const cargoArgs = ['build', '--target', 'wasm32-unknown-unknown'];
       if (release) {
@@ -179,22 +183,28 @@ export class RustCompilerStrategy implements ToolchainStrategy {
         stderr: err.stderr ?? err.message,
       });
     } finally {
-      if (hasCargoToml) {
-        // Restaurar byte-clean aunque falle el build (D3)
-        if (backupToml) fs.writeFileSync(cargoTomlPath, backupToml);
-        if (backupLock) {
-          fs.writeFileSync(cargoLockPath, backupLock);
-        } else {
-          // Cargo pudo crear un Cargo.lock que no existía: eliminarlo
-          fs.rmSync(cargoLockPath, { force: true });
-        }
-      } else if (fs.existsSync(cargoTomlPath)) {
-        // Limpiar el Cargo.toml temporal que creamos
-        try {
+      try {
+        if (hasCargoToml) {
+          // Restaurar byte-clean aunque falle el build (D3)
+          if (backupToml) fs.writeFileSync(cargoTomlPath, backupToml);
+          if (backupLock) {
+            fs.writeFileSync(cargoLockPath, backupLock);
+          } else {
+            // Cargo pudo crear un Cargo.lock que no existía: eliminarlo
+            fs.rmSync(cargoLockPath, { force: true });
+          }
+        } else if (fs.existsSync(cargoTomlPath)) {
+          // Limpiar el Cargo.toml temporal que creamos
           fs.rmSync(cargoTomlPath, { force: true });
-        } catch {
-          // Best-effort cleanup
         }
+      } catch (restoreErr: any) {
+        // El restore nunca debe enmascarar el error original del build ni dejar
+        // el workspace con el manifest inyectado silenciosamente (D3).
+        throw new CompilerError(`Rust build failed and restoring Cargo.toml/Cargo.lock also failed: ${restoreErr.message ?? restoreErr}`, {
+          code: 'COMPILER_ERROR',
+          fileName: options.fileName,
+          stderr: restoreErr.message ?? restoreErr,
+        });
       }
     }
   }
