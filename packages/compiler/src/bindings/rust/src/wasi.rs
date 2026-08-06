@@ -192,7 +192,6 @@ pub fn fd_write(fd: i32, data: &[u8]) -> Result<usize, WasiError> {
 ///
 /// The number of bytes read.
 pub fn fd_read(fd: i32, buf: &mut [u8]) -> Result<usize, WasiError> {
-pub fn fd_read(fd: i32, buf: &mut [u8]) -> Result<usize, WasiError> {
     let iov = __wasi_iovec_t { buf: buf.as_ptr(), buf_len: buf.len() };
     let mut nread: usize = 0;
     let ret = unsafe { __wasi_fd_read(fd, &iov, 1, &mut nread) };
@@ -265,7 +264,6 @@ pub fn fd_seek(fd: i32, offset: i64, whence: i32) -> Result<u64, WasiError> {
 ///
 /// The preopen metadata, or a [`WasiError`] if the descriptor is not a preopened directory.
 pub fn fd_prestat_get(fd: i32) -> Result<__wasi_prestat_t, WasiError> {
-pub fn fd_prestat_get(fd: i32) -> Result<__wasi_prestat_t, WasiError> {
     let mut buf: __wasi_prestat_t = unsafe { core::mem::zeroed() };
     let ret = unsafe { __wasi_fd_prestat_get(fd, &mut buf) };
     if ret != 0 { return Err(WasiError(-ret)); }
@@ -289,7 +287,6 @@ pub fn fd_prestat_get(fd: i32) -> Result<__wasi_prestat_t, WasiError> {
 /// assert!(!name.is_empty());
 /// # Ok::<(), WasiError>(())
 /// ```
-pub fn fd_prestat_dir_name(fd: i32) -> Result<Vec<u8>, WasiError> {
 pub fn fd_prestat_dir_name(fd: i32) -> Result<Vec<u8>, WasiError> {
     let prestat = fd_prestat_get(fd)?;
     let mut name = vec![0u8; prestat.pr_name_len as usize];
@@ -435,7 +432,6 @@ pub fn path_filestat_get(dir_fd: i32, path: &[u8]) -> Result<__wasi_filestat_t, 
 /// let result = path_unlink_file(3, b"temporary.txt");
 /// assert!(result.is_ok());
 /// ```
-pub fn path_unlink_file(dir_fd: i32, path: &[u8]) -> Result<(), WasiError> {
 pub fn path_unlink_file(dir_fd: i32, path: &[u8]) -> Result<(), WasiError> {
     let ret = unsafe { __wasi_path_unlink_file(dir_fd, path.as_ptr(), path.len()) };
     if ret != 0 { return Err(WasiError(-ret)); }
@@ -608,7 +604,6 @@ pub fn environ_get(environ: *mut *mut u8, environ_buf: *mut u8) -> Result<(), Wa
 /// assert!(count >= 0);
 /// assert!(buffer_size >= 0);
 /// ```
-pub fn environ_sizes_get() -> Result<(usize, usize), WasiError> {
 pub fn environ_sizes_get() -> Result<(usize, usize), WasiError> {
     let mut count: usize = 0;
     let mut buf_size: usize = 0;

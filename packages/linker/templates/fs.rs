@@ -209,7 +209,6 @@ pub fn unlink(path: &[u8]) -> Result<(), i32> {
 /// mkdir(b"new-directory").expect("failed to create directory");
 /// ```
 pub fn mkdir(path: &[u8]) -> Result<(), i32> {
-pub fn mkdir(path: &[u8]) -> Result<(), i32> {
     let r = resolve_path(path).ok_or(-1)?;
     wasi::path_create_directory(r.dir_fd, &r.relative).map_err(|e| e.0)?;
     Ok(())
