@@ -47,7 +47,9 @@ pub struct __wasi_iovec_t {
 
 #[repr(C)]
 pub struct __wasi_prestat_t {
-    pub pr_name_len: usize,
+    pub pr_type: u8,
+    pub padding: [u8; 3],
+    pub pr_name_len: u32,
 }
 
 #[repr(C)]
@@ -141,7 +143,7 @@ pub fn fd_prestat_get(fd: i32) -> Result<__wasi_prestat_t, WasiError> {
 
 pub fn fd_prestat_dir_name(fd: i32) -> Result<Vec<u8>, WasiError> {
     let prestat = fd_prestat_get(fd)?;
-    let mut name = vec![0u8; prestat.pr_name_len];
+    let mut name = vec![0u8; prestat.pr_name_len as usize];
     let ret = unsafe { __wasi_fd_prestat_dir_name(fd, name.as_mut_ptr(), name.len()) };
     if ret != 0 { return Err(WasiError(-ret)); }
     // Trim trailing NUL if present
@@ -167,11 +169,10 @@ pub fn path_open(dir_fd: i32, path: &[u8], for_write: bool, create: bool) -> Res
     let mut oflags: u32 = 0;
     let mut rights_base: u64 = RIGHTS_READ;
     if for_write {
-        oflags |= 0x02; // O_WRONLY
         rights_base |= RIGHTS_WRITE;
     }
     if create {
-        oflags |= 0x40; // O_CREAT
+        oflags |= 0x01; // O_CREAT
         rights_base |= RIGHTS_WRITE;
     }
     let mut opened_fd: i32 = -1;

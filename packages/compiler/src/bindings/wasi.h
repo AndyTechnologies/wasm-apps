@@ -27,7 +27,7 @@ WASI_IMPORT("proc_exit")   void __wasi_proc_exit(int32_t code);
 WASI_IMPORT("clock_time_get") int32_t __wasi_clock_time_get(int32_t id, uint64_t precision, uint64_t *time);
 
 // WASI types for compatibility
-typedef struct { size_t pr_name_len; } __wasi_prestat_t;
+typedef struct { uint8_t pr_type; uint8_t padding[3]; uint32_t pr_name_len; } __wasi_prestat_t;
 typedef struct { uint32_t buf; uint32_t buf_len; } __wasi_iovec_t; // WASM32 ABI: 8-byte ciovec/iovec
 typedef struct {
   uint64_t st_dev; uint64_t st_ino; uint32_t st_filetype;
@@ -110,10 +110,10 @@ inline int fd_readdir(int fd, char *buf, size_t len, __wasi_dircookie_t cookie) 
 inline int path_open(int dir_fd, const char *path, size_t path_len, int oflags) {
   uint32_t flags = 0;
   uint64_t rights_base = 0;
-  if (oflags & 0x01) { flags |= 0x01; rights_base |= 0x0000000000000001ULL; }  // O_READ
-  if (oflags & 0x02) { flags |= 0x02; rights_base |= 0x0000000000000002ULL; }  // O_WRITE
-  if (oflags & 0x40) { flags |= 0x40; rights_base |= 0x0000000000000004ULL; }  // O_CREAT
-  if (oflags & 0x200) { flags |= 0x200; }                                      // O_TRUNC
+  if (oflags & 0x01) { rights_base |= 0x0000000000000001ULL; }  // O_READ -> rights only (WASI flag 0x01 is O_CREAT)
+  if (oflags & 0x02) { rights_base |= 0x0000000000000002ULL; }  // O_WRITE -> rights only (WASI flag 0x02 is O_DIRECTORY)
+  if (oflags & 0x40) { flags |= 0x01; rights_base |= 0x0000000000000004ULL; }  // O_CREAT -> WASI O_CREAT
+  if (oflags & 0x200) { flags |= 0x08; }                                       // O_TRUNC -> WASI O_TRUNC
   int32_t opened_fd = -1;
   int err = __wasi_path_open(dir_fd, 0, path, path_len, flags,
                              rights_base, rights_base, 0, &opened_fd);
