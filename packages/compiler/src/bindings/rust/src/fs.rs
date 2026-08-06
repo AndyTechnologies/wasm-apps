@@ -39,7 +39,7 @@ fn resolve_path(path: &[u8]) -> Option<ResolvedPath> {
         };
 
         // Read dir name
-        let mut dirname = vec![0u8; prestat.pr_name_len];
+        let mut dirname = vec![0u8; prestat.pr_name_len as usize];
         let ret = unsafe {
             wasi::__wasi_fd_prestat_dir_name(fd, dirname.as_mut_ptr(), dirname.len())
         };
@@ -139,7 +139,6 @@ pub fn read_file_to_buf(path: &[u8], buf: &mut [u8]) -> Result<usize, i32> {
 ///
 /// Returns the underlying filesystem error code if the path cannot be resolved
 /// or the file cannot be opened or written.
-pub fn write_file(path: &[u8], data: &[u8]) -> Result<usize, i32> {
 pub fn write_file(path: &[u8], data: &[u8]) -> Result<usize, i32> {
     let r = resolve_path(path).ok_or(-1)?;
     let fd = wasi::path_open(r.dir_fd, &r.relative, true, true)?;

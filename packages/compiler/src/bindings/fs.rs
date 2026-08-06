@@ -111,7 +111,6 @@ pub fn read_file(path: &[u8]) -> Result<Vec<u8>, i32> {
 ///
 /// The number of bytes read, or a WASI error code.
 pub fn read_file_to_buf(path: &[u8], buf: &mut [u8]) -> Result<usize, i32> {
-pub fn read_file_to_buf(path: &[u8], buf: &mut [u8]) -> Result<usize, i32> {
     let r = resolve_path(path).ok_or(-1)?;
     let fd = wasi::path_open(r.dir_fd, &r.relative, false, false)?;
     let n = wasi::fd_read(fd, buf)?;

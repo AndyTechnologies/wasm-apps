@@ -172,7 +172,6 @@ pub fn stderr_write(data: &[u8]) -> Result<usize, WasiError> {
 ///
 /// Returns a [`WasiError`] when the WASI write operation fails.
 pub fn fd_write(fd: i32, data: &[u8]) -> Result<usize, WasiError> {
-pub fn fd_write(fd: i32, data: &[u8]) -> Result<usize, WasiError> {
     let iov = __wasi_iovec_t { buf: data.as_ptr(), buf_len: data.len() };
     let mut written: usize = 0;
     let ret = unsafe { __wasi_fd_write(fd, &iov, 1, &mut written) };
@@ -341,7 +340,6 @@ pub fn fd_prestat_dir_name(fd: i32) -> Result<Vec<u8>, WasiError> {
 /// The returned byte count indicates how much of the buffer was filled. Use the
 /// cookie from a directory entry to continue reading subsequent entries.
 pub fn fd_readdir(fd: i32, buf: &mut [u8], cookie: u64) -> Result<usize, WasiError> {
-pub fn fd_readdir(fd: i32, buf: &mut [u8], cookie: u64) -> Result<usize, WasiError> {
     let mut nread: usize = 0;
     let ret = unsafe { __wasi_fd_readdir(fd, buf.as_mut_ptr(), buf.len(), cookie, &mut nread) };
     if ret != 0 { return Err(WasiError(-ret)); }
@@ -498,7 +496,6 @@ pub fn stat_file(dir_fd: i32, path: &[u8]) -> Result<u32, WasiError> {
 /// # Errors
 ///
 /// Returns the WASI error produced when the file metadata cannot be retrieved.
-pub fn file_size(dir_fd: i32, path: &[u8]) -> Result<u64, WasiError> {
 pub fn file_size(dir_fd: i32, path: &[u8]) -> Result<u64, WasiError> {
     let st = path_filestat_get(dir_fd, path)?;
     Ok(st.st_size)

@@ -163,7 +163,6 @@ pub fn stderr_write(data: &[u8]) -> Result<usize, WasiError> {
 ///
 /// Returns a [`WasiError`] when the WASI write operation fails.
 pub fn fd_write(fd: i32, data: &[u8]) -> Result<usize, WasiError> {
-pub fn fd_write(fd: i32, data: &[u8]) -> Result<usize, WasiError> {
     let iov = __wasi_iovec_t { buf: data.as_ptr(), buf_len: data.len() };
     let mut written: usize = 0;
     let ret = unsafe { __wasi_fd_write(fd, &iov, 1, &mut written) };
