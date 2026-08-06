@@ -71,14 +71,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.wasm-linker/
-          key: wasm-linker-${{ runner.os }}-${{ hashFiles('packages/linker/CMakeLists.txt') }}
+          key: wasm-linker-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('packages/linker/CMakeLists.txt') }}
       - name: Setup system deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils
+        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils lld
         shell: bash
       - name: Setup system deps (macOS)
         if: runner.os == 'macOS'
-        run: brew install cmake xz
+        run: brew install cmake xz llvm && echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+        shell: bash
+      - name: Setup Rust wasm32 target
+        run: rustup target add wasm32-unknown-unknown
         shell: bash
       - name: Setup wasmtime
         run: pnpm run linker setup
