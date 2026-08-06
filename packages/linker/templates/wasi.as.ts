@@ -70,8 +70,6 @@ function makeIovec(data: usize, len: i32): usize {
   let buf = heap.alloc(8);
   store<usize>(buf, data, 0);
   store<i32>(buf, len, 4);
-  // Second 4 bytes (padding/alignment)
-  store<i32>(buf, 0, 8);
   return buf;
 }
 
@@ -126,11 +124,11 @@ export function fdSeek(fd: i32, offset: i64, whence: i32): i64 {
 // ── Preopen dir scanning ───────────────────────────
 
 export function fdPrestatGet(fd: i32): Prestat | null {
-  let buf = heap.alloc(4);
+  let buf = heap.alloc(8);
   let ret = wasiFdPrestatGet(fd, buf);
   if (ret != 0) return null;
   let p = new Prestat();
-  p.prNameLen = load<i32>(buf);
+  p.prNameLen = load<i32>(buf, 4);
   return p;
 }
 
@@ -156,11 +154,10 @@ export function pathOpen(dirFd: i32, path: usize, pathLen: i32, forWrite: bool, 
   let oflags: i32 = 0;
   let rightsBase: i64 = RIGHTS_READ;
   if (forWrite) {
-    oflags |= 0x02;
     rightsBase |= RIGHTS_WRITE;
   }
   if (create) {
-    oflags |= 0x40;
+    oflags |= 0x01;
     rightsBase |= RIGHTS_WRITE;
   }
   let openedFd = heap.alloc(4);
