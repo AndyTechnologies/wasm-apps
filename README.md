@@ -15,7 +15,8 @@ Compila código **AssemblyScript**, **C++** y **Rust** a WebAssembly y lo enlaza
   - **C++** (`.wasm.cpp`, `.wasm.cxx`, `.wasm.cc`) vía clang++ / CMake
   - **Rust** (`.wasm.rs`) vía cargo + `wasm32-unknown-unknown`
   - **Precompilado** (`.wasm`) pasa-through con validación de magic bytes
-- **linker** — lee los módulos `.wasm`, resuelve dependencias y genera C++ con templates **Nunjucks**, luego compila con cmake-js + Wasmtime C-API
+  - **Bindings inyectadas** — expone `console`, `fs` y `wasi` a los tres lenguajes sin copias locales: AS importa desde `packages/compiler/src/bindings/*.ts`, C++ recibe el include path vía `-I`, Rust recibe el crate vendido `wasm_apps_bindings` inyectado en `Cargo.toml`
+- **linker** — lee los módulos `.wasm`, resuelve dependencias y genera C++ con templates **Nunjucks**, luego compila con cmake-js + Wasmtime C-API. Con `wasi: true`, configura **preopens WASI** (`mounts` de `wapp.json`) vía `wasi_config.preopen_dir(...)`
 - **orchestrator** (`wapp`) — CLI unificada que coordina el pipeline completo: descubre archivos fuente multi-extensión, los enruta por toolchain, y gestiona proyectos con `wapp.json`
 
 ## Requisitos
@@ -387,8 +388,13 @@ wasm-apps/
 ├── examples/
 │   ├── math.wasm.ts            # Ejemplo AssemblyScript
 │   ├── stdlib_test.wasm.ts     # Test completo de stdlib
-│   ├── cpp-saludo/             # Ejemplo C++
-│   ├── rust-hello/             # Ejemplo Rust
+│   ├── cpp-saludo/             # Ejemplo C++ (bindings inyectadas)
+│   ├── rust-hello/             # Ejemplo Rust (bindings inyectadas)
+│   ├── as-fs/                  # AssemblyScript + filesystem WASI (mounts)
+│   ├── rust-fs/                # Rust + filesystem WASI (mounts)
+│   ├── mounts-demo/            # C++ + filesystem WASI (mounts)
+│   ├── multi-toolchain/        # AS + C++ en un mismo build
+│   ├── precompiled/            # WASM precompilado pasa-through
 │   ├── custom-template/        # Ejemplo template Nunjucks personalizado
 │   └── plugin-*/               # Ejemplos de plugins
 └── pnpm-workspace.yaml
@@ -401,19 +407,20 @@ wasm-apps/
 1. **Descubrimiento** — `wapp build` globea archivos con extensiones soportadas: `**/*.wasm.ts`, `**/*.wasm.cpp`, `**/*.wasm.rs`, `**/*.wasm`, etc.
 2. **Enrutamiento** — `ToolchainRouter.getExtension()` extrae el sufijo más largo (ej: `.wasm.cpp` gana contra `.wasm` genérico)
 3. **Estrategia** — Cada extensión se mapea a una `ToolchainStrategy` (AssemblyScript, C++, Rust, Precompilado)
-4. **Compilación** — La estrategia correspondiente compila el archivo a WebAssembly binario
+4. **Compilación** — La estrategia correspondiente compila el archivo a WebAssembly binario, inyectando los bindings de `console`/`fs`/`wasi` según el lenguaje (imports AS reescritos por ruta, include path `-I` en C++, crate `wasm_apps_bindings` en Rust)
 5. **Caché** — Cada resultado se cachea por `SHA-256(source + flags + toolchainId)`
 
 ### Linker
 
 1. **Lectura** — Los módulos `.wasm` se parsean con `WebAssembly.Module` para obtener imports/exports
 2. **Resolución de dependencias** — Se construye un grafo y se ordenan topológicamente
-3. **Generación de C++ (Nunjucks)** — Se renderiza `main.c.njk` con contexto que incluye:
+3. **Preopens WASI** — Si `wasi: true` y hay `mounts` en `wapp.json`, el linker valida cada mount en build-time (`ConfigError`) y genera `wasi_config.preopen_dir(host, guest, READ|WRITE, READ|WRITE)`. El host relativo se resuelve contra el cwd del build y se embebe la ruta absoluta en el binario
+4. **Generación de C++ (Nunjucks)** — Se renderiza `main.c.njk` con contexto que incluye:
    - Arrays de bytes de cada módulo WASM
    - Funciones host nativas (`env.*`)
    - Instanciación de módulos en orden de dependencia
    - Llamada a la función de entrada (`_start`)
-4. **Compilación** — cmake-js + toolchain C++ producen el ejecutable nativo enlazado estáticamente con Wasmtime
+5. **Compilación** — cmake-js + toolchain C++ producen el ejecutable nativo enlazado estáticamente con Wasmtime
 
 ## Contribuir
 

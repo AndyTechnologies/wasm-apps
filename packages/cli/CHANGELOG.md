@@ -1,5 +1,11 @@
 # @wasm-apps/cli
 
+## Unreleased
+
+### Patch Changes
+
+- feat(cli): pasa `mounts` de `wapp.json` al linker (preopens WASI)
+
 ## 1.3.1
 
 ### Patch Changes
