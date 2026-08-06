@@ -2,7 +2,12 @@
 #include "console.h"
 #include "fs.h"
 
-extern "C" int _start() {
+extern "C" /**
+ * @brief Reads the mounted greeting file and writes its contents to standard output.
+ *
+ * @return int 0 after processing the greeting file.
+ */
+int _start() {
     console::log("Opening file...");
 
     char buf[512];

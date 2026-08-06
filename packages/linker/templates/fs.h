@@ -5,6 +5,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/**
+ * Resolves a path against a preopened directory.
+ * @param path Path to resolve.
+ * @param out_dir_fd Receives the matching directory descriptor.
+ * @param out_rel_offset Receives the offset of the path relative to that directory.
+ * @return 0 on success, or -1 if no preopened directory matches the path.
+ */
 namespace fs {
 
 // ── Internal: resolve path to (dirFd, relative) ─────
