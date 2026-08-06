@@ -67,7 +67,7 @@ export class CppCompilerStrategy implements ToolchainStrategy {
     try {
       // Configure
       const cmakeArgs = ['-S', sourceDir, '-B', buildDir];
-      cmakeArgs.push(`-DCMAKE_CXX_FLAGS=-I${BINDINGS_DIR}`);
+      cmakeArgs.push(`-DCMAKE_CXX_FLAGS=-I"${BINDINGS_DIR}"`);
       if (!release) {
         cmakeArgs.push('-DCMAKE_BUILD_TYPE=Debug');
       } else {
