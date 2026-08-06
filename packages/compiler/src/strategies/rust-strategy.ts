@@ -12,20 +12,26 @@ const __dirname = path.dirname(__filename);
 const BINDINGS_RUST_DIR = path.resolve(__dirname, '..', 'bindings', 'rust');
 
 /**
- * Escapa un path para usarlo como valor TOML: `\` → `\\` y `"` → `\"`
- * (necesario para rutas win32 dentro de `path = "..."`).
+ * Escapes a path for use as a TOML string value.
+ *
+ * @param p - The path to escape
+ * @returns The path with backslashes and double quotes escaped
  */
 export function escapeTomlPathValue(p: string): string {
   return p.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 /**
- * Inyecta `wasm_apps_bindings = { path = "<bindingsDir>" }` en el manifest.
+ * Adds the `wasm_apps_bindings` path dependency to a TOML manifest.
  *
- * String-based (sin parser TOML): inserta la línea al final de la sección
- * `[dependencies]` existente, o crea la sección al final del archivo si falta.
- * Detecta EOL (CRLF-aware), preserva el contenido previo byte a byte y es
- * idempotente (si la dep ya está, no toca nada).
+ * The dependency is appended to the existing `[dependencies]` section or added
+ * in a new section when none exists. Existing manifests that already contain
+ * the dependency are returned unchanged.
+ *
+ * @param manifest - The TOML manifest content to update
+ * @param bindingsDir - The path to the `wasm_apps_bindings` crate
+ * @param isWin32 - Whether to escape the path for Windows TOML syntax
+ * @returns The manifest with the bindings dependency added
  */
 export function injectBindingsDependency(manifest: string, bindingsDir: string, isWin32 = false): string {
   // Idempotence guard: ya inyectado → no-op

@@ -17,6 +17,12 @@ class ResolvedPath {
   }
 }
 
+/**
+ * Resolves a path against an available preopened directory.
+ *
+ * @param path - The path to resolve.
+ * @returns The matching directory descriptor and relative path, or `null` if no preopened directory matches.
+ */
 function resolvePath(path: string): ResolvedPath | null {
   let pathBytes = String.UTF8.encode(path);
   let pathArr = Uint8Array.wrap(pathBytes);
@@ -64,7 +70,12 @@ function resolvePath(path: string): ResolvedPath | null {
   return null;
 }
 
-// ── Public API ────────────────────────────────────
+/**
+ * Reads the contents of a file.
+ *
+ * @param path - The path of the file to read
+ * @returns The file contents, or `null` if the path cannot be resolved or the file cannot be opened or read
+ */
 
 export function readFile(path: string): ArrayBuffer | null {
   let rp = resolvePath(path);
@@ -89,6 +100,13 @@ export function readFile(path: string): ArrayBuffer | null {
   return result;
 }
 
+/**
+ * Writes data to a file at the specified path.
+ *
+ * @param path - The path of the file to write
+ * @param data - The contents to write to the file
+ * @returns `true` if the file is opened and written successfully, `false` otherwise
+ */
 export function writeFile(path: string, data: ArrayBuffer): bool {
   let rp = resolvePath(path);
   if (rp == null) return false;
@@ -106,6 +124,12 @@ export function writeFile(path: string, data: ArrayBuffer): bool {
   return ret >= 0;
 }
 
+/**
+ * Checks whether a filesystem entry exists at the specified path.
+ *
+ * @param path - The path to check
+ * @returns `true` if metadata is available for the path, `false` otherwise
+ */
 export function exists(path: string): bool {
   let rp = resolvePath(path);
   if (rp == null) return false;
@@ -117,6 +141,12 @@ export function exists(path: string): bool {
   return fs != null;
 }
 
+/**
+ * Removes a file at the specified path.
+ *
+ * @param path - The path of the file to remove
+ * @returns `true` if the file was removed successfully, `false` otherwise
+ */
 export function unlink(path: string): bool {
   let rp = resolvePath(path);
   if (rp == null) return false;
@@ -127,6 +157,12 @@ export function unlink(path: string): bool {
   return pathUnlinkFile(rp!.dirFd, relAddr, relLen) == 0;
 }
 
+/**
+ * Creates a directory at the specified path.
+ *
+ * @param path - The path of the directory to create
+ * @returns `true` if the directory is created successfully, `false` otherwise
+ */
 export function mkdir(path: string): bool {
   let rp = resolvePath(path);
   if (rp == null) return false;

@@ -5,7 +5,15 @@ use wasm_apps_bindings::{console, fs, wasi, wasm_setup};
 
 wasm_setup!();
 
-#[no_mangle]
+/// Reads the greeting file from the mounted data directory and writes its contents to standard output.
+///
+/// Logs a fallback message when the mounted directory or file is unavailable.
+///
+/// # Examples
+///
+/// ```
+/// _start();
+/// ```”】【
 pub extern "C" fn _start() {
     console::log("Opening file...");
     let data = fs::read_file(b"/mnt/data/greeting.txt");

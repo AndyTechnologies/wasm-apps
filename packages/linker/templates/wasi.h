@@ -41,6 +41,158 @@ typedef uint64_t __wasi_dircookie_t;
 #endif
 
 #ifdef __cplusplus
+/**
+ * Writes bytes to standard output.
+ * @param data Buffer containing the bytes to write.
+ * @param len Number of bytes to write.
+ */
+
+/**
+ * Writes bytes to standard error.
+ * @param data Buffer containing the bytes to write.
+ * @param len Number of bytes to write.
+ */
+
+/**
+ * Writes a null-terminated string to standard output.
+ * @param s String to write.
+ */
+
+/**
+ * Writes bytes to a file descriptor.
+ * @param fd File descriptor receiving the bytes.
+ * @param data Buffer containing the bytes to write.
+ * @param len Number of bytes to write.
+ * @return Number of bytes written, or a negative error code.
+ */
+
+/**
+ * Reads bytes from a file descriptor.
+ * @param fd File descriptor to read from.
+ * @param buf Buffer receiving the bytes.
+ * @param len Capacity of the buffer.
+ * @return Number of bytes read, or a negative error code.
+ */
+
+/**
+ * Closes a file descriptor.
+ * @param fd File descriptor to close.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Changes the position of a file descriptor.
+ * @param fd File descriptor to seek.
+ * @param offset Position adjustment.
+ * @param whence Reference point for the adjustment.
+ * @return New file position, or a negative error code.
+ */
+
+/**
+ * Retrieves metadata for a preopened file descriptor.
+ * @param fd Preopened file descriptor.
+ * @param buf Buffer receiving the preopen metadata.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Retrieves the name of a preopened directory.
+ * @param fd Preopened directory descriptor.
+ * @param buf Buffer receiving the directory name.
+ * @param len Capacity of the buffer.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Reads directory entries from a file descriptor.
+ * @param fd Directory file descriptor.
+ * @param buf Buffer receiving directory entries.
+ * @param len Capacity of the buffer.
+ * @param cookie Position from which to read entries.
+ * @return Number of bytes written to the buffer, or a negative error code.
+ */
+
+/**
+ * Opens a path relative to a directory descriptor.
+ * @param dir_fd Directory descriptor containing the path.
+ * @param path Path to open.
+ * @param path_len Length of the path.
+ * @param oflags File opening flags.
+ * @return Opened file descriptor, or a negative error code.
+ */
+
+/**
+ * Retrieves metadata for a path relative to a directory descriptor.
+ * @param dir_fd Directory descriptor containing the path.
+ * @param flags Path lookup flags.
+ * @param path Path to inspect.
+ * @param path_len Length of the path.
+ * @param buf Buffer receiving the file metadata.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Removes a file relative to a directory descriptor.
+ * @param dir_fd Directory descriptor containing the file.
+ * @param path Path of the file to remove.
+ * @param path_len Length of the path.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Creates a directory relative to a directory descriptor.
+ * @param dir_fd Directory descriptor in which to create the directory.
+ * @param path Directory path.
+ * @param path_len Length of the path.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Retrieves the type of a file.
+ * @param dir_fd Directory descriptor containing the file.
+ * @param path File path.
+ * @return File type, or a negative error code.
+ */
+
+/**
+ * Retrieves the size of a file.
+ * @param dir_fd Directory descriptor containing the file.
+ * @param path File path.
+ * @return File size, or a negative error code.
+ */
+
+/**
+ * Determines whether a path exists.
+ * @param dir_fd Directory descriptor containing the path.
+ * @param path Path to check.
+ * @return `true` if the path exists, `false` otherwise.
+ */
+
+/**
+ * Retrieves the process environment.
+ * @param environ Buffer receiving environment pointers.
+ * @param environ_buf Buffer receiving environment strings.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Retrieves the number and total buffer size of environment variables.
+ * @param count Receives the number of environment variables.
+ * @param buf_size Receives the required buffer size.
+ * @return Zero on success, or a negative error code.
+ */
+
+/**
+ * Terminates the process with an exit code.
+ * @param code Process exit code.
+ */
+
+/**
+ * Retrieves the current clock time.
+ * @param id Clock identifier.
+ * @param precision Requested clock precision.
+ * @return Clock time.
+ */
 namespace wasi {
 
 // ── Stdout/stderr ──────────────────────────────────

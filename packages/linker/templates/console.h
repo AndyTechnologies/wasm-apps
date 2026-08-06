@@ -3,6 +3,26 @@
 
 #include "wasi.h"
 
+/**
+ * Writes a message followed by a newline to standard output.
+ * @param msg Message to write.
+ */
+
+/**
+ * Writes a warning message followed by a newline to standard error.
+ * @param msg Warning message to write.
+ */
+
+/**
+ * Writes an error message followed by a newline to standard error.
+ * @param msg Error message to write.
+ */
+
+/**
+ * Checks a condition and reports failed assertions to standard error.
+ * @param cond Condition to check.
+ * @param msg Message to include when the condition is false.
+ */
 namespace console {
 
 inline void log(const char* msg) {
