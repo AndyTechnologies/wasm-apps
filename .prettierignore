@@ -13,4 +13,3 @@ pnpm-lock.yaml
 # Bindings AssemblyScript: decoradores @external no son TS (prettier no los parsea)
 packages/compiler/src/bindings/*.ts
 packages/compiler/dist/bindings/*.ts
-packages/linker/templates/*.as.ts
