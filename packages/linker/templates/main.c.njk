@@ -140,6 +140,9 @@ int main(int argc, char *argv[]) {
     wasi_config.inherit_stdin();
     wasi_config.inherit_stdout();
     wasi_config.inherit_stderr();
+    {%- for m in mounts %}
+    wasi_config.preopen_dir("{{ m.host }}", "{{ m.guest }}", {{ m.dirPerms }}, {{ m.filePerms }});
+    {%- endfor %}
     _check_result(ctx.set_wasi(std::move(wasi_config)), "set_wasi");
     _check_result(linker.define_wasi(), "define_wasi");
     {% endif %}{% for func in hostFunctions %}

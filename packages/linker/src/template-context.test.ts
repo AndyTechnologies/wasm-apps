@@ -124,6 +124,7 @@ describe('NunjucksTemplateContext', () => {
       modules: [],
       hostFunctions: [],
       globals: [],
+      mounts: [],
     };
 
     expect(context.modules).toEqual([]);
