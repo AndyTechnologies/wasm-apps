@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const rootDir = resolve(import.meta.dirname, '..');
 const examplesDir = join(rootDir, 'examples');
@@ -132,6 +132,8 @@ for (const dir of exampleDirs) {
       continue;
     }
     const precompiledSrcDir = join(examplePath, 'src');
+    // src/ is not versioned (main.wasm is regenerated) — ensure it exists
+    mkdirSync(precompiledSrcDir, { recursive: true });
     // Clean any stale .wasm files from src/
     for (const f of readdirSync(precompiledSrcDir)) {
       if (f.endsWith('.wasm')) rmSync(join(precompiledSrcDir, f));
