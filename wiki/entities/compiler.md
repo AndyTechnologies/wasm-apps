@@ -63,3 +63,15 @@ interface ToolchainStrategy {
 ```
 
 Para agregar un nuevo lenguaje, implementá `ToolchainStrategy` y registralo en el router. Ver [[concepts/architecture-patterns|Patrones Arquitectónicos]].
+
+## Bindings inyectadas
+
+El compilador expone las APIs `console`, `fs` y `wasi` a los tres lenguajes **sin copias locales** en el proyecto del usuario:
+
+| Lenguaje       | Mecanismo                                                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| AssemblyScript | Imports `from 'console'                                                                                           | 'fs' | 'wasi'`reescritos a`bindings/*.ts` (`rewriteBindingImports`) |
+| C++            | Include path `bindings/` añadido a las flags (`-I` en clang++/CMake)                                              |
+| Rust           | Crate vendido `wasm_apps_bindings` inyectado como dependencia `path` en `Cargo.toml` (`injectBindingsDependency`) |
+
+Fuentes: `src/bindings/*.ts` (AS), `src/bindings/*.h` (C++), `src/bindings/rust/` (crate Rust). Ver [[concepts/host-functions|Host Functions]] para la capa de host functions del linker.

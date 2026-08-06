@@ -12,13 +12,15 @@ El pipeline usa un **ToolchainRouter** (Microkernel + Strategy) para enrutar cad
 
 ## Componentes
 
-1. **Compiler** (`@wasm-apps/compiler`) — ToolchainRouter con 4 estrategias: AssemblyScript (asc), C++ (clang++/CMake), Rust (cargo), Precompilado (magic bytes). Caché en dos niveles con clave extendida por toolchainId.
-2. **Linker** (`@wasm-apps/linker`) — lee módulos `.wasm`, resuelve dependencias, genera C++ con Nunjucks templates, compila con cmake-js. Soporta plugins, compilación cruzada, templates personalizados.
+1. **Compiler** (`@wasm-apps/compiler`) — ToolchainRouter con 4 estrategias: AssemblyScript (asc), C++ (clang++/CMake), Rust (cargo), Precompilado (magic bytes). Caché en dos niveles con clave extendida por toolchainId. Inyecta bindings `console`/`fs`/`wasi` a los tres lenguajes (AS por rewrite de imports, C++ por `-I`, Rust por crate vendido `wasm_apps_bindings`).
+2. **Linker** (`@wasm-apps/linker`) — lee módulos `.wasm`, resuelve dependencias, genera C++ con Nunjucks templates, compila con cmake-js. Soporta plugins, compilación cruzada, templates personalizados y preopens WASI (`mounts` de `wapp.json` → `wasi_config.preopen_dir`).
 3. **CLI** (`@wasm-apps/cli`) — orquestador `wapp` que coordina el pipeline completo con configuración via `wapp.json`. Ver [[entities/compiler|Compiler]], [[entities/linker|Linker]], [[entities/cli|CLI]], [[entities/types|Tipos Compartidos]].
 
 ## Diferenciadores
 
 - **Multi-lenguaje**: AssemblyScript, C++, Rust en un mismo pipeline
+- **Bindings inyectadas**: APIs `console`/`fs`/`wasi` sin copias locales en el proyecto
+- **Preopens WASI**: acceso a directorios del host via `mounts` en `wapp.json` (validados en build-time)
 - **Binarios autocontenidos**: sin dependencias de runtime WASM en despliegue
 - **Caché incremental**: tres capas (descargas, compilación, build) con toolchain-aware keys
 - **Multiplataforma**: Linux, macOS, Windows con compilación cruzada

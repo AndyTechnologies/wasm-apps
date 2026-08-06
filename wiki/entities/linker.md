@@ -15,6 +15,17 @@ Lee módulos WebAssembly (`.wasm`), resuelve dependencias entre ellos, genera c�
 | `moduleMatching` | `'name-only'\|'file-name'` | Estrategia de matching        |
 | `target`         | `string`                   | Tripleta de cross-compilación |
 | `wasmtimePath`   | `string`                   | Ruta a Wasmtime C-API         |
+| `mounts`         | `MountSpec[]`              | Preopens WASI (opcional)      |
+
+## Preopens WASI (mounts)
+
+Con `wasi: true`, `mounts` expone directorios del host dentro del WASM: `[{ "host": "data", "guest": "/mnt/data" }]`. El linker:
+
+1. **Valida en build-time** cada mount (`ConfigError`: host/guest obligatorios, host existente y directorio, guest absoluto) en `resolveMounts` (`src/index.ts`).
+2. **Resuelve** hosts relativos contra el cwd del build y embebe la ruta absoluta en el binario.
+3. **Genera** `wasi_config.preopen_dir(host, guest, READ|WRITE, READ|WRITE)` en `main.c.njk` (`codegen.ts`).
+
+Los mounts forman parte del build manifest (invalida la caché si cambian).
 
 ## Proceso interno
 

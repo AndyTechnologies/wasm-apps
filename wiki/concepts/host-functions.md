@@ -22,3 +22,7 @@ Todas las funciones `Math.x` redirigidas a `<cmath>` de C++: `abs`, `acos`, `aco
 | `trace`           | Traza de depuración                |
 
 Las constantes de `Math` (PI, E, LN2, etc.) y `process.argv` se definen como imports globales WASM.
+
+## Bindings inyectadas (console/fs/wasi)
+
+Además de las host functions `env.*` (stdlib de AssemblyScript), el [[entities/compiler|compilador]] inyecta bindings de alto nivel `console`, `fs` y `wasi` a los tres lenguajes (AS por rewrite de imports, C++ por `-I`, Rust por el crate `wasm_apps_bindings`). Son la capa que usan los ejemplos fs (`fs::readFile`, `readFile('/mnt/data/...')`) sobre los preopens WASI del [[entities/linker|linker]].
