@@ -1,2 +1,2 @@
 Opening file...
-(no mounted dir)
+Hello from the mounted directory!

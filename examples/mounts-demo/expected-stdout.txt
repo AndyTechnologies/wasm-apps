@@ -1,2 +1,2 @@
 Opening file...
-(no mounted dir — try with preopen_dir)
+Hello from the mounted directory!
