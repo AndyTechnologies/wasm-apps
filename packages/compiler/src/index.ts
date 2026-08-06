@@ -66,11 +66,12 @@ export interface AscCoreResult {
 }
 
 /**
- * Reescribe imports bare de bindings (`console`, `fs`, `wasi`) a rutas relativas
- * al directorio del fuente. asc 0.28 NO resuelve bare imports vía `--path`
- * (solo busca `~lib/<name>` en la stdlib, que secuestra `console` y `wasi`),
- * por lo que los nombres de bindings se convierten a imports relativos con
- * extensión `.ts` desde `sourceDir`.
+ * Rewrites bare binding imports to relative paths for their TypeScript files.
+ *
+ * @param sourceCode - Source code containing binding imports
+ * @param bindingsDir - Directory containing the binding files
+ * @param sourceDir - Directory used as the base for relative paths
+ * @returns Source code with `console`, `fs`, and `wasi` imports rewritten
  */
 export function rewriteBindingImports(sourceCode: string, bindingsDir: string, sourceDir: string): string {
   const importPathFor = (name: string): string => {
@@ -86,11 +87,17 @@ export function rewriteBindingImports(sourceCode: string, bindingsDir: string, s
 }
 
 /**
- * Ejecuta `asc` (AssemblyScript CLI) con los argumentos adecuados y devuelve
- * los archivos generados. No aplica caché — es la capa pura de spawn + I/O.
+ * Compiles AssemblyScript source and returns the generated artifacts without using caches.
  *
- * Usada tanto por `compileWasm()` (que añade caché encima) como por
- * `AssemblyScriptToolchainStrategy.compile()` (que produce ToolchainResult).
+ * @param sourceCode - The AssemblyScript source to compile
+ * @param fileName - The source file name or path used for compilation and error reporting
+ * @param isDev - Whether to use development compilation settings
+ * @param runtime - The AssemblyScript runtime to use
+ * @param sourceMap - Whether to generate a source map in development mode
+ * @param optimizeLevel - The optimization level for release builds
+ * @param shrinkLevel - The code-shrinking level for release builds
+ * @returns The generated WebAssembly bytes, declarations, JavaScript bindings, optional source map, and source hash
+ * @throws CompilerError If compilation fails or required output files are missing
  */
 export async function compileAssemblyScriptCore(
   sourceCode: string,
