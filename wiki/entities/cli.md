@@ -24,6 +24,8 @@ Orquestador `wapp` que coordina el pipeline completo: descubre archivos `.wasm.t
 | `cacheInfo()`                        | Estado de las 3 capas de caché                                      |
 | `clearCache(options?)`               | Limpia caché(es) específicas                                        |
 
+`wapp build` pasa `config.mounts` (preopens WASI de `wapp.json`, ver [[entities/linker|Linker]]) al linker junto con las demás opciones.
+
 ## Arquitectura interna
 
 Usa **Command Pattern**: cada operación es un objeto `ICommand` independiente. El invocador (`cli.ts`) parsea args con Commander, obtiene el comando del registro y lo ejecuta. Ver [[concepts/architecture-patterns|Patrones Arquitectónicos]].

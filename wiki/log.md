@@ -48,3 +48,14 @@
 - concepts/host-functions.md: añadido link a concepts/plugin-system
 - concepts/architecture-patterns.md: añadidos links a entities/compiler, entities/linker, entities/cli
 - sources/github-repo.md: añadido link a overview
+
+## [2026-08-06] actualizacion-por-codigo | Feature web-console-fs-api-examples (bindings inyectadas + mounts WASI)
+
+- Páginas afectadas: [[entities/compiler]], [[entities/linker]], [[entities/cli]], [[entities/types]], [[concepts/host-functions]], [[overview]], [[index]]
+- entities/compiler.md: añadida sección "Bindings inyectadas" (console/fs/wasi: rewrite de imports AS, `-I` C++, crate vendido `wasm_apps_bindings` en Rust)
+- entities/linker.md: añadida sección "Preopens WASI (mounts)" (validación ConfigError, hosts relativos al cwd del build, `wasi_config.preopen_dir` con READ|WRITE, mounts en el build manifest) y `mounts` en NativeAppOptions
+- entities/cli.md: nota de passthrough de `config.mounts` al linker
+- entities/types.md: añadido `MountSpec` a la tabla de tipos
+- concepts/host-functions.md: añadida sección "Bindings inyectadas (console/fs/wasi)"
+- overview.md: bindings y mounts en componentes/diferenciadores
+- index.md: actualizado pie de actualización (2026-08-06)

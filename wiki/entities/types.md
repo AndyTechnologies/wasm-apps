@@ -4,17 +4,18 @@ Paquete base que define tipos, interfaces, clases de error y utilidades de loggi
 
 ## Tipos principales
 
-| Tipo               | Descripción                              |
-| ------------------ | ---------------------------------------- |
-| `WasmExport`       | Exportación de un módulo WASM            |
-| `WasmImport`       | Importación de un módulo WASM            |
-| `WasmModuleInfo`   | Metadatos de un módulo parseado          |
-| `ResolvedLink`     | Orden de instanciación + mapa de exports |
-| `NativeAppOptions` | Opciones para crear ejecutable nativo    |
-| `CompileOptions`   | Opciones de compilación AS               |
-| `WappConfig`       | Configuración de alto nivel del proyecto |
-| `WasmPlugin`       | Interfaz de plugin del toolchain         |
-| `ToolchainError`   | Clase base abstracta para errores        |
+| Tipo               | Descripción                               |
+| ------------------ | ----------------------------------------- |
+| `WasmExport`       | Exportación de un módulo WASM             |
+| `WasmImport`       | Importación de un módulo WASM             |
+| `WasmModuleInfo`   | Metadatos de un módulo parseado           |
+| `ResolvedLink`     | Orden de instanciación + mapa de exports  |
+| `NativeAppOptions` | Opciones para crear ejecutable nativo     |
+| `MountSpec`        | Preopen WASI: `host` + `guest` (absoluta) |
+| `CompileOptions`   | Opciones de compilación AS                |
+| `WappConfig`       | Configuración de alto nivel del proyecto  |
+| `WasmPlugin`       | Interfaz de plugin del toolchain          |
+| `ToolchainError`   | Clase base abstracta para errores         |
 
 ## Clases de error
 

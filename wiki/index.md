@@ -4,13 +4,13 @@ Toolchain que compila AssemblyScript (`.wasm.ts`) a WebAssembly y lo enlaza en e
 
 ## Entidades
 
-| Página                                | Descripción                                                   |
-| ------------------------------------- | ------------------------------------------------------------- |
-| [[overview\|Overview]]                | Síntesis del proyecto                                         |
-| [[entities/compiler\|Compilador]]     | ToolchainRouter multi-lenguaje (AS, C++, Rust, Precompilado)  |
-| [[entities/linker\|Linker]]           | Enlaza WASM → ejecutable nativo con Wasmtime C-API + Nunjucks |
-| [[entities/cli\|CLI (wapp)]]          | Orquestador unificado del pipeline                            |
-| [[entities/types\|Tipos Compartidos]] | Interfaces, errores, logger compartidos                       |
+| Página                                | Descripción                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| [[overview\|Overview]]                | Síntesis del proyecto                                                                 |
+| [[entities/compiler\|Compilador]]     | ToolchainRouter multi-lenguaje (AS, C++, Rust, Precompilado) + bindings inyectadas    |
+| [[entities/linker\|Linker]]           | Enlaza WASM → ejecutable nativo con Wasmtime C-API + Nunjucks, preopens WASI (mounts) |
+| [[entities/cli\|CLI (wapp)]]          | Orquestador unificado del pipeline                                                    |
+| [[entities/types\|Tipos Compartidos]] | Interfaces, errores, logger compartidos                                               |
 
 ## Conceptos
 
@@ -48,4 +48,4 @@ Toolchain que compila AssemblyScript (`.wasm.ts`) a WebAssembly y lo enlaza en e
 
 ---
 
-**Páginas**: 25 | **Fuentes**: 14 | **Última actualización**: 2026-07-18
+**Páginas**: 25 | **Fuentes**: 14 | **Última actualización**: 2026-08-06
