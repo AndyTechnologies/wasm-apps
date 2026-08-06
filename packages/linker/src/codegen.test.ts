@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
 import type { ResolvedLink, ResolvedModule, WasmModuleInfo } from '@wasm-apps/types';
-import { generateCCode, findEntryModule, validateEntryExport } from './codegen.js';
+import { generateCCode, findEntryModule, validateEntryExport, WASI_DIR_PERMS, WASI_FILE_PERMS } from './codegen.js';
 
 function makeModule(name: string, exportsList: string[], importsList: Array<{ module: string; name: string; kind?: string }> = []): WasmModuleInfo {
   return {
@@ -80,6 +80,47 @@ describe('generateCCode', () => {
     const link = makeResolved([mod]);
     const code = generateCCode(link, '_start', false);
     expect(code).not.toContain('WasiConfig');
+  });
+
+  it('emits preopen_dir for declared mounts', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true, undefined, [{ host: '/abs/path/to/data', guest: '/mnt/data' }]);
+    expect(code).toContain(`wasi_config.preopen_dir("/abs/path/to/data", "/mnt/data", ${WASI_DIR_PERMS}, ${WASI_FILE_PERMS});`);
+  });
+
+  it('emits one preopen_dir per mount in order', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true, undefined, [
+      { host: '/first', guest: '/mnt/first' },
+      { host: '/second', guest: '/mnt/second' },
+    ]);
+    const first = code.indexOf('wasi_config.preopen_dir("/first", "/mnt/first"');
+    const second = code.indexOf('wasi_config.preopen_dir("/second", "/mnt/second"');
+    expect(first).toBeGreaterThan(-1);
+    expect(second).toBeGreaterThan(first);
+  });
+
+  it('escapes quotes and backslashes in mount paths', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true, undefined, [{ host: '/path with "quotes"\\dir', guest: '/mnt/data' }]);
+    expect(code).toContain('wasi_config.preopen_dir("/path with \\"quotes\\"\\\\dir", "/mnt/data"');
+  });
+
+  it('does not emit preopen_dir when mounts is empty', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true);
+    expect(code).not.toContain('preopen_dir');
+  });
+
+  it('emits preopen_dir only inside the wasi block', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false, undefined, [{ host: '/data', guest: '/mnt/data' }]);
+    expect(code).not.toContain('preopen_dir');
   });
 
   it('skips WASI imports in code generation', () => {

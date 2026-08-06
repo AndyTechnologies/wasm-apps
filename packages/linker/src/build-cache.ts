@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { formatBytes, logger } from '@wasm-apps/types';
+import type { MountSpec } from '@wasm-apps/types';
 
 /**
  * Computes a SHA-256 hash of all Nunjucks template files in a directory.
@@ -72,6 +73,7 @@ interface BuildManifestOptions {
   wasmtimePath: string;
   wasmtimeVersion: string;
   templateHash: string;
+  mounts?: MountSpec[];
 }
 
 interface BuildManifest {
@@ -141,6 +143,7 @@ export async function isBuildUpToDate(
     wasmtimePath?: string;
     wasmtimeVersion: string;
     templateHash?: string;
+    mounts?: MountSpec[];
   },
   rootDir?: string,
 ): Promise<boolean> {
@@ -157,6 +160,7 @@ export async function isBuildUpToDate(
   if (manifest.options.moduleMatching !== options.moduleMatching) return false;
   if (manifest.options.wasmtimePath !== (options.wasmtimePath || '')) return false;
   if (manifest.options.wasmtimeVersion !== options.wasmtimeVersion) return false;
+  if (JSON.stringify(manifest.options.mounts || []) !== JSON.stringify(options.mounts || [])) return false;
 
   if (options.templateHash !== undefined && manifest.options.templateHash !== options.templateHash) return false;
 
@@ -186,6 +190,7 @@ export function saveBuildManifest(
     wasmtimePath?: string;
     wasmtimeVersion: string;
     templateHash?: string;
+    mounts?: MountSpec[];
   },
   rootDir?: string,
 ): void {
@@ -206,6 +211,7 @@ export function saveBuildManifest(
       wasmtimePath: options.wasmtimePath || '',
       wasmtimeVersion: options.wasmtimeVersion,
       templateHash: options.templateHash || '',
+      mounts: options.mounts || [],
     },
     outputHash: fileHash(output),
     createdAt: new Date().toISOString(),

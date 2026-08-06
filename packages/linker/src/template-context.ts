@@ -85,6 +85,21 @@ export interface TemplateGlobalEntry {
 }
 
 /**
+ * Entrada de un preopen WASI en el contexto de template.
+ * Describe cómo generar la llamada `wasi_config.preopen_dir(...)` en C++.
+ */
+export interface TemplateMountEntry {
+  /** Ruta host escapada para string literal C++. */
+  host: string;
+  /** Ruta guest absoluta escapada para string literal C++. */
+  guest: string;
+  /** Bitmask de permisos WASI preview1 sobre el directorio. */
+  dirPerms: number;
+  /** Bitmask de permisos WASI preview1 sobre los archivos. */
+  filePerms: number;
+}
+
+/**
  * Contexto completo para renderizar templates Nunjucks de generación de C++.
  * Sustituye el paso de múltiples argumentos independientes en codegen.ts
  * por un único objeto estructurado.
@@ -115,4 +130,6 @@ export interface NunjucksTemplateContext {
     debugger: boolean;
     resources: { searchPaths: string[] };
   };
+  /** Preopens WASI a configurar (vacío si no hay mounts). */
+  mounts: TemplateMountEntry[];
 }

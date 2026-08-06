@@ -6,8 +6,8 @@ import { saveBuildManifest, isBuildUpToDate, computeTemplateHash } from './build
 import { resolveDependencies } from './linker.js';
 import { generateCCode } from './codegen.js';
 import { compileCpp } from './compiler.js';
-import type { NativeAppOptions, WasmModuleInfo, WasmImport, WasmExport, WasmImportFuncType, ModuleMatchingStrategy } from '@wasm-apps/types';
-import { LinkerError, logger } from '@wasm-apps/types';
+import type { NativeAppOptions, WasmModuleInfo, WasmImport, WasmExport, WasmImportFuncType, ModuleMatchingStrategy, MountSpec } from '@wasm-apps/types';
+import { LinkerError, ConfigError, logger } from '@wasm-apps/types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,8 +64,51 @@ function resolveWasmtimePath(wasmtimePath?: string): string | undefined {
   return path.join(cacheDir, entries[0]);
 }
 
+/**
+ * Valida los preopens WASI en build-time (fallo temprano) y resuelve los
+ * hosts relativos contra el cwd del build. El host resuelto se embebe en el
+ * binario, así el preopen funciona sin importar el cwd de ejecución.
+ */
+function resolveMounts(mounts: MountSpec[] | undefined): MountSpec[] {
+  if (!mounts || mounts.length === 0) return [];
+  const resolved: MountSpec[] = [];
+  for (const mount of mounts) {
+    if (!mount.host || !mount.guest) {
+      throw new ConfigError(`Mount inválido: host y guest son obligatorios (host: ${JSON.stringify(mount.host)}, guest: ${JSON.stringify(mount.guest)}).`, {
+        code: 'INVALID_MOUNT',
+        mount,
+      });
+    }
+    const resolvedHost = path.resolve(mount.host);
+    let stat;
+    try {
+      stat = fs.statSync(resolvedHost);
+    } catch {
+      throw new ConfigError(`Mount inválido: el host '${mount.host}' no existe (resuelto a '${resolvedHost}').`, {
+        code: 'MOUNT_HOST_NOT_FOUND',
+        mount,
+      });
+    }
+    if (!stat.isDirectory()) {
+      throw new ConfigError(`Mount inválido: el host '${mount.host}' no es un directorio.`, {
+        code: 'MOUNT_HOST_NOT_DIRECTORY',
+        mount,
+      });
+    }
+    if (!mount.guest.startsWith('/')) {
+      throw new ConfigError(`Mount inválido: el guest '${mount.guest}' debe ser una ruta absoluta que empiece con '/'.`, {
+        code: 'MOUNT_GUEST_NOT_ABSOLUTE',
+        mount,
+      });
+    }
+    resolved.push({ host: resolvedHost, guest: mount.guest });
+  }
+  return resolved;
+}
+
 export async function createNativeApp(options: NativeAppOptions, quiet = false): Promise<string> {
   const { inputPaths, output, entry, wasi, moduleMatching } = options;
+  const mounts = resolveMounts(options.mounts);
 
   const outputPath = path.resolve(output);
   const { parseWasmModule } = await import('./wasm-io.js');
@@ -88,6 +131,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
       wasmtimePath: resolvedWasmtimePath,
       wasmtimeVersion,
       templateHash,
+      mounts,
     });
     if (cacheOk) {
       logger.success(`Build up-to-date: ${outputPath}`);
@@ -119,7 +163,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Generating C++ source...');
 
-  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined);
+  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined, mounts);
 
   if (!quiet) logger.step('Compiling native binary...');
 
@@ -133,6 +177,7 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
     wasmtimePath: resolvedWasmtimePath,
     wasmtimeVersion,
     templateHash,
+    mounts,
   });
 
   if (!quiet) logger.success(`Built: ${outputPath}`);

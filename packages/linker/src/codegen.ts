@@ -1,9 +1,27 @@
 import os from 'node:os';
-import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo } from '@wasm-apps/types';
+import type { ResolvedLink, WasmImportFuncType, WasmModuleInfo, MountSpec } from '@wasm-apps/types';
 import { LinkerError } from '@wasm-apps/types';
 import { hostFunctionRegistry } from './host-function-registry.js';
 import { renderTemplate } from './template-renderer.js';
-import type { NunjucksTemplateContext, TemplateModuleEntry, TemplateHostFunctionEntry, TemplateGlobalEntry, TemplateExportEntry } from './template-context.js';
+import type {
+  NunjucksTemplateContext,
+  TemplateModuleEntry,
+  TemplateHostFunctionEntry,
+  TemplateGlobalEntry,
+  TemplateExportEntry,
+  TemplateMountEntry,
+} from './template-context.js';
+
+/**
+ * Permisos WASI para preopens.
+ *
+ * wasmtime v46 usa flags simples: 1 = READ, 2 = WRITE. El bitmask de rights
+ * preview1 (bits 9-26 para dir, 0-8/21-23/27 para file) es rechazado por
+ * `wasi_config_preopen_dir` (devuelve false y el preopen falla silenciosamente),
+ * por lo que los preopens se configuran con permisos completos (READ|WRITE).
+ */
+export const WASI_DIR_PERMS = 1 | 2; // READ | WRITE sobre el directorio
+export const WASI_FILE_PERMS = 1 | 2; // READ | WRITE sobre los archivos
 
 const VALTYPE_TO_CPP: Record<string, string> = {
   i32: 'ValType::i32()',
@@ -133,7 +151,13 @@ function buildHostFunctionList(
  * Construye un NunjucksTemplateContext a partir de los parámetros de generateCCode.
  * Esto reemplaza las funciones generatePreamble/generateStringReader/etc.
  */
-function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): NunjucksTemplateContext {
+function buildTemplateContext(
+  link: ResolvedLink,
+  entryPoint: string,
+  wasi: boolean,
+  importFuncTypes?: WasmImportFuncType[],
+  mounts: MountSpec[] = [],
+): NunjucksTemplateContext {
   const modules = link.order;
   const moduleBuffers = buildModuleBuffers(modules);
   const neededGlobals = buildNeededGlobals(modules);
@@ -208,6 +232,14 @@ function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: bool
     });
   }
 
+  // Construir entries de preopens WASI
+  const templateMounts: TemplateMountEntry[] = mounts.map((mount) => ({
+    host: escapeCppString(mount.host),
+    guest: escapeCppString(mount.guest),
+    dirPerms: WASI_DIR_PERMS,
+    filePerms: WASI_FILE_PERMS,
+  }));
+
   return {
     moduleName: 'wasm-linker',
     entryPoint: entryModule,
@@ -218,6 +250,7 @@ function buildTemplateContext(link: ResolvedLink, entryPoint: string, wasi: bool
     modules: templateModules,
     hostFunctions: templateHostFunctions,
     globals: templateGlobals,
+    mounts: templateMounts,
   };
 }
 
@@ -236,7 +269,7 @@ export function validateEntryExport(link: ResolvedLink, entryPoint: string): voi
   throw new LinkerError(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
 }
 
-export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string {
-  const context = buildTemplateContext(link, entryPoint, wasi, importFuncTypes);
+export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], mounts: MountSpec[] = []): string {
+  const context = buildTemplateContext(link, entryPoint, wasi, importFuncTypes, mounts);
   return renderTemplate(context);
 }
