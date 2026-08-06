@@ -1,5 +1,11 @@
 # @wasm-apps/compiler
 
+## Unreleased
+
+### Patch Changes
+
+- feat(compiler): inyecta bindings `console`/`fs`/`wasi` a AS, C++ y Rust sin copias locales (rewrite de imports, `-I` bindings, crate `wasm_apps_bindings` en Cargo.toml)
+
 ## 1.3.1
 
 ### Patch Changes
