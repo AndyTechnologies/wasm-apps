@@ -67,6 +67,14 @@ export interface RegisteredHostFunction {
   generator: HostFunctionGenerator;
 }
 
+/** Especificación de un preopen WASI: directorio host montado en una ruta guest. */
+export interface MountSpec {
+  /** Ruta host (relativa al cwd del build o absoluta). */
+  host: string;
+  /** Ruta guest absoluta (prefijo `/`) visible dentro del WASM. */
+  guest: string;
+}
+
 /** Opciones para crear un ejecutable nativo a partir de módulos WASM. */
 export interface NativeAppOptions {
   inputPaths: string[];
@@ -77,6 +85,8 @@ export interface NativeAppOptions {
   moduleMatching: ModuleMatchingStrategy;
   zigPath?: string;
   wasmtimePath?: string;
+  /** Directorios preabiertos WASI (preopens). */
+  mounts?: MountSpec[];
 }
 
 /** Variante del runtime de AssemblyScript. */
@@ -246,6 +256,8 @@ export interface WappConfig {
   output?: string;
   entry?: string;
   wasi?: boolean;
+  /** Preopens WASI: directorios host montados en rutas guest. */
+  mounts?: MountSpec[];
   moduleMatching?: ModuleMatchingStrategy;
   target?: string;
   targets?: CrossCompileTarget[];
