@@ -10,6 +10,7 @@
   "entry": "_start",
   "moduleMatching": "file-name",
   "wasi": false,
+  "mounts": [{ "host": "data", "guest": "/mnt/data" }],
   "target": "x86_64-linux",
   "wasmtimePath": "/ruta/a/wasmtime",
   "compiler": {
@@ -68,6 +69,26 @@ _string, por defecto: `"file-name"`_
 _boolean, por defecto: `false`_
 
 Cuando es `true`, enlaza con la interfaz WASI en lugar de imports `env` directos. **Requerido** para toolchains C++ y Rust que usen llamadas estándar (`printf`, `println!`, etc.).
+
+### mounts
+
+_array de objetos, opcional. Requiere `"wasi": true`._
+
+Preopens WASI: directorios del host que el WASM puede leer/escribir bajo una ruta guest. Sin preopens, el WASM no tiene acceso a nada del filesystem.
+
+| Campo   | Tipo   | Descripción                                                                                               |
+| ------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `host`  | string | Ruta host. Relativa al cwd del build o absoluta. Debe existir y ser un directorio (se valida al linkear). |
+| `guest` | string | Ruta guest absoluta dentro del WASM (empieza con `/`, ej. `/mnt/data`). Se usa como prefijo de ruta.      |
+
+```json
+{
+  "wasi": true,
+  "mounts": [{ "host": "data", "guest": "/mnt/data" }]
+}
+```
+
+Los hosts relativos se resuelven contra el cwd del build y el binario embebe la ruta absoluta resultante. Los preopens se configuran con permisos completos (lectura y escritura) por defecto.
 
 ### target
 
