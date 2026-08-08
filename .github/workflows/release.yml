@@ -1,24 +1,31 @@
 name: Release
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a publicar (X.Y.Z). Solo para dispatch manual.'
+        required: false
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: write
   id-token: write
+  checks: read
 
 jobs:
   release:
     if: >
-      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'Release v'))
+      github.event_name == 'push'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
         with:
           version: 11.10.0
@@ -28,47 +35,60 @@ jobs:
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            if [ -z "$VERSION" ]; then
+              >&2 echo "ERROR: workflow_dispatch requiere el input version (X.Y.Z)"
+              exit 1
+            fi
+          fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            >&2 echo "ERROR: versión inválida '$VERSION' (esperaba X.Y.Z)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${{ github.sha }}"
+          SUITE=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-suites" --jq '.check_suites[] | select(.app.slug == "github-actions") | .conclusion' 2>/dev/null | head -1 || true)
+          if [ "$SUITE" != "success" ]; then
+            >&2 echo "ERROR: CI no está en success para $SHA (conclusión: '${SUITE:-desconocida}')"
+            exit 1
+          fi
+          echo "CI ok para $SHA"
+
       - name: Install & Build
         run: |
           pnpm install --no-frozen-lockfile
           pnpm -r build
 
-      - name: Publish changed packages
+      - name: Publish packages (version from tag)
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
           PUBLISHED=0
-          for pkg in packages/*/; do
-            NAME=$(node -p "require('./${pkg}package.json').name")
-            VERSION=$(node -p "require('./${pkg}package.json').version")
-            PUBLISHED_VER=$(pnpm view "$NAME" version 2>/dev/null || echo "0.0.0")
-            if [ "$VERSION" != "$PUBLISHED_VER" ]; then
-              echo "Publishing $NAME@$VERSION (was $PUBLISHED_VER)"
-              (cd "$pkg" && pnpm publish --no-git-checks --provenance --access public)
-              PUBLISHED=$((PUBLISHED + 1))
-            else
-              echo "Skipping $NAME@$VERSION (already published)"
-            fi
+          # Orden de dependencias: types → compiler → linker → cli
+          for pkg in packages/types packages/compiler packages/linker packages/cli; do
+            NAME=$(node -p "require('./${pkg}/package.json').name")
+            npm pkg set version="$VERSION" --prefix "$pkg"
+            echo "Publishing $NAME@$VERSION"
+            (cd "$pkg" && pnpm publish --no-git-checks --provenance --access public)
+            PUBLISHED=$((PUBLISHED + 1))
           done
-          if [ "$PUBLISHED" -eq 0 ]; then
-            >&2 echo "ERROR: No packages had version changes"
-            exit 1
-          fi
           echo "Published $PUBLISHED package(s)"
-
-      - name: Get version
-        id: version
-        run: |
-          VERSION=$(node -p "require('./packages/cli/package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists, skipping release"
-            exit 0
-          fi
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --generate-notes \
