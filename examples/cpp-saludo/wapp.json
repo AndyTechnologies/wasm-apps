@@ -1,0 +1,12 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "cpp-saludo",
+  "entry": "_start",
+  "moduleMatching": "file-name",
+  "wasi": true,
+  "compiler": {
+    "release": false,
+    "optimizeLevel": 3
+  }
+}

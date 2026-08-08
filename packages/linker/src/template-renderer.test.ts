@@ -24,6 +24,7 @@ function minimalContext(overrides?: Partial<NunjucksTemplateContext>): NunjucksT
     ],
     hostFunctions: [],
     globals: [],
+    mounts: [],
     ...overrides,
   };
 }

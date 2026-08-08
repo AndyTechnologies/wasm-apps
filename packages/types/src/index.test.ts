@@ -9,9 +9,8 @@ import {
   PipelinePhase,
   formatBytes,
   EXTENSION_TO_TOOLCHAIN,
-  PermissionDecision,
 } from './index.js';
-import type { ToolchainId, WasmArtifact, WappConfig, MountEntry } from './index.js';
+import type { ToolchainId, WasmArtifact, WappConfig } from './index.js';
 
 describe('formatBytes', () => {
   it('formatea 0 bytes', () => {
@@ -188,29 +187,6 @@ describe('WasmArtifact with toolchainId', () => {
       toolchainId: 'cpp',
     };
     expect(artifact.toolchainId).toBe('cpp');
-  });
-});
-
-describe('MountEntry', () => {
-  it('serializa y deserializa correctamente', () => {
-    const entry = { host: '/home/user/data', guest: '/data' };
-    const json = JSON.stringify(entry);
-    const parsed = JSON.parse(json);
-    expect(parsed.host).toBe('/home/user/data');
-    expect(parsed.guest).toBe('/data');
-  });
-
-  it('acepta guest paths con múltiples segmentos', () => {
-    const entry: Record<string, string> = { host: './assets', guest: '/app/assets' };
-    expect(entry.guest).toBe('/app/assets');
-  });
-});
-
-describe('PermissionDecision', () => {
-  it('tiene los tres valores esperados', () => {
-    expect(PermissionDecision.AllowOnce).toBe('AllowOnce');
-    expect(PermissionDecision.AllowForever).toBe('AllowForever');
-    expect(PermissionDecision.Deny).toBe('Deny');
   });
 });
 

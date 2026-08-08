@@ -1,6 +1,6 @@
 # `@wasm-apps/cli` — Orquestador `wapp`
 
-CLI unificada que coordina el pipeline completo: descubre archivos fuente `.wasm.ts`, los compila a WebAssembly y linkea un ejecutable nativo autocontenido. Lee la configuración de `wapp.json` y admite sobrescrituras por línea de comandos.
+CLI unificada que coordina el pipeline completo: descubre archivos fuente multi-extension (`.wasm.ts`, `.wasm.cpp`, `.wasm.rs`, `.wasm`, etc.), los compila a WebAssembly y linkea un ejecutable nativo autocontenido. Lee la configuración de `wapp.json` y admite sobrescrituras por línea de comandos.
 
 ## Instalación
 
@@ -130,18 +130,19 @@ wapp cache clear --all     # Todo
 
 ## Configuración (`wapp.json`)
 
-| Campo            | Tipo      | Por defecto    | Descripción                              |
-| ---------------- | --------- | -------------- | ---------------------------------------- |
-| `sourceDir`      | `string`  | `"src"`        | Directorio de archivos `.wasm.ts`        |
-| `outDir`         | `string`  | `"wasm-out"`   | Directorio de salida `.wasm`             |
-| `output`         | `string`  | nombre del dir | Nombre del ejecutable                    |
-| `entry`          | `string`  | `"_start"`     | Función de entrada                       |
-| `moduleMatching` | `string`  | `"file-name"`  | Estrategia de matching                   |
-| `wasi`           | `boolean` | `false`        | Habilitar WASI                           |
-| `target`         | `string`  | nativa         | Tripleta de compilación cruzada          |
-| `compiler`       | `object`  | —              | Flags del compilador AssemblyScript      |
-| `plugins`        | `array`   | —              | Plugins del pipeline                     |
-| `optimization`   | `object`  | —              | Configuración de optimización del linker |
+| Campo            | Tipo      | Por defecto    | Descripción                                                    |
+| ---------------- | --------- | -------------- | -------------------------------------------------------------- |
+| `sourceDir`      | `string`  | `"src"`        | Directorio de archivos `.wasm.ts`                              |
+| `outDir`         | `string`  | `"wasm-out"`   | Directorio de salida `.wasm`                                   |
+| `output`         | `string`  | nombre del dir | Nombre del ejecutable                                          |
+| `entry`          | `string`  | `"_start"`     | Función de entrada                                             |
+| `moduleMatching` | `string`  | `"file-name"`  | Estrategia de matching                                         |
+| `wasi`           | `boolean` | `false`        | Habilitar WASI                                                 |
+| `mounts`         | `array`   | —              | Preopens WASI: `[{ "host", "guest" }]` (requiere `wasi: true`) |
+| `target`         | `string`  | nativa         | Tripleta de compilación cruzada                                |
+| `compiler`       | `object`  | —              | Flags del compilador (multi-toolchain)                         |
+| `plugins`        | `array`   | —              | Plugins del pipeline                                           |
+| `optimization`   | `object`  | —              | Configuración de optimización del linker                       |
 
 ## Dependencias
 

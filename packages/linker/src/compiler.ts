@@ -37,13 +37,6 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
     const cppFile = path.join(srcDir, 'main.cpp');
     await fs.promises.writeFile(cppFile, cppSource);
 
-    // Copy fs-runtime.h to the build src directory if it exists in templates
-    // fs-runtime.h is at templates/fs-runtime.h relative to compiler.ts or dist/compiler.js
-    const fsRuntimeSrc = path.resolve(__dirname, '../templates/fs-runtime.h');
-    if (fs.existsSync(fsRuntimeSrc)) {
-      await fs.promises.copyFile(fsRuntimeSrc, path.join(srcDir, 'fs-runtime.h'));
-    }
-
     const cmakeContent = extraLibs ? generateCMakeListsWithExtras(options.wasmtimePath, extraLibs) : generateCMakeLists(options.wasmtimePath);
     await fs.promises.writeFile(path.join(buildDir, 'CMakeLists.txt'), cmakeContent);
 

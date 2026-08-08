@@ -1,6 +1,18 @@
-# `@wasm-apps/compiler` — Compilador AssemblyScript → WASM
+# `@wasm-apps/compiler` — Compilador multi-toolchain
 
-Compila archivos AssemblyScript (`.wasm.ts`, `.ts`, `.asm`) a WebAssembly binario usando `assemblyscript/asc` como librería.
+Compila archivos AssemblyScript (`.wasm.ts`, `.wasm.mjs`, `.as`), C++ (`.wasm.cpp`, `.wasm.cxx`, `.wasm.cc`), Rust (`.wasm.rs`) y WASM precompilado (`.wasm`) a WebAssembly binario usando un `ToolchainRouter` con estrategias por lenguaje (`assemblyscript/asc`, clang++/CMake, cargo, passthrough).
+
+## Bindings inyectadas
+
+El compilador expone las APIs `console`, `fs` y `wasi` a los tres lenguajes sin copias locales en el proyecto:
+
+| Lenguaje       | Mecanismo                                                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| AssemblyScript | Imports `from 'console'                                                                                           | 'fs' | 'wasi'`reescritos a`bindings/*.ts` (`rewriteBindingImports`) |
+| C++            | Include path del directorio `bindings/` añadido a las flags (`-I`)                                                |
+| Rust           | Crate vendido `wasm_apps_bindings` inyectado como dependencia `path` en `Cargo.toml` (`injectBindingsDependency`) |
+
+Fuentes: `src/bindings/*.ts` (AssemblyScript), `src/bindings/*.h` (C++), `src/bindings/rust/` (crate Rust).
 
 ## Instalación
 

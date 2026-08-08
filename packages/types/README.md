@@ -12,29 +12,30 @@ pnpm add @wasm-apps/types
 
 ### Tipos e interfaces
 
-| Exportación              | Descripción                                              |
-| ------------------------ | -------------------------------------------------------- |
-| `WasmExport`             | Exportación de un módulo WASM (nombre + kind)            |
-| `WasmImport`             | Importación de un módulo WASM (módulo + nombre + kind)   |
-| `WasmImportFuncType`     | Firma de tipos de una función importada                  |
-| `WasmModuleInfo`         | Metadatos de un módulo WASM parseado                     |
-| `ResolvedModule`         | Módulo en orden de dependencias con índice de instancia  |
-| `ResolvedLink`           | Orden de instanciación + mapa de exports resueltos       |
-| `HostFuncDef`            | Definición de función host para generación C++           |
-| `HostFunctionGenerator`  | Función que produce el cuerpo C++ de una host function   |
-| `RegisteredHostFunction` | Función host registrada con metadatos y generador        |
-| `NativeAppOptions`       | Opciones para crear un ejecutable nativo                 |
-| `CompileOptions`         | Opciones para compilar un archivo `.wasm.ts`             |
-| `CompileResult`          | Resultado de una compilación exitosa                     |
-| `WappConfig`             | Configuración de alto nivel del proyecto (`wapp.json`)   |
-| `CrossCompileTarget`     | Destino de compilación cruzada                           |
-| `PluginConfig`           | Configuración para un plugin individual                  |
-| `PipelineContext`        | Contexto que se pasa a través de las fases del pipeline  |
-| `WasmPlugin`             | Interfaz de un plugin del toolchain                      |
-| `PipelinePhase`          | Enum de fases del pipeline (`BeforeModuleCompile`, etc.) |
-| `AsRuntime`              | Variante del runtime de AssemblyScript                   |
-| `ModuleMatchingStrategy` | Estrategia de matching (`name-only`, `file-name`)        |
-| `ToolchainError`         | Clase base abstracta para errores del toolchain          |
+| Exportación              | Descripción                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `WasmExport`             | Exportación de un módulo WASM (nombre + kind)                                  |
+| `WasmImport`             | Importación de un módulo WASM (módulo + nombre + kind)                         |
+| `WasmImportFuncType`     | Firma de tipos de una función importada                                        |
+| `WasmModuleInfo`         | Metadatos de un módulo WASM parseado                                           |
+| `ResolvedModule`         | Módulo en orden de dependencias con índice de instancia                        |
+| `ResolvedLink`           | Orden de instanciación + mapa de exports resueltos                             |
+| `HostFuncDef`            | Definición de función host para generación C++                                 |
+| `HostFunctionGenerator`  | Función que produce el cuerpo C++ de una host function                         |
+| `RegisteredHostFunction` | Función host registrada con metadatos y generador                              |
+| `NativeAppOptions`       | Opciones para crear un ejecutable nativo                                       |
+| `MountSpec`              | Preopen WASI: `host` (ruta del host) + `guest` (ruta absoluta dentro del WASM) |
+| `CompileOptions`         | Opciones para compilar un archivo `.wasm.ts`                                   |
+| `CompileResult`          | Resultado de una compilación exitosa                                           |
+| `WappConfig`             | Configuración de alto nivel del proyecto (`wapp.json`)                         |
+| `CrossCompileTarget`     | Destino de compilación cruzada                                                 |
+| `PluginConfig`           | Configuración para un plugin individual                                        |
+| `PipelineContext`        | Contexto que se pasa a través de las fases del pipeline                        |
+| `WasmPlugin`             | Interfaz de un plugin del toolchain                                            |
+| `PipelinePhase`          | Enum de fases del pipeline (`BeforeModuleCompile`, etc.)                       |
+| `AsRuntime`              | Variante del runtime de AssemblyScript                                         |
+| `ModuleMatchingStrategy` | Estrategia de matching (`name-only`, `file-name`)                              |
+| `ToolchainError`         | Clase base abstracta para errores del toolchain                                |
 
 ### Clases de error
 

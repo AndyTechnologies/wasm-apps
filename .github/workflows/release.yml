@@ -2,60 +2,30 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g. 1.6.0)'
-        required: true
+        description: 'Versión a publicar (X.Y.Z). Solo para dispatch manual.'
+        required: false
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: write
   id-token: write
+  checks: read
 
 jobs:
   release:
+    if: >
+      github.event_name == 'push'
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Validate version
-        id: version
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ inputs.version }}"
-            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "❌ La versión '$VERSION' no cumple X.Y.Z"
-              exit 1
-            fi
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-            echo "✅ Workflow manual: versión $VERSION"
-          else
-            TAG="${{ github.ref_name }}"
-            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "❌ El tag '$TAG' no cumple vX.Y.Z"
-              exit 1
-            fi
-            VERSION="${TAG#v}"
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-            echo "✅ Tag válido: $TAG → versión $VERSION"
-          fi
-
-      - name: Verify CI passed for this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          SHA="${{ github.sha }}"
-          echo "Verificando CI en commit $SHA..."
-          CONCLUSION=$(gh run list --commit "$SHA" --workflow "CI" \
-            --json conclusion --jq '.[0].conclusion // "pending"' --limit 1)
-          if [ "$CONCLUSION" != "success" ]; then
-            echo "❌ CI no pasó para este commit (conclusion=$CONCLUSION)"
-            exit 1
-          fi
-          echo "✅ CI pasó correctamente"
-
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
         with:
           version: 11.10.0
@@ -65,34 +35,54 @@ jobs:
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            if [ -z "$VERSION" ]; then
+              >&2 echo "ERROR: workflow_dispatch requiere el input version (X.Y.Z)"
+              exit 1
+            fi
+          fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            >&2 echo "ERROR: versión inválida '$VERSION' (esperaba X.Y.Z)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA="${{ github.sha }}"
+          SUITE=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-suites" --jq '.check_suites[] | select(.app.slug == "github-actions") | .conclusion' 2>/dev/null | head -1 || true)
+          if [ "$SUITE" != "success" ]; then
+            >&2 echo "ERROR: CI no está en success para $SHA (conclusión: '${SUITE:-desconocida}')"
+            exit 1
+          fi
+          echo "CI ok para $SHA"
+
       - name: Install & Build
         run: |
           pnpm install --no-frozen-lockfile
           pnpm -r build
 
-      - name: Set version from tag
+      - name: Publish packages (version from tag)
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          for pkg in packages/*/; do
-            node -e "
-              const fs = require('fs');
-              const p = JSON.parse(fs.readFileSync('${pkg}package.json'));
-              p.version = '$VERSION';
-              fs.writeFileSync('${pkg}package.json', JSON.stringify(p, null, 2) + '\n');
-            "
-          done
-          echo "✅ Versión $VERSION seteada en todos los packages"
-
-      - name: Publish to npm
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          for pkg in packages/*/; do
-            NAME=$(node -p "require('./${pkg}package.json').name")
-            echo "📦 Publicando $NAME@$VERSION ..."
+          PUBLISHED=0
+          # Orden de dependencias: types → compiler → linker → cli
+          for pkg in packages/types packages/compiler packages/linker packages/cli; do
+            NAME=$(node -p "require('./${pkg}/package.json').name")
+            npm pkg set version="$VERSION" --prefix "$pkg"
+            echo "Publishing $NAME@$VERSION"
             (cd "$pkg" && pnpm publish --no-git-checks --provenance --access public)
-            echo "✅ Publicado $NAME@$VERSION"
+            PUBLISHED=$((PUBLISHED + 1))
           done
-          echo "✅ Todos los packages publicados"
+          echo "Published $PUBLISHED package(s)"
 
       - name: Create GitHub Release
         env:
@@ -103,4 +93,3 @@ jobs:
             --title "v$VERSION" \
             --generate-notes \
             --target "${{ github.sha }}"
-          echo "✅ GitHub Release v$VERSION creada"

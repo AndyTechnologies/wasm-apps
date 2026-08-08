@@ -2,21 +2,6 @@ export { logger, formatBytes } from './logger.js';
 import type { Logger } from './logger.js';
 export type { Logger };
 
-/** Entrada de montaje de directorio host → guest WASI. */
-export interface MountEntry {
-  /** Ruta en el sistema host (resuelta relativa a wapp.json al build). */
-  host: string;
-  /** Ruta virtual WASI (e.g. "/data"). */
-  guest: string;
-}
-
-/** Decisión de permiso para acceso a filesystem. */
-export enum PermissionDecision {
-  AllowOnce = 'AllowOnce',
-  AllowForever = 'AllowForever',
-  Deny = 'Deny',
-}
-
 /** Una entrada de exportación WASM. */
 export interface WasmExport {
   name: string;
@@ -97,6 +82,14 @@ export interface RegisteredHostFunction {
   generator: HostFunctionGenerator;
 }
 
+/** Especificación de un preopen WASI: directorio host montado en una ruta guest. */
+export interface MountSpec {
+  /** Ruta host (relativa al cwd del build o absoluta). */
+  host: string;
+  /** Ruta guest absoluta (prefijo `/`) visible dentro del WASM. */
+  guest: string;
+}
+
 /** Opciones para crear un ejecutable nativo a partir de módulos WASM. */
 export interface NativeAppOptions {
   inputPaths: string[];
@@ -107,8 +100,13 @@ export interface NativeAppOptions {
   moduleMatching: ModuleMatchingStrategy;
   zigPath?: string;
   wasmtimePath?: string;
-  templatePath?: string;
-  mounts?: MountEntry[];
+  /** Directorios preabiertos WASI (preopens). */
+  mounts?: MountSpec[];
+  /** Configuración del linker. */
+  linker?: {
+    /** Ruta a un directorio con templates Nunjucks personalizados. */
+    templatePath?: string;
+  };
 }
 
 /** Una librería extra para incluir en la compilación CMake (por ejemplo SDL3, RmlUI, GLAD). */
@@ -254,7 +252,7 @@ export interface ILinkerStrategy {
 /** Estrategia de generación de código C++. */
 export interface ICodegenStrategy {
   readonly name: string;
-  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], templatePath?: string): string;
+  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], mounts?: MountSpec[], templatePath?: string): string;
 }
 
 // ──────────────────────────────────────────
@@ -287,10 +285,11 @@ export interface WappConfig {
   output?: string;
   entry?: string;
   wasi?: boolean;
+  /** Preopens WASI: directorios host montados en rutas guest. */
+  mounts?: MountSpec[];
   moduleMatching?: ModuleMatchingStrategy;
   target?: string;
   targets?: CrossCompileTarget[];
-  mounts?: MountEntry[];
   zigPath?: string;
   wasmtimePath?: string;
   compiler?: {

@@ -18,7 +18,7 @@ Cualquier cambio en el código fuente, flags del compilador, o toolchain produce
 
 **Ubicación:** `.wapp_build/build-manifest.json` (local al proyecto)
 
-El manifiesto almacena hashes de todos los archivos `.wasm` de entrada más las opciones del linker (entry, target, wasi, moduleMatching, wasmtimePath, wasmtimeVersion) más un **templateHash** de los templates Nunjucks. Si cambia algún template Nunjucks, el build se invalida y regenera el C++.
+El manifiesto almacena hashes de todos los archivos `.wasm` de entrada más las opciones del linker (entry, target, wasi, moduleMatching, wasmtimePath, wasmtimeVersion, **mounts**) más un **templateHash** de los templates Nunjucks. Si cambia algún template Nunjucks o algún mount (`wapp.json`), el build se invalida y regenera el C++.
 
 ## Caché de descarga
 

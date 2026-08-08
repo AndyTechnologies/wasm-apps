@@ -8,4 +8,5 @@ allowBuilds:
 
 overrides:
   brace-expansion: ^5.0.8
+  postcss: 8.5.23
   tar: ^7.5.21

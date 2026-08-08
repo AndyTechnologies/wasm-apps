@@ -1,5 +1,11 @@
 # @wasm-apps/linker
 
+## Unreleased
+
+### Patch Changes
+
+- feat(linker): valida preopens WASI en build-time (ConfigError) y genera `wasi_config.preopen_dir(...)` con permisos completos para cada mount; los mounts invalidan el build cache
+
 ## 1.3.1
 
 ### Patch Changes

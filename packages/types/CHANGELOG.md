@@ -1,5 +1,11 @@
 # @wasm-apps/types
 
+## Unreleased
+
+### Patch Changes
+
+- feat(types): añade `MountSpec` (host/guest) y el campo `mounts` en `NativeAppOptions` para preopens WASI
+
 ## 1.3.1
 
 ### Patch Changes

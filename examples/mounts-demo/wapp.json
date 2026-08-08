@@ -1,0 +1,13 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "mounts-demo",
+  "entry": "_start",
+  "moduleMatching": "file-name",
+  "wasi": true,
+  "mounts": [{ "host": "data", "guest": "/mnt/data" }],
+  "compiler": {
+    "release": false,
+    "optimizeLevel": 2
+  }
+}

@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -8,8 +7,8 @@ import {
   type ICodegenStrategy,
   type ModuleMatchingStrategy,
   type WasmModuleInfo,
-  type CacheInfo,
-  type MountEntry,
+  type NativeAppOptions,
+  type MountSpec,
   LinkerError,
   logger,
 } from '@wasm-apps/types';
@@ -35,7 +34,7 @@ export class NativeAppBuilder {
   private codegenStrategy: ICodegenStrategy;
   private templateDir?: string;
   private validateBeforeBuild = true;
-  private mounts?: MountEntry[];
+  private mounts?: MountSpec[];
 
   constructor(linkerStrategy?: ILinkerStrategy, codegenStrategy?: ICodegenStrategy, wasmtimeVersion?: string) {
     this.linkerStrategy = linkerStrategy || new WasmtimeLinkerStrategy();
@@ -100,21 +99,9 @@ export class NativeAppBuilder {
     return this;
   }
 
-  setMounts(mounts: MountEntry[]): this {
+  setMounts(mounts: MountSpec[]): this {
     this.mounts = mounts;
     return this;
-  }
-
-  private computeMountsHash(): string {
-    if (!this.mounts || this.mounts.length === 0) return '';
-    const hash = crypto.createHash('sha256');
-    for (const m of this.mounts) {
-      hash.update(m.host);
-      hash.update('\0');
-      hash.update(m.guest);
-      hash.update('\0');
-    }
-    return hash.digest('hex');
   }
 
   setLinkerStrategy(strategy: ILinkerStrategy): this {
@@ -179,7 +166,7 @@ export class NativeAppBuilder {
       wasmtimePath: resolvedPath || undefined,
       wasmtimeVersion: this.wasmtimeVersion,
       templateHash,
-      mountsHash: this.computeMountsHash(),
+      mounts: this.mounts,
     });
   }
 
@@ -226,8 +213,6 @@ export class NativeAppBuilder {
 
     if (!quiet) logger.step('Linking native binary...');
 
-    const mountsHash = this.computeMountsHash();
-
     const nativeOptions = {
       inputPaths: this.wasmPaths,
       output: outputPath,
@@ -236,9 +221,11 @@ export class NativeAppBuilder {
       wasi: this.wasi,
       moduleMatching: this.moduleMatching,
       wasmtimePath: resolvedWasmtimePath,
-      templatePath: this.templateDir,
+      linker: {
+        templatePath: this.templateDir,
+      },
       mounts: this.mounts,
-    };
+    } satisfies NativeAppOptions;
 
     const result = await this.linkerStrategy.link(this.resolvedModules, nativeOptions);
 
@@ -253,7 +240,7 @@ export class NativeAppBuilder {
       wasmtimePath: resolvedWasmtimePath || '',
       wasmtimeVersion: this.wasmtimeVersion,
       templateHash,
-      mountsHash,
+      mounts: this.mounts,
     });
 
     if (!quiet) logger.success(`Built: ${outputPath}`);

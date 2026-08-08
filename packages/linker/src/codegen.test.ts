@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import crypto from 'node:crypto';
 import path from 'node:path';
 import type { ResolvedLink, ResolvedModule, WasmModuleInfo } from '@wasm-apps/types';
-import { generateCCode, findEntryModule, validateEntryExport } from './codegen.js';
+import { generateCCode, findEntryModule, validateEntryExport, WASI_DIR_PERMS, WASI_FILE_PERMS } from './codegen.js';
 
 function makeModule(name: string, exportsList: string[], importsList: Array<{ module: string; name: string; kind?: string }> = []): WasmModuleInfo {
   return {
@@ -55,57 +54,23 @@ describe('validateEntryExport', () => {
   });
 });
 
-describe('SHA-256 test vectors (fs-runtime.h)', () => {
-  it('generates SHA-256 hex correctly for known inputs', () => {
-    // Known SHA-256 test vectors from FIPS 180-4
-    expect(crypto.createHash('sha256').update('').digest('hex')).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
-    expect(crypto.createHash('sha256').update('abc').digest('hex')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
-    expect(crypto.createHash('sha256').update('message digest').digest('hex')).toBe('f7846f55cf23e14eebeab5b4e1550cad5b509e3348fbc4efa3a1413d393cb650');
-  });
-
-  it('computes permissionId deterministically', () => {
-    const wasmHash = 'abc123def456';
-    const path = '/data';
-    const id = crypto
-      .createHash('sha256')
-      .update(wasmHash + ':' + path)
-      .digest('hex');
-    // Same inputs should produce same hash
-    const id2 = crypto
-      .createHash('sha256')
-      .update(wasmHash + ':' + path)
-      .digest('hex');
-    expect(id).toBe(id2);
-    // Different paths should produce different hashes
-    const id3 = crypto
-      .createHash('sha256')
-      .update(wasmHash + ':/etc')
-      .digest('hex');
-    expect(id).not.toBe(id3);
-  });
-});
-
 describe('generateCCode with mounts', () => {
   it('generates preopen_dir lines for each mount when wasi is true', () => {
     const mod = makeModule('test', ['_start']);
     const link = makeResolved([mod]);
-    const mounts: Array<{ host: string; guest: string }> = [
+    const mounts = [
       { host: '/home/user/data', guest: '/data' },
       { host: '/home/user/config', guest: '/etc/app' },
     ];
-    const code = generateCCode(link, '_start', true, undefined, undefined, mounts);
-    expect(code).toContain('#include "fs-runtime.h"');
-    expect(code).toContain('static std::vector<std::string> _fs_allowed_roots;');
-    expect(code).toContain('_fs_allowed_roots.push_back("/home/user/data");');
-    expect(code).toContain('_fs_allowed_roots.push_back("/home/user/config");');
-    expect(code).toContain('wasi_config.preopen_dir("/home/user/data", "/data");');
-    expect(code).toContain('wasi_config.preopen_dir("/home/user/config", "/etc/app");');
+    const code = generateCCode(link, '_start', true, undefined, mounts);
+    expect(code).toContain('wasi_config.preopen_dir("/home/user/data", "/data", 3, 3);');
+    expect(code).toContain('wasi_config.preopen_dir("/home/user/config", "/etc/app", 3, 3);');
   });
 
   it('does not generate preopen_dir when mounts is empty', () => {
     const mod = makeModule('test', ['_start']);
     const link = makeResolved([mod]);
-    const code = generateCCode(link, '_start', false, undefined, undefined, []);
+    const code = generateCCode(link, '_start', false, undefined, []);
     expect(code).not.toContain('preopen_dir');
   });
 });
@@ -136,6 +101,47 @@ describe('generateCCode', () => {
     const link = makeResolved([mod]);
     const code = generateCCode(link, '_start', false);
     expect(code).not.toContain('WasiConfig');
+  });
+
+  it('emits preopen_dir for declared mounts', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true, undefined, [{ host: '/abs/path/to/data', guest: '/mnt/data' }]);
+    expect(code).toContain(`wasi_config.preopen_dir("/abs/path/to/data", "/mnt/data", ${WASI_DIR_PERMS}, ${WASI_FILE_PERMS});`);
+  });
+
+  it('emits one preopen_dir per mount in order', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true, undefined, [
+      { host: '/first', guest: '/mnt/first' },
+      { host: '/second', guest: '/mnt/second' },
+    ]);
+    const first = code.indexOf('wasi_config.preopen_dir("/first", "/mnt/first"');
+    const second = code.indexOf('wasi_config.preopen_dir("/second", "/mnt/second"');
+    expect(first).toBeGreaterThan(-1);
+    expect(second).toBeGreaterThan(first);
+  });
+
+  it('escapes quotes and backslashes in mount paths', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true, undefined, [{ host: '/path with "quotes"\\dir', guest: '/mnt/data' }]);
+    expect(code).toContain('wasi_config.preopen_dir("/path with \\"quotes\\"\\\\dir", "/mnt/data"');
+  });
+
+  it('does not emit preopen_dir when mounts is empty', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', true);
+    expect(code).not.toContain('preopen_dir');
+  });
+
+  it('emits preopen_dir only inside the wasi block', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false, undefined, [{ host: '/data', guest: '/mnt/data' }]);
+    expect(code).not.toContain('preopen_dir');
   });
 
   it('skips WASI imports in code generation', () => {

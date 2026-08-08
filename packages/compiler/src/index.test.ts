@@ -17,7 +17,7 @@ import { runExecFile } from './strategies/_utils.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { compileWasm, clearMemoryCache } from './index.js';
+import { compileWasm, clearMemoryCache, rewriteBindingImports } from './index.js';
 import { clearCompileCache } from './disk-cache.js';
 
 /** Escribe archivos de salida simulados de asc en el temp dir derivado de los args. */
@@ -136,5 +136,74 @@ describe('compileWasm', () => {
     expect(args).toContain('2');
     expect(args).toContain('--shrinkLevel');
     expect(args).toContain('1');
+  });
+});
+
+describe('rewriteBindingImports', () => {
+  const bindingsDir = '/repo/packages/compiler/dist/bindings';
+  const sourceDir = '/repo/examples/as-fs/src';
+
+  it('rewrites bare console/fs/wasi imports to relative .ts paths preserving quotes', () => {
+    const src = "import { log } from 'console';\nimport { readFile } from 'fs';\nimport { stdoutWrite } from 'wasi';\n";
+    const out = rewriteBindingImports(src, bindingsDir, sourceDir);
+    expect(out).toBe(
+      "import { log } from '../../../packages/compiler/dist/bindings/console.ts';\n" +
+        "import { readFile } from '../../../packages/compiler/dist/bindings/fs.ts';\n" +
+        "import { stdoutWrite } from '../../../packages/compiler/dist/bindings/wasi.ts';\n",
+    );
+  });
+
+  it('preserves double-quoted specifiers', () => {
+    const src = 'import { log } from "console";';
+    const out = rewriteBindingImports(src, bindingsDir, sourceDir);
+    expect(out).toBe('import { log } from "../../../packages/compiler/dist/bindings/console.ts";');
+  });
+
+  it('prefixes ./ when bindings live inside the source dir', () => {
+    const out = rewriteBindingImports("import { log } from 'console';", '/repo/src/bindings', '/repo/src');
+    expect(out).toBe("import { log } from './bindings/console.ts';");
+  });
+
+  it('leaves relative imports untouched', () => {
+    const src = "import { x } from './console';\nimport { y } from '../fs';\n";
+    expect(rewriteBindingImports(src, bindingsDir, sourceDir)).toBe(src);
+  });
+
+  it('leaves unknown bare imports untouched', () => {
+    const src = "import { z } from 'lodash';\n";
+    expect(rewriteBindingImports(src, bindingsDir, sourceDir)).toBe(src);
+  });
+
+  it('emits only forward-slash separators', () => {
+    const out = rewriteBindingImports("import { log } from 'console';", bindingsDir, sourceDir);
+    expect(out).not.toContain('\\');
+  });
+});
+
+describe('compileWasm binding import rewrite wiring', () => {
+  it('writes bare binding imports rewritten to relative paths in the temp source', async () => {
+    let tempSource = '';
+    vi.mocked(runExecFile).mockImplementation(async (_cmd: string, args: string[]) => {
+      // Capturar el fuente temp ANTES del cleanup del finally
+      const srcFile = args[0];
+      if (typeof srcFile === 'string' && srcFile.endsWith('source.ts')) {
+        tempSource = fs.readFileSync(srcFile, 'utf-8');
+      }
+      writeAscOutputs(args);
+      return { stdout: '', stderr: '' };
+    });
+
+    const tmpDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'compile-test-'));
+    const wasmFile2 = path.join(tmpDir2, 'test.wasm.ts');
+    fs.writeFileSync(wasmFile2, 'placeholder');
+    await compileWasm({
+      fileName: `${wasmFile2}-rewrite`,
+      sourceCode: "import { log } from 'console';\nexport function _start(): void { log('hi'); }\n",
+      isDev: true,
+    });
+    fs.rmSync(tmpDir2, { recursive: true, force: true });
+
+    expect(tempSource).toContain('console.ts');
+    expect(tempSource).not.toContain("from 'console'");
   });
 });

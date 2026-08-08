@@ -18,6 +18,7 @@ Edita `wapp.json` para personalizar el comportamiento:
   "entry": "_start",
   "moduleMatching": "file-name",
   "wasi": false,
+  "mounts": [{ "host": "data", "guest": "/mnt/data" }],
   "target": "x86_64-linux",
   "compiler": {
     "release": false,
@@ -33,17 +34,18 @@ Edita `wapp.json` para personalizar el comportamiento:
 }
 ```
 
-| Campo                 | Propósito                                                                  |
-| --------------------- | -------------------------------------------------------------------------- |
-| `sourceDir`           | Directorio con archivos fuente (`.wasm.ts`, `.wasm.cpp`, `.wasm.rs`, etc.) |
-| `outDir`              | Directorio de salida para archivos `.wasm` intermedios                     |
-| `output`              | Nombre del ejecutable nativo final                                         |
-| `entry`               | Nombre del export a llamar al iniciar (por defecto `_start`)               |
-| `moduleMatching`      | Cómo emparejar imports con archivos fuente                                 |
-| `wasi`                | Habilitar interfaz WASI (requerido para C++ con `printf`)                  |
-| `target`              | Tripleta de destino para compilación cruzada                               |
-| `compiler`            | Flags globales del compilador                                              |
-| `compiler.toolchains` | Overrides por toolchain (assemblyscript, cpp, rust, precompiled)           |
+| Campo                 | Propósito                                                                       |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `sourceDir`           | Directorio con archivos fuente (`.wasm.ts`, `.wasm.cpp`, `.wasm.rs`, etc.)      |
+| `outDir`              | Directorio de salida para archivos `.wasm` intermedios                          |
+| `output`              | Nombre del ejecutable nativo final                                              |
+| `entry`               | Nombre del export a llamar al iniciar (por defecto `_start`)                    |
+| `moduleMatching`      | Cómo emparejar imports con archivos fuente                                      |
+| `wasi`                | Habilitar interfaz WASI (requerido para C++ con `printf`)                       |
+| `mounts`              | Preopens WASI: directorios host montados en rutas guest (requiere `wasi: true`) |
+| `target`              | Tripleta de destino para compilación cruzada                                    |
+| `compiler`            | Flags globales del compilador                                                   |
+| `compiler.toolchains` | Overrides por toolchain (assemblyscript, cpp, rust, precompiled)                |
 
 ### Per-Toolchain Config
 

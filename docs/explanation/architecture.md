@@ -77,6 +77,8 @@ class ToolchainRouter {
 
 **Resolución longest-suffix-first**: El router siempre elige el sufijo más largo, por lo que `.wasm.ts` gana contra `.wasm` genérico. Esto permite tener archivos `.wasm.cpp` sin que el router los confunda con `.wasm` precompilados.
 
+**Bindings inyectadas**: las estrategias AS, C++ y Rust inyectan las bindings `console`/`fs`/`wasi` desde `packages/compiler/src/bindings/` (rewrite de imports, include path `-I`, o crate vendido `wasm_apps_bindings` en Rust), de modo que los fuentes no necesitan copias locales.
+
 **Extensión**: Para añadir un nuevo lenguaje, implementá `ToolchainStrategy` y registralo en el router:
 
 ```typescript
@@ -270,9 +272,9 @@ Los plugins se cargan desde `wapp.json` → `plugins[]`. Ver `docs/USER_PLUGINS.
 8. Pipeline orquesta:
    a. ParseModulesStage → parsea .wasm
    b. ResolveDependenciesStage → orden topológico
-   c. GenerateCodeStage → render Nunjucks template → C++
+   c. GenerateCodeStage → render Nunjucks template → C++ (incluye `wasi_config.preopen_dir(...)` para cada mount de `wapp.json`, validados en build-time con `ConfigError`)
    d. CompileCppStage → cmake-js → binario
-9. Verifica LinkerManifestRepository (incluye templateHash)
+9. Verifica LinkerManifestRepository (incluye templateHash y mounts)
 10. Devuelve ruta del binario
 ```
 

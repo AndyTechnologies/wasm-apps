@@ -7,6 +7,7 @@ wasm-apps/
 │   ├── cli/                  # CLI orquestador (wapp)
 │   ├── compiler/             # Compilador multi-toolchain
 │   │   └── src/
+│   │       ├── bindings/     # Bindings inyectados console/fs/wasi (AS, C++, Rust vendido)
 │   │       ├── strategies/   # ToolchainStrategy implementations
 │   │       │   ├── assemblyscript-strategy.ts  # AS (asc)
 │   │       │   ├── cpp-strategy.ts             # C++ (clang++/CMake)
@@ -15,10 +16,19 @@ wasm-apps/
 │   │       │   └── toolchain-strategy.ts       # Interfaz base
 │   │       └── toolchain-router.ts             # Router Microkernel
 │   └── linker/               # Linker WASM → binario nativo
-│       └── templates/        # Templates Nunjucks para C++
+│       └── templates/        # Templates Nunjucks para C++ (main.c.njk genera preopens)
 ├── examples/                 # Archivos de ejemplo multi-lenguaje
+│   ├── cpp-saludo/           # C++ con bindings inyectadas
+│   ├── rust-hello/           # Rust con bindings inyectadas
+│   ├── as-fs/                # AssemblyScript + filesystem WASI (mounts)
+│   ├── rust-fs/              # Rust + filesystem WASI (mounts)
+│   ├── mounts-demo/          # C++ + filesystem WASI (mounts)
+│   ├── multi-toolchain/      # AS + C++ en un mismo build
+│   ├── precompiled/          # WASM precompilado pasa-through
+│   ├── custom-template/      # Template Nunjucks personalizado
+│   └── plugin-*/             # Ejemplos de plugins
 ├── skills/                   # AI agent skills (ver AGENTS.md)
-├── scripts/                  # Scripts de build y test
+├── scripts/                  # Scripts de build y test (test-examples.mjs)
 ├── .wapp_cache/              # Caché del compilador (gitignored)
 ├── .wapp_build/              # Manifiesto de build (gitignored)
 └── wapp.json                 # Configuración del proyecto

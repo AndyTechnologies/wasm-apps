@@ -28,15 +28,32 @@ const outputPath = await createNativeApp({
 
 **Opciones** (`NativeAppOptions`):
 
-| Campo            | Tipo                       | Descripción                                |
-| ---------------- | -------------------------- | ------------------------------------------ |
-| `inputPaths`     | `string[]`                 | Rutas a archivos `.wasm`                   |
-| `output`         | `string`                   | Ruta del ejecutable de salida              |
-| `entry`          | `string`                   | Nombre del export a llamar al iniciar      |
-| `wasi`           | `boolean`                  | Habilitar interfaz WASI                    |
-| `moduleMatching` | `'name-only'\|'file-name'` | Estrategia de resolución de imports        |
-| `target`         | `string`                   | Tripleta de compilación cruzada (opcional) |
-| `wasmtimePath`   | `string`                   | Ruta personalizada a Wasmtime C-API        |
+| Campo            | Tipo                       | Descripción                                   |
+| ---------------- | -------------------------- | --------------------------------------------- |
+| `inputPaths`     | `string[]`                 | Rutas a archivos `.wasm`                      |
+| `output`         | `string`                   | Ruta del ejecutable de salida                 |
+| `entry`          | `string`                   | Nombre del export a llamar al iniciar         |
+| `wasi`           | `boolean`                  | Habilitar interfaz WASI                       |
+| `moduleMatching` | `'name-only'\|'file-name'` | Estrategia de resolución de imports           |
+| `target`         | `string`                   | Tripleta de compilación cruzada (opcional)    |
+| `wasmtimePath`   | `string`                   | Ruta personalizada a Wasmtime C-API           |
+| `mounts`         | `MountSpec[]`              | Preopens WASI: `{ host, guest }[]` (opcional) |
+
+### Preopens WASI (mounts)
+
+Con `wasi: true`, `mounts` configura preopens de directorios del host visibles dentro del WASM:
+
+```ts
+await createNativeApp({
+  inputPaths: ['wasm-out/modulo.wasm'],
+  output: 'dist/mi-app',
+  entry: '_start',
+  wasi: true,
+  mounts: [{ host: 'data', guest: '/mnt/data' }],
+});
+```
+
+El linker valida cada mount en build-time (`ConfigError`: host/guest obligatorios, host existente y directorio, guest absoluto), resuelve los hosts relativos contra el cwd del build y genera `wasi_config.preopen_dir(...)` con permisos completos (READ|WRITE) en el template `main.c.njk`. Los mounts forman parte del manifiesto de build (invalida la caché si cambian).
 
 ### `parseWasmModule(filePath): WasmModuleInfo`
 

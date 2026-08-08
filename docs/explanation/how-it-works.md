@@ -19,6 +19,18 @@ El compilador usa un **ToolchainRouter** (patrón Microkernel + Strategy) que en
 
 Cada estrategia produce un archivo `.wasm` intermedio nombrado como `{base}.{toolchainId}.wasm` (ej: `main.cpp.wasm`, `lib.rust.wasm`).
 
+### Bindings auto-inyectadas
+
+Las APIs `console`, `fs` y `wasi` se exponen a los tres lenguajes **sin que el desarrollador copie bindings en su proyecto**. El compiler las inyecta según el toolchain:
+
+| Lenguaje       | Mecanismo de inyección                                                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AssemblyScript | Los imports `from 'console'`, `from 'fs'`, `from 'wasi'` se reescriben a la ruta real de `packages/compiler/src/bindings/*.ts` (`rewriteBindingImports`) |
+| C++            | El include path del directorio de bindings se añade a las flags de compilación (`-I`)                                                                    |
+| Rust           | El crate vendido `wasm_apps_bindings` se inyecta como dependencia `path` en el `Cargo.toml` (`injectBindingsDependency`)                                 |
+
+Los ejemplos `cpp-saludo`, `rust-hello`, `as-fs`, `rust-fs` y `mounts-demo` muestran este mecanismo: sus fuentes importan `console.h`/`fs.h`, `wasm_apps_bindings` o `console`/`fs` sin ningún bindings local.
+
 ## 2. Linker — WASM a ejecutable nativo
 
 El linker lee los módulos `.wasm`, resuelve dependencias y genera C++ mediante **templates Nunjucks**:
@@ -33,6 +45,16 @@ El linker lee los módulos `.wasm`, resuelve dependencias y genera C++ mediante 
 4. **Compila** el C++ generado con cmake-js en un ejecutable autocontenido, enlazando estáticamente Wasmtime
 
 Los templates Nunjucks (en `packages/linker/templates/`) se pueden personalizar globalmente o por proyecto.
+
+### Preopens WASI (mounts)
+
+Con `"wasi": true`, el campo `mounts` de `wapp.json` declara directorios del host preabiertos dentro del WASM (ver [referencia de wapp.json](../reference/config.md#mounts)). El linker:
+
+1. **Valida en build-time** cada mount con `ConfigError` (host y guest obligatorios, host existente y directorio, guest absoluto).
+2. **Resuelve** los hosts relativos contra el cwd del build y embebe la ruta absoluta en el binario (el preopen funciona sin importar el cwd de ejecución).
+3. **Genera** `wasi_config.preopen_dir(host, guest, perms)` en `main.c.njk` con permisos completos de lectura y escritura.
+
+Los ejemplos `as-fs`, `rust-fs` y `mounts-demo` montan `data/` en `/mnt/data` y leen `greeting.txt`.
 
 ## 3. Orquestador — CLI wapp
 
