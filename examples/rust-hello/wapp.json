@@ -1,0 +1,8 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "rust-hello",
+  "entry": "_start",
+  "wasi": true,
+  "compiler": {}
+}

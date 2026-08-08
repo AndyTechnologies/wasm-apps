@@ -123,9 +123,6 @@ for (const dir of exampleDirs) {
   // Clean build artifacts so every example builds from scratch
   cleanBuildArtifacts(examplePath);
 
-  // Diagnóstico temporal: guarda el main.cpp generado junto al binario
-  process.env.WAPP_KEEP_CPP = '1';
-
   // precompiled depends on basico's compiled WASM — clean src/ and copy before building
   if (dir === 'precompiled') {
     const basicoWasm = join(examplesDir, 'basico', 'wasm-out', 'main.wasm');
@@ -185,11 +182,6 @@ for (const dir of exampleDirs) {
       stdout = String(err.stdout);
     }
     console.error(`  RESULT: ${dir} — RUNTIME FAILED`);
-    // Diagnóstico temporal: volcar el main.cpp generado para inspección
-    const cppPath = join(examplePath, outDir, `${outputName}.cpp`);
-    if (existsSync(cppPath)) {
-      process.stderr.write(`  --- main.cpp generado (${cppPath}) ---\n${indent(readFileSync(cppPath, 'utf-8'))}\n`);
-    }
     if (stdout) process.stdout.write(`  stdout:\n${indent(stdout)}`);
     if (err && typeof err === 'object' && 'stderr' in err && err.stderr) {
       process.stderr.write(`  stderr:\n${indent(String(err.stderr))}`);

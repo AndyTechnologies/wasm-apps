@@ -1,0 +1,26 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "rmlui-basic",
+  "entry": "_start",
+  "wasi": false,
+  "plugins": [
+    {
+      "id": "rmlui-plugin",
+      "enabled": true,
+      "config": {
+        "window": {
+          "title": "RmlUI Basic Example",
+          "width": 800,
+          "height": 600
+        },
+        "debugger": false
+      }
+    }
+  ],
+  "compiler": {
+    "release": false,
+    "runtime": "stub",
+    "optimizeLevel": 3
+  }
+}

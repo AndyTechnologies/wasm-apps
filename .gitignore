@@ -14,6 +14,8 @@ wasm-out
 *-app
 out
 wapp.json
+# Los wapp.json de examples/ son configs de demostración versionadas (CI depende de ellas)
+!examples/**/wapp.json
 
 # IDE
 .vscode/
