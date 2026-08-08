@@ -1,0 +1,15 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "custom-template",
+  "entry": "_start",
+  "moduleMatching": "file-name",
+  "wasi": false,
+  "compiler": {
+    "release": false,
+    "optimizeLevel": 3
+  },
+  "linker": {
+    "templatePath": "./templates"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "rmlui-dom-api",
+  "entry": "_start",
+  "wasi": false,
+  "plugins": [
+    {
+      "id": "rmlui-plugin",
+      "enabled": true,
+      "config": {
+        "window": {
+          "title": "RmlUI DOM API Example",
+          "width": 1024,
+          "height": 768
+        },
+        "debugger": true,
+        "resources": {
+          "searchPaths": ["ui/"]
+        }
+      }
+    }
+  ],
+  "compiler": {
+    "release": false,
+    "runtime": "stub",
+    "optimizeLevel": 3
+  }
+}

@@ -76,10 +76,6 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
     const outDir = path.dirname(outputPath);
     await fs.promises.mkdir(outDir, { recursive: true });
     await fs.promises.copyFile(builtBinary, outputPath);
-    // Diagnóstico temporal: WAPP_KEEP_CPP=1 guarda el main.cpp generado junto al binario
-    if (process.env.WAPP_KEEP_CPP === '1') {
-      await fs.promises.copyFile(cppFile, path.join(outDir, `${path.basename(outputPath)}.cpp`)).catch(() => {});
-    }
     if (process.platform !== 'win32') {
       try {
         await fs.promises.chmod(outputPath, 0o755);
