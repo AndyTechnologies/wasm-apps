@@ -8,6 +8,7 @@ import { generateCCode } from './codegen.js';
 import { compileCpp } from './compiler.js';
 import type { NativeAppOptions, WasmModuleInfo, WasmImport, WasmExport, WasmImportFuncType, ModuleMatchingStrategy, MountSpec } from '@wasm-apps/types';
 import { LinkerError, ConfigError, logger } from '@wasm-apps/types';
+import { getRmluiExtraLibs } from './rmlui-plugin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -167,7 +168,8 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Compiling native binary...');
 
-  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath }, !quiet);
+  const extraLibs = getRmluiExtraLibs();
+  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath }, !quiet, extraLibs.length > 0 ? extraLibs : undefined);
 
   saveBuildManifest(inputPaths, outputPath, {
     entry,

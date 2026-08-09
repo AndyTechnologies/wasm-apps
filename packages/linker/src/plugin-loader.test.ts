@@ -148,3 +148,41 @@ describe('plugin-loader path validation', () => {
     expect(mockWarn).toHaveBeenCalled();
   });
 });
+
+describe('rmlui-plugin guard disabled (T-025)', () => {
+  const mockRmluiRegister = vi.hoisted(() => vi.fn());
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRmluiRegister.mockReset();
+  });
+
+  it('DEFAULT_PLUGINS trae rmlui-plugin con enabled: false (off por defecto)', async () => {
+    const fsMod = await import('node:fs');
+    const src = fsMod.readFileSync(new URL('./plugin-loader.ts', import.meta.url), 'utf-8');
+    expect(src).toMatch(/\{ id: 'rmlui-plugin', enabled: false, config: \{\} \}/);
+  });
+
+  it('loadPlugins() con defaults NO importa rmlui-plugin (guard disabled)', async () => {
+    // Si el guard fallara, el import dinámico dispararía el throw de este mock.
+    vi.doMock('./rmlui-plugin.js', () => {
+      throw new Error('rmlui-plugin importado pero debería estar disabled');
+    });
+    const { loadPlugins } = await import('./plugin-loader.js');
+    await expect(loadPlugins()).resolves.toBeUndefined();
+    const calls = mockRegisterWasmPlugin.mock.calls.map((c) => c[0]?.id);
+    expect(calls).not.toContain('rmlui-plugin');
+    vi.unmock('./rmlui-plugin.js');
+  });
+
+  it('loadPlugins() con rmlui enabled:true SÍ lo importa y registra', async () => {
+    vi.doMock('./rmlui-plugin.js', () => ({
+      default: { id: 'rmlui-plugin', register: mockRmluiRegister },
+    }));
+    const { loadPlugins } = await import('./plugin-loader.js');
+    await loadPlugins([{ id: 'rmlui-plugin', enabled: true, config: {} }]);
+    expect(mockRmluiRegister).toHaveBeenCalledTimes(1);
+    expect(mockRegisterWasmPlugin).toHaveBeenCalledWith(expect.objectContaining({ id: 'rmlui-plugin' }));
+    vi.unmock('./rmlui-plugin.js');
+  });
+});

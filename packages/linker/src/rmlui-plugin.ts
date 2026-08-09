@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PipelinePhase, type PluginContext, type WasmPlugin } from '@wasm-apps/types';
+import { PipelinePhase, type PluginContext, type WasmPlugin, type ExtraLib } from '@wasm-apps/types';
 import type { PipelineContext, RmluiPluginConfig } from '@wasm-apps/types';
-import { getRmluiCacheDir, getSdlIncludeDir, getRmluiIncludeDir, getGladIncludeDir, RMLUI_VERSION } from './rmlui-dl.js';
+import { getRmluiCacheDir, getSdlIncludeDir, getRmluiIncludeDir, getSdlLibDir, getRmluiLibDir, RMLUI_VERSION, SDL3_VERSION } from './rmlui-dl.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -374,12 +374,10 @@ const rmluiPlugin: WasmPlugin = {
       const cacheDir = getRmluiCacheDir();
       const sdlIncludeDir = getSdlIncludeDir(cacheDir, RMLUI_VERSION);
       const rmluiIncludeDir = getRmluiIncludeDir(cacheDir, RMLUI_VERSION);
-      const gladIncludeDir = getGladIncludeDir(cacheDir, RMLUI_VERSION);
 
       ctx.logger.detail(`[rmlui-plugin] Extra libs would be added from:
         SDL:  ${sdlIncludeDir}
-        RmlUI: ${rmluiIncludeDir}
-        GLAD: ${gladIncludeDir}`);
+        RmlUI: ${rmluiIncludeDir}`);
     });
 
     // --- Store config ---
@@ -404,4 +402,34 @@ export function getRmluiConfig(): { isActive: boolean; config: RmluiPluginConfig
     config: activeConfig,
     templatePath: activeTemplatePath,
   };
+}
+
+/**
+ * Devuelve las librerías extra (SDL3, RmlUi core+debugger) necesarias para
+ * linkar un binario RmlUI. Vacío si el plugin no está activo.
+ * Consumido por compileCpp(extraLibs) → generateCMakeListsWithExtras.
+ */
+export function getRmluiExtraLibs(): ExtraLib[] {
+  if (!isActive) return [];
+  const cacheDir = getRmluiCacheDir();
+  const extraLibs: ExtraLib[] = [
+    {
+      name: 'sdl3',
+      includeDir: getSdlIncludeDir(cacheDir, SDL3_VERSION),
+      libDir: getSdlLibDir(cacheDir, SDL3_VERSION),
+      libs: ['SDL3'],
+      frameworks: process.platform === 'darwin' ? ['Cocoa', 'IOKit', 'CoreVideo', 'CoreFoundation'] : undefined,
+    },
+    {
+      name: 'rmlui',
+      includeDir: getRmluiIncludeDir(cacheDir, RMLUI_VERSION),
+      libDir: getRmluiLibDir(cacheDir, RMLUI_VERSION),
+      libs: ['rmlui_core', 'rmlui_debugger'],
+      frameworks: process.platform === 'darwin' ? ['Cocoa', 'IOKit', 'CoreVideo', 'CoreFoundation'] : undefined,
+    },
+  ];
+  if (process.platform === 'linux') {
+    extraLibs[0].libs.push('dl');
+  }
+  return extraLibs;
 }
