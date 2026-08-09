@@ -1,4 +1,4 @@
-// SDL3 + OpenGL 3 + RmlUI initialization
+// SDL3 + OpenGL 3 + RmlUI initialization (RmlUi 6.2 sequence)
 // Assumes _rmluiWindow, _rmluiGlContext, etc. are file-scope statics
 // declared via _rmlui-state.c.njk (included before main).
 SDL_Init(SDL_INIT_VIDEO);
@@ -10,22 +10,32 @@ _rmluiWindow = SDL_CreateWindow("{{ rmlui.window.title }}",
     SDL_WINDOW_OPENGL{% if rmlui.window.resizable %} | SDL_WINDOW_RESIZABLE{% endif %});
 _rmluiGlContext = SDL_GL_CreateContext(_rmluiWindow);
 
+// GL loader vendored from RmlUi 6.2 Backends/RmlUi_Include_GL3.h
 gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
 
-_rmluiSystemInterface = new RmlSDL_SystemInterface_SDL(_rmluiWindow);
+_rmluiSystemInterface = new SystemInterface_SDL(_rmluiWindow);
 Rml::SetSystemInterface(_rmluiSystemInterface);
 
-_rmluiRenderInterface = new RmlGL3_RenderInterface_GL3();
+_rmluiRenderInterface = new RenderInterface_GL3();
 Rml::SetRenderInterface(_rmluiRenderInterface);
 
 Rml::Initialise();
-
-{% if rmlui.debugger %}
-Rml::Debugger::Initialise();
-{% endif %}
 
 // Load default fonts
 Rml::LoadFontFace("LatoLatin-Regular.ttf", false);
 Rml::LoadFontFace("LatoLatin-Bold.ttf", false);
 Rml::LoadFontFace("LatoLatin-Italic.ttf", false);
 Rml::LoadFontFace("NotoEmoji-Regular.ttf", false);
+
+// ── RmlUi 6.2 debugger init order ────────────────────────────────────────
+// Paso 8: el contexto se crea en runtime vía la host function
+// Rml_CreateContext (desde WASM). Paso 9: el debugger SOLO se inicializa
+// con un contexto válido — Rml::Debugger::Initialise() sin contexto está
+// PROHIBIDO en 6.2. La inicialización se hace C++-side con el contexto ya
+// creado (null-guard: si CreateContext falló, nunca se inicializa); el ABI
+// solo expone Rml_DebuggerToggle.
+if (Rml::Context* context = Rml::CreateContext("main", Rml::Vector2i(800, 600))) {
+  Rml::Debugger::Initialise(context);
+} else {
+  // CreateContext falló: debugger nunca se inicializa (null-guard).
+}

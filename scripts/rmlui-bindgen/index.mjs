@@ -14,24 +14,41 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { RMLUI_VERSION, SDL3_VERSION } from '../../packages/linker/src/rmlui-versions.ts';
 
 // ── CLI Argument Parsing ─────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const args = { header: '', rust: '', as: '' };
+  const args = { header: '', rust: '', as: '', fetchHeaders: false, pinsReport: '' };
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
-      case '--header':       args.header = argv[++i]; break;
-      case '--output-rust':  args.rust = argv[++i]; break;
-      case '--output-as':    args.as = argv[++i]; break;
+      case '--header':
+        args.header = argv[++i];
+        break;
+      case '--output-rust':
+        args.rust = argv[++i];
+        break;
+      case '--output-as':
+        args.as = argv[++i];
+        break;
+      case '--fetch-headers':
+        args.fetchHeaders = true;
+        break;
+      case '--pins-report':
+        args.pinsReport = argv[++i];
+        break;
       case '--help':
         console.log(`Usage: node index.mjs --header <file.h> --output-rust <file.rs> --output-as <file.ts>`);
+        console.log(`       node index.mjs --fetch-headers [--pins-report <file.json>]`);
         process.exit(0);
     }
   }
-  if (!args.header || !args.rust || !args.as) {
-    console.error('ERROR: --header, --output-rust, and --output-as are required');
+  if (!args.fetchHeaders && (!args.header || !args.rust || !args.as)) {
+    console.error('ERROR: --header, --output-rust, and --output-as are required (or use --fetch-headers)');
     console.error('Usage: node index.mjs --header <file.h> --output-rust <file.rs> --output-as <file.ts>');
     process.exit(1);
   }
@@ -41,28 +58,28 @@ function parseArgs(argv) {
 // ── C Header Parsing ────────────────────────────────────────────────────
 
 const C_TO_RUST_TYPE = new Map([
-  ['void',                 '()'],
-  ['int32_t',              'i32'],
-  ['int',                  'i32'],
-  ['Rml_ContextId',        'i32'],
-  ['Rml_ElementId',        'i32'],
-  ['Rml_DocumentId',       'i32'],
-  ['Rml_CallbackId',       'i32'],
-  ['char*',                '*mut c_char'],
-  ['const char*',          '*const c_char'],
-  ['const void*',          '*const c_void'],
+  ['void', '()'],
+  ['int32_t', 'i32'],
+  ['int', 'i32'],
+  ['Rml_ContextId', 'i32'],
+  ['Rml_ElementId', 'i32'],
+  ['Rml_DocumentId', 'i32'],
+  ['Rml_CallbackId', 'i32'],
+  ['char*', '*mut c_char'],
+  ['const char*', '*const c_char'],
+  ['const void*', '*const c_void'],
 ]);
 
 const C_TO_AS_TYPE = new Map([
-  ['void',                 'void'],
-  ['int32_t',              'i32'],
-  ['int',                  'i32'],
-  ['Rml_ContextId',        'i32'],
-  ['Rml_ElementId',        'i32'],
-  ['Rml_DocumentId',       'i32'],
-  ['Rml_CallbackId',       'i32'],
-  ['const char*',          'string'],
-  ['const void*',          'i32'],
+  ['void', 'void'],
+  ['int32_t', 'i32'],
+  ['int', 'i32'],
+  ['Rml_ContextId', 'i32'],
+  ['Rml_ElementId', 'i32'],
+  ['Rml_DocumentId', 'i32'],
+  ['Rml_CallbackId', 'i32'],
+  ['const char*', 'string'],
+  ['const void*', 'i32'],
 ]);
 
 /**
@@ -70,7 +87,10 @@ const C_TO_AS_TYPE = new Map([
  * into its base type name (without const/ptr).
  */
 function baseTypeName(raw) {
-  return raw.replace(/\bconst\s+/g, '').replace(/\s*\*/g, '').trim();
+  return raw
+    .replace(/\bconst\s+/g, '')
+    .replace(/\s*\*/g, '')
+    .trim();
 }
 
 /**
@@ -87,9 +107,7 @@ function cleanParamToken(s) {
 function parseFuncDecl(line) {
   // Match: <return_type> <func_name>(<params>);
   // Return type may include "const" prefix and "*" suffix.
-  const m = line.match(
-    /^(const\s+)?(\w+(?:\s+\w+)?(?:\s*\*)?)\s+(Rml_\w+|RmlUI_\w+)\(([^)]*)\)\s*;/
-  );
+  const m = line.match(/^(const\s+)?(\w+(?:\s+\w+)?(?:\s*\*)?)\s+(Rml_\w+|RmlUI_\w+)\(([^)]*)\)\s*;/);
   if (!m) return null;
 
   const constPrefix = m[1] || '';
@@ -229,17 +247,19 @@ function generateRust(funcs) {
   for (const f of funcs) {
     const fnName = toRustSnake(f.funcName);
     const retType = f.returnType;
-    const hasBufArg = f.params.some(p => p.type === 'const void*');
+    const hasBufArg = f.params.some((p) => p.type === 'const void*');
 
     // Build doc comment
     lines.push(`/// Safe wrapper around \`${f.funcName}\`.`);
 
     // Build function signature
-    const rustParams = f.params.map(p => {
-      if (p.type === 'const char*') return `${p.name}: &str`;
-      if (p.type === 'const void*') return `${p.name}: &[u8]`;
-      return `${p.name}: ${mapRustType(p.type)}`;
-    }).join(', ');
+    const rustParams = f.params
+      .map((p) => {
+        if (p.type === 'const char*') return `${p.name}: &str`;
+        if (p.type === 'const void*') return `${p.name}: &[u8]`;
+        return `${p.name}: ${mapRustType(p.type)}`;
+      })
+      .join(', ');
 
     // Return type
     let rustRet = '()';
@@ -260,18 +280,20 @@ function generateRust(funcs) {
     lines.push(`pub fn ${fnName}(${rustParams}) -> ${rustRet} {`);
 
     // Build call
-    const callArgs = f.params.map(p => {
-      if (p.type === 'const char*') {
-        // Convert &str to CString, handle NUL errors
-        return `CString::new(${p.name}).map_err(|_| RmluiError::NullParam)?.as_ptr()`;
-      }
-      if (p.type === 'const void*') {
-        // Pass pointer and length
-        // For Load*FromBuffer functions, we pass data pointer
-        return `${p.name}.as_ptr() as *const std::ffi::c_void`;
-      }
-      return p.name;
-    }).join(', ');
+    const callArgs = f.params
+      .map((p) => {
+        if (p.type === 'const char*') {
+          // Convert &str to CString, handle NUL errors
+          return `CString::new(${p.name}).map_err(|_| RmluiError::NullParam)?.as_ptr()`;
+        }
+        if (p.type === 'const void*') {
+          // Pass pointer and length
+          // For Load*FromBuffer functions, we pass data pointer
+          return `${p.name}.as_ptr() as *const std::ffi::c_void`;
+        }
+        return p.name;
+      })
+      .join(', ');
 
     if (retType === 'void') {
       // Void function: just call
@@ -289,9 +311,7 @@ function generateRust(funcs) {
       lines.push('}');
     } else {
       // i32/handle return: check for error
-      const rawCall = f.params.length > 0
-        ? `unsafe { ${f.funcName}(${callArgs}) }`
-        : `unsafe { ${f.funcName}() }`;
+      const rawCall = f.params.length > 0 ? `unsafe { ${f.funcName}(${callArgs}) }` : `unsafe { ${f.funcName}() }`;
       lines.push(`    let result = ${rawCall};`);
       lines.push('    if result >= 0 {');
       lines.push('        Ok(result)');
@@ -380,10 +400,12 @@ function generateAs(funcs) {
     const hasStringReturn = retType.includes('char*') && !retType.includes('void*');
 
     // Build params
-    const asParams = f.params.map(p => {
-      if (p.type === 'const void*') return `${p.name}: i32`;
-      return `${p.name}: ${mapAsType(p.type)}`;
-    }).join(', ');
+    const asParams = f.params
+      .map((p) => {
+        if (p.type === 'const void*') return `${p.name}: i32`;
+        return `${p.name}: ${mapAsType(p.type)}`;
+      })
+      .join(', ');
 
     let wrapperRet = asRet;
     if (hasStringReturn) {
@@ -395,13 +417,13 @@ function generateAs(funcs) {
     lines.push(`/** Safe wrapper around \`${f.funcName}\`. */`);
     if (retType === 'void') {
       lines.push(`export function ${wrapperName}(${asParams}): void {`);
-      lines.push(`  raw${f.funcName}(${f.params.map(p => p.name).join(', ')});`);
+      lines.push(`  raw${f.funcName}(${f.params.map((p) => p.name).join(', ')});`);
       lines.push('}');
     } else if (hasStringReturn) {
       // String return — the raw returns an i32 pointer to WASM memory
       // Use loadString or simple pointer read
       lines.push(`export function ${wrapperName}(${asParams}): string {`);
-      lines.push(`  const ptr = raw${f.funcName}(${f.params.map(p => p.name).join(', ')});`);
+      lines.push(`  const ptr = raw${f.funcName}(${f.params.map((p) => p.name).join(', ')});`);
       lines.push('  if (ptr === 0) return "";');
       lines.push('  // Read null-terminated string from WASM memory at ptr');
       lines.push('  let result = "";');
@@ -415,7 +437,7 @@ function generateAs(funcs) {
     } else {
       // i32/handle return
       lines.push(`export function ${wrapperName}(${asParams}): i32 {`);
-      lines.push(`  const result = raw${f.funcName}(${f.params.map(p => p.name).join(', ')});`);
+      lines.push(`  const result = raw${f.funcName}(${f.params.map((p) => p.name).join(', ')});`);
       lines.push('  if (result < 0) {');
       lines.push('    // Caller should check return value');
       lines.push('    return result;');
@@ -429,10 +451,143 @@ function generateAs(funcs) {
   return lines.join('\n');
 }
 
+// ── Pinned Tag Header Acquisition (R-006/R-007) ─────────────────────────
+
+/**
+ * URL del tarball del tag pinned (refs/tags), nunca una branch flotante.
+ * @param {string} [version]
+ */
+export function rmluiTarballUrl(version = RMLUI_VERSION) {
+  return `https://github.com/mikke89/RmlUi/archive/refs/tags/${version}.tar.gz`;
+}
+
+/**
+ * Directorio de extracción en os.tmpdir() (AGENTS.md: nunca /tmp fijo).
+ * @param {string} [version]
+ */
+export function bindgenHeadersDir(version = RMLUI_VERSION) {
+  return path.join(os.tmpdir(), `rmlui-bindgen-${version}`);
+}
+
+/**
+ * Descarga el tarball del tag pinned a un archivo local (fetch sigue redirects de GitHub).
+ * @param {string} destPath
+ * @param {string} [url]
+ */
+export async function downloadRmluiTarball(destPath, url = rmluiTarballUrl()) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download ${url}: HTTP ${res.status}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  fs.writeFileSync(destPath, buf);
+}
+
+/**
+ * Extrae el tarball con --strip-components=1 para que Backends/ quede en la raíz.
+ * Usa tar del sistema (Linux/macOS nativo; Windows 10+ incluye tar.exe).
+ * @param {string} tarballPath
+ * @param {string} destDir
+ */
+export function extractRmluiTarball(tarballPath, destDir) {
+  fs.mkdirSync(destDir, { recursive: true });
+  execFileSync('tar', ['-xzf', tarballPath, '-C', destDir, '--strip-components=1'], { stdio: 'pipe' });
+}
+
+/** Headers de backends + Core que deben existir tras extraer el tarball. */
+export const BACKEND_HEADER_FILES = ['Backends/RmlUi_Include_GL3.h', 'Backends/RmlUi_Platform_SDL.h', 'Backends/RmlUi_Renderer_GL3.h', 'Include/RmlUi/Core.h'];
+
+/**
+ * Compile probe: valida que los headers de backends existen y que el
+ * loader GL3 compila standalone (g++ -fsyntax-only). Lanza si algo falla.
+ * @param {string} headersRoot
+ * @param {{ compiler?: string }} [opts]
+ */
+export function probeBackendHeaders(headersRoot, { compiler = 'g++' } = {}) {
+  const missing = BACKEND_HEADER_FILES.filter((f) => !fs.existsSync(path.join(headersRoot, f)));
+  if (missing.length > 0) {
+    throw new Error(`Missing RmlUi headers: ${missing.join(', ')}`);
+  }
+  const tuPath = path.join(os.tmpdir(), `rmlui-bindgen-probe-${process.pid}.cpp`);
+  fs.writeFileSync(tuPath, '#include <RmlUi_Include_GL3.h>\n');
+  try {
+    execFileSync(compiler, ['-fsyntax-only', '-I', path.join(headersRoot, 'Backends'), '-I', path.join(headersRoot, 'Include'), tuPath], { stdio: 'pipe' });
+  } finally {
+    fs.rmSync(tuPath, { force: true });
+  }
+}
+
+/**
+ * Vendorea RmlUi_Include_GL3.h (loader GL embebido, R-007) desde el tarball
+ * extraído hacia packages/linker/templates-rmlui/vendor/.
+ * @param {string} headersRoot
+ * @param {string} destPath
+ */
+export function vendorGl3Header(headersRoot, destPath) {
+  const src = path.join(headersRoot, 'Backends', 'RmlUi_Include_GL3.h');
+  if (!fs.existsSync(src)) {
+    throw new Error(`Missing source header: ${src}`);
+  }
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  fs.copyFileSync(src, destPath);
+  return destPath;
+}
+
+/**
+ * Escribe el reporte pins.json con la versión pinada (R-006).
+ * @param {string} filePath
+ * @param {{ rmlui?: string, sdl3?: string }} [versions]
+ */
+export function writePinsReport(filePath, { rmlui = RMLUI_VERSION, sdl3 = SDL3_VERSION } = {}) {
+  const report = {
+    rmlui: { version: rmlui, tarball: rmluiTarballUrl(rmlui) },
+    sdl3: { version: sdl3 },
+  };
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(report, null, 2) + '\n', 'utf-8');
+  return report;
+}
+
+/**
+ * Flujo completo: fetch → extraer → probe → vendor GL3 → pins.json.
+ * @param {{ url?: string, destDir?: string, vendorDest?: string, pinsReport?: string, compiler?: string }} [opts]
+ */
+export async function fetchHeaders({ url = rmluiTarballUrl(), destDir = bindgenHeadersDir(), vendorDest, pinsReport, compiler } = {}) {
+  const tarballPath = path.join(os.tmpdir(), `rmlui-bindgen-${RMLUI_VERSION}.tar.gz`);
+  console.log(`⬇ Fetching ${url}`);
+  await downloadRmluiTarball(tarballPath, url);
+  console.log(`📦 Extracting to ${destDir}`);
+  extractRmluiTarball(tarballPath, destDir);
+  console.log(`🔍 Compile probe (${compiler ?? 'g++'} -fsyntax-only)...`);
+  probeBackendHeaders(destDir, compiler ? { compiler } : {});
+  if (vendorDest) {
+    vendorGl3Header(destDir, vendorDest);
+    console.log(`✓ Vendored GL3 header → ${vendorDest}`);
+  }
+  if (pinsReport) {
+    writePinsReport(pinsReport);
+    console.log(`✓ Pins report → ${pinsReport}`);
+  }
+  return destDir;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+
+  if (args.fetchHeaders) {
+    const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+    const repoRoot = path.resolve(scriptDir, '..', '..');
+    const vendorDest = path.join(repoRoot, 'packages', 'linker', 'templates-rmlui', 'vendor', 'RmlUi_Include_GL3.h');
+    const pinsReport = args.pinsReport || path.join(scriptDir, 'pins.json');
+    return fetchHeaders({ vendorDest, pinsReport }).catch((err) => {
+      console.error(`ERROR: header fetch failed: ${err.message}`);
+      process.exit(1);
+    });
+  }
+
   const funcs = parseHeader(path.resolve(args.header));
 
   if (funcs.length === 0) {
@@ -455,4 +610,6 @@ function main() {
   console.log(`✓ Wrote ${asPath} (${funcs.length} functions)`);
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

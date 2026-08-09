@@ -44,9 +44,9 @@ describe('renderTemplate — RmlUI', () => {
         resources: { searchPaths: ['ui/'] },
       },
     });
-  const output = renderTemplate(ctx, RMLUI_TEMPLATE_DIR);
+    const output = renderTemplate(ctx, RMLUI_TEMPLATE_DIR);
 
-  // SDL/GL/RmlUI init
+    // SDL/GL/RmlUI init
     expect(output).toContain('SDL_Init(SDL_INIT_VIDEO)');
     expect(output).toContain('SDL_GL_SetAttribute');
     expect(output).toContain('SDL_CreateWindow');
@@ -56,9 +56,20 @@ describe('renderTemplate — RmlUI', () => {
     expect(output).toContain('Rml::SetSystemInterface');
     expect(output).toContain('Rml::SetRenderInterface');
     expect(output).toContain('Rml::Initialise');
-    expect(output).toContain('Rml::Debugger::Initialise');
     expect(output).toContain('Rml::LoadFontFace');
     expect(output).toContain('LatoLatin-Regular.ttf'); // default font fallback
+
+    // RmlUi 6.2: Debugger::Initialise() sin contexto PROHIBIDO.
+    // El debugger se inicializa con contexto vía Rml_DebuggerInitialise(ctx).
+    expect(output).not.toMatch(/Debugger::Initialise\s*\(\)/);
+
+    // RmlUi 6.2 backends + vendored GL loader (sin GLAD externo)
+    expect(output).toContain('RmlUi/Backends/RmlUi_Platform_SDL.h');
+    expect(output).toContain('RmlUi/Backends/RmlUi_Renderer_GL3.h');
+    expect(output).toContain('vendor/RmlUi_Include_GL3.h');
+    expect(output).not.toContain('<glad/gl.h>');
+    expect(output).not.toContain('RmlUi_GL3/');
+    expect(output).not.toContain('RmlUi_SDL/');
 
     // Interactive loop
     expect(output).toContain('while (_rmluiRunning)');
@@ -106,7 +117,7 @@ describe('renderTemplate — RmlUI', () => {
     });
     const output = renderTemplate(ctx, RMLUI_TEMPLATE_DIR);
 
-    expect(output).not.toContain('Rml::Debugger::Initialise');
+    expect(output).not.toMatch(/Debugger::Initialise\s*\(\)/);
     expect(output).not.toContain('SDL_WINDOW_RESIZABLE'); // not resizable
   });
 
@@ -160,11 +171,13 @@ describe('renderTemplate — RmlUI', () => {
     // Reentrancy guard
     expect(output).toContain('_rmluiInEventDispatch');
 
-    // C ABI implementations
+    // C ABI implementations — post-RmlUi-6.2 symbols
     expect(output).toContain('Rml_CreateContext');
     expect(output).toContain('Rml_ReleaseContext');
     expect(output).toContain('Rml_LoadDocument');
-    expect(output).toContain('Rml_LoadDocumentFromString');
+    expect(output).toContain('Rml_LoadDocumentFromMemory');
+    expect(output).toContain('Rml_GetNumDocuments');
+    expect(output).toContain('Rml_GetDocument');
     expect(output).toContain('Rml_ShowDocument');
     expect(output).toContain('Rml_CreateElement');
     expect(output).toContain('Rml_CreateTextNode');
@@ -183,10 +196,9 @@ describe('renderTemplate — RmlUI', () => {
     expect(output).toContain('Rml_SetStyle');
     expect(output).toContain('Rml_AddEventListener');
     expect(output).toContain('Rml_RemoveEventListener');
-    expect(output).toContain('Rml_AddClass');
-    expect(output).toContain('Rml_RemoveClass');
-    expect(output).toContain('Rml_ToggleClass');
-    expect(output).toContain('Rml_HasClass');
+    expect(output).toContain('Rml_SetClass');
+    expect(output).toContain('Rml_IsClassSet');
+    expect(output).toContain('Rml_SetClassNames');
     expect(output).toContain('Rml_LoadFont');
     expect(output).toContain('Rml_LoadFontFromBuffer');
     expect(output).toContain('Rml_LoadTexture');
@@ -204,12 +216,50 @@ describe('renderTemplate — RmlUI', () => {
     expect(output).toContain('Rml_SetResourcePath');
     expect(output).toContain('Rml_RegisterResourceProvider');
 
+    // RmlUi 6.2: body/head via tag traversal (ElementDocument::GetBody/GetHead
+    // fueron eliminados en 6.2) — helper _rmluiFindByTag
+    expect(output).toContain('_rmluiFindByTag');
+    expect(output).not.toMatch(/->GetBody\(\)/);
+    expect(output).not.toMatch(/->GetHead\(\)/);
+
+    // RmlUi 6.2 backends: clases global scope + helpers namespaced
+    expect(output).toContain('RmlSDL::ConvertKey');
+    expect(output).toContain('SystemInterface_SDL');
+    expect(output).toContain('RenderInterface_GL3');
+
     // Render loop functions
     expect(output).toContain('RmlUI_ProcessSdlEvents');
     expect(output).toContain('RmlUI_Update');
     expect(output).toContain('RmlUI_Render');
     expect(output).toContain('RmlUI_Shutdown');
     expect(output).toContain('RmlUI_IsRunning');
+  });
+
+  it('does NOT render legacy RmlUi 5.x symbols', () => {
+    const ctx = minimalContext({
+      rmlui: {
+        enabled: true,
+        window: { title: 'Test', width: 1024, height: 768, resizable: false },
+        debugger: false,
+        resources: { searchPaths: [] },
+      },
+    });
+    const output = renderTemplate(ctx, RMLUI_TEMPLATE_DIR);
+
+    // RmlUi 6.2 removed LoadDocumentFromString (renamed to
+    // LoadDocumentFromMemory) and the class_list API (replaced by
+    // SetClass/IsClassSet/SetClassNames).
+    expect(output).not.toContain('Rml_LoadDocumentFromString');
+    expect(output).not.toContain('class_list');
+    expect(output).not.toContain('Rml_AddClass');
+    expect(output).not.toContain('Rml_RemoveClass');
+    expect(output).not.toContain('Rml_ToggleClass');
+    expect(output).not.toContain('Rml_HasClass');
+    expect(output).not.toContain('rmlui_cast');
+
+    // RmlUi 6.2 backends: old prefixed class names are gone
+    expect(output).not.toContain('RmlSDL_SystemInterface_SDL');
+    expect(output).not.toContain('RmlGL3_RenderInterface_GL3');
   });
 
   it('renders W10: elements survive removeChild (no erase)', () => {

@@ -71,6 +71,8 @@ public:
   Rml_ContextId native_handle() const noexcept { return id_; }
 
   RmlElement document(const char* path);
+  RmlElement getDocument(int32_t index);
+  int32_t getNumDocuments();
   RmlElement body();
   RmlElement head();
   RmlElement getElementById(const char* id);
@@ -92,6 +94,12 @@ public:
 
   // ── DOM tree ─────────────────────────────────────────────────────────
 
+  /**
+   * Appends `child` to this element.
+   * Ownership: after a successful append the element belongs to the DOM tree
+   * and must NOT be `release()`d by the caller; released elements are owned by
+   * the bridge (in _rmluiElements) until `shutdown()`.
+   */
   void appendChild(RmlElement child) {
     int32_t rc = Rml_AppendChild(id_, child.id_);
     if (rc != RMLUI_OK) throw RmlUI_Exception(static_cast<Rml_Error>(rc));
@@ -182,24 +190,28 @@ public:
 
   // ── Class list ───────────────────────────────────────────────────────
 
-  void addClass(const char* cls) {
-    int32_t rc = Rml_AddClass(id_, cls);
+  /** Sets whether the given class is present on this element. */
+  void setClass(const char* cls, bool enabled) {
+    int32_t rc = Rml_SetClass(id_, cls, enabled ? 1 : 0);
     if (rc != RMLUI_OK) throw RmlUI_Exception(static_cast<Rml_Error>(rc));
   }
 
-  void removeClass(const char* cls) {
-    int32_t rc = Rml_RemoveClass(id_, cls);
+  /** Returns whether the given class is present on this element. */
+  bool isClassSet(const char* cls) {
+    return Rml_IsClassSet(id_, cls) != 0;
+  }
+
+  /** Replaces the entire class list with the given space-separated names. */
+  void setClassNames(const char* names) {
+    int32_t rc = Rml_SetClassNames(id_, names);
     if (rc != RMLUI_OK) throw RmlUI_Exception(static_cast<Rml_Error>(rc));
   }
 
-  void toggleClass(const char* cls) {
-    int32_t rc = Rml_ToggleClass(id_, cls);
-    if (rc != RMLUI_OK) throw RmlUI_Exception(static_cast<Rml_Error>(rc));
-  }
-
-  bool hasClass(const char* cls) {
-    return Rml_HasClass(id_, cls) != 0;
-  }
+  // Convenience wrappers over setClass/isClassSet.
+  void addClass(const char* cls) { setClass(cls, true); }
+  void removeClass(const char* cls) { setClass(cls, false); }
+  void toggleClass(const char* cls) { setClass(cls, !isClassSet(cls)); }
+  bool hasClass(const char* cls) { return isClassSet(cls); }
 };
 
 // ── RmlStyle RAII class ──────────────────────────────────────────────
@@ -239,6 +251,14 @@ inline RmlDocument loadDocument(Rml_ContextId ctx, const char* path) {
   return RmlElement(Rml_LoadDocument(ctx, path));
 }
 
+/**
+ * Loads RML markup from an in-memory string into the context.
+ * `source_url` is the base URL used to resolve relative resources.
+ */
+inline RmlDocument loadDocumentFromMemory(Rml_ContextId ctx, const char* rml, const char* source_url) {
+  return RmlElement(Rml_LoadDocumentFromMemory(ctx, rml, source_url));
+}
+
 inline void showDocument(RmlDocument doc) {
   Rml_ShowDocument(doc.native_handle());
 }
@@ -263,6 +283,14 @@ inline void shutdown() {
 
 inline RmlElement RmlContext::document(const char* path) {
   return RmlElement(Rml_LoadDocument(id_, path));
+}
+
+inline RmlElement RmlContext::getDocument(int32_t index) {
+  return RmlElement(Rml_GetDocument(id_, index));
+}
+
+inline int32_t RmlContext::getNumDocuments() {
+  return Rml_GetNumDocuments(id_);
 }
 
 inline RmlElement RmlContext::body() {

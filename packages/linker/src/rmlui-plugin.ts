@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PipelinePhase, type PluginContext, type WasmPlugin } from '@wasm-apps/types';
 import type { PipelineContext, RmluiPluginConfig } from '@wasm-apps/types';
-import { getRmluiCacheDir, getSdlIncludeDir, getRmluiIncludeDir, getGladIncludeDir } from './rmlui-dl.js';
+import { getRmluiCacheDir, getSdlIncludeDir, getRmluiIncludeDir, getGladIncludeDir, RMLUI_VERSION } from './rmlui-dl.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,8 +11,6 @@ const __dirname = path.dirname(__filename);
 let isActive = false;
 let activeTemplatePath: string | undefined;
 let activeConfig: RmluiPluginConfig = {};
-
-const RMLUI_VERSION = '1.0.0';
 
 // ── Helpers for generating host function C++ bodies ─────────────────────────
 
@@ -167,7 +165,32 @@ const rmluiPlugin: WasmPlugin = {
 
     // Document loading
     ctx.hostFunctions.register('env', 'Rml_LoadDocument', (_params, _results) => contextStringHandle('Rml_LoadDocument'));
-    ctx.hostFunctions.register('env', 'Rml_LoadDocumentFromString', (_params, _results) => contextStringHandle('Rml_LoadDocumentFromString'));
+    ctx.hostFunctions.register('env', 'Rml_LoadDocumentFromMemory', (_params, _results) => {
+      if (_params.length >= 3) {
+        return `
+    Rml_ContextId c = args[0].i32();
+    std::string rml = _readAsStringNT(caller, args[1].i32());
+    std::string sourceUrl = _readAsStringNT(caller, args[2].i32());
+    results[0] = Val(int32_t(::Rml_LoadDocumentFromMemory(c, rml.c_str(), sourceUrl.c_str())));
+    return std::monostate{};`;
+      }
+      return `
+    results[0] = Val(int32_t(RMLUI_ERR_NULL_PARAM));
+    return std::monostate{};`;
+    });
+    ctx.hostFunctions.register('env', 'Rml_GetNumDocuments', (_params, _results) => {
+      return `
+    Rml_ContextId c = args[0].i32();
+    results[0] = Val(int32_t(::Rml_GetNumDocuments(c)));
+    return std::monostate{};`;
+    });
+    ctx.hostFunctions.register('env', 'Rml_GetDocument', (_params, _results) => {
+      return `
+    Rml_ContextId c = args[0].i32();
+    int32_t index = args[1].i32();
+    results[0] = Val(int32_t(::Rml_GetDocument(c, index)));
+    return std::monostate{};`;
+    });
     ctx.hostFunctions.register('env', 'Rml_ShowDocument', (_params, _results) => scalarVoid('Rml_ShowDocument', [0]));
     ctx.hostFunctions.register('env', 'Rml_HideDocument', (_params, _results) => scalarVoid('Rml_HideDocument', [0]));
     ctx.hostFunctions.register('env', 'Rml_CloseDocument', (_params, _results) => scalarVoid('Rml_CloseDocument', [0]));
@@ -213,10 +236,21 @@ const rmluiPlugin: WasmPlugin = {
     ctx.hostFunctions.register('env', 'Rml_RemoveEventListener', (_params, _results) => handleStringI32('Rml_RemoveEventListener', 0, 1));
 
     // Class list
-    ctx.hostFunctions.register('env', 'Rml_AddClass', (_params, _results) => handleStringI32('Rml_AddClass', 0, 1));
-    ctx.hostFunctions.register('env', 'Rml_RemoveClass', (_params, _results) => handleStringI32('Rml_RemoveClass', 0, 1));
-    ctx.hostFunctions.register('env', 'Rml_ToggleClass', (_params, _results) => handleStringI32('Rml_ToggleClass', 0, 1));
-    ctx.hostFunctions.register('env', 'Rml_HasClass', (_params, _results) => handleStringI32('Rml_HasClass', 0, 1));
+    ctx.hostFunctions.register('env', 'Rml_SetClass', (_params, _results) => {
+      if (_params.length >= 3) {
+        return `
+    Rml_ElementId el = args[0].i32();
+    std::string cls = _readAsStringNT(caller, args[1].i32());
+    int32_t enabled = args[2].i32();
+    results[0] = Val(int32_t(::Rml_SetClass(el, cls.c_str(), enabled)));
+    return std::monostate{};`;
+      }
+      return `
+    results[0] = Val(int32_t(RMLUI_ERR_NULL_PARAM));
+    return std::monostate{};`;
+    });
+    ctx.hostFunctions.register('env', 'Rml_IsClassSet', (_params, _results) => handleStringI32('Rml_IsClassSet', 0, 1));
+    ctx.hostFunctions.register('env', 'Rml_SetClassNames', (_params, _results) => handleStringI32('Rml_SetClassNames', 0, 1));
 
     // Font loading
     ctx.hostFunctions.register('env', 'Rml_LoadFont', (_params, _results) => string1I32('Rml_LoadFont', 0));

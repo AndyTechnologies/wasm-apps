@@ -1,9 +1,11 @@
 import os from 'node:os';
 import path from 'node:path';
 import { LinkerError } from '@wasm-apps/types';
+import { RMLUI_VERSION } from './rmlui-versions.js';
 
 export { downloadFile } from './downloader.js';
 export { extractArchive } from './extract.js';
+export { RMLUI_VERSION, SDL3_VERSION } from './rmlui-versions.js';
 
 export interface RmluiAsset {
   url: string;
@@ -41,7 +43,7 @@ export interface RmluiAssets {
  * si la descarga falla, rmlui-setup.ts intentará construir desde fuente.
  */
 export function getRmluiAssets(version?: string): RmluiAssets {
-  const v = version || '1.0.0';
+  const v = version || RMLUI_VERSION;
   const plat = os.platform();
   const arch = os.arch();
   const target = getRmluiTarget(plat, arch);

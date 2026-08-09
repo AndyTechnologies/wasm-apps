@@ -1,12 +1,10 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { getRmluiCacheDir, getRmluiAssets } from './rmlui-dl.js';
+import { getRmluiCacheDir, getRmluiAssets, RMLUI_VERSION } from './rmlui-dl.js';
 import { downloadFile } from './downloader.js';
 import { extractArchive } from './extract.js';
 import { logger } from '@wasm-apps/types';
 import { CacheManager } from './cache.js';
-
-const RMLUI_VERSION = '1.0.0';
 
 /**
  * Instala/actualiza las dependencias de RmlUI (SDL3, RmlUI, GLAD) en el caché global.

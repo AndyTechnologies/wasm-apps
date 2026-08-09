@@ -33,17 +33,43 @@ void          Rml_ReleaseContext(Rml_ContextId ctx);
 /* ── Document loading ─────────────────────────────────────────────────── */
 
 Rml_DocumentId Rml_LoadDocument(Rml_ContextId ctx, const char* path);
-Rml_DocumentId Rml_LoadDocumentFromString(Rml_ContextId ctx, const char* rml);
+/**
+ * Load a document from an in-memory RML string (RmlUi 6.2
+ * Context::LoadDocumentFromMemory). `source_url` is used for resolution of
+ * relative embedded resources; pass NULL to use the default
+ * "[document from memory]".
+ */
+Rml_DocumentId Rml_LoadDocumentFromMemory(Rml_ContextId ctx, const char* rml, const char* source_url);
 Rml_DocumentId Rml_LoadDocumentFromBuffer(Rml_ContextId ctx, const void* data, int32_t len);
 void           Rml_ShowDocument(Rml_DocumentId doc);
 void           Rml_HideDocument(Rml_DocumentId doc);
 void           Rml_CloseDocument(Rml_DocumentId doc);
 
+/* ── Document enumeration (index-based, RmlUi 6.2) ─────────────────────── */
+
+/** Number of documents currently loaded in the context. */
+int32_t       Rml_GetNumDocuments(Rml_ContextId ctx);
+/** Document by index; returns 0 when out of range (RmlUi 6.2 GetDocument(int)). */
+Rml_ElementId Rml_GetDocument(Rml_ContextId ctx, int32_t index);
+
 /* ── Element tree construction ────────────────────────────────────────── */
 
 Rml_ElementId Rml_CreateElement(const char* tag);
 Rml_ElementId Rml_CreateTextNode(const char* text);
+/**
+ * Append `child` to `parent`.
+ *
+ * OWNERSHIP CONTRACT: on success the caller relinquishes ownership of
+ * `child` — RmlUi takes it (ElementPtr is moved into the parent's child
+ * list). On failure (invalid handle, or `child` already has a parent,
+ * RMLUI_ERR_INVALID_HANDLE) the caller keeps ownership and the element
+ * remains usable. `child` must not already be attached to any parent.
+ */
 int32_t       Rml_AppendChild(Rml_ElementId parent, Rml_ElementId child);
+/**
+ * Detach `child` from `parent`. Ownership of the element returns to the
+ * caller: the element stays alive and may be re-appended later.
+ */
 int32_t       Rml_RemoveChild(Rml_ElementId parent, Rml_ElementId child);
 int32_t       Rml_InsertBefore(Rml_ElementId parent, Rml_ElementId child, Rml_ElementId ref);
 int32_t       Rml_ReplaceChild(Rml_ElementId parent, Rml_ElementId newChild, Rml_ElementId oldChild);
@@ -87,12 +113,14 @@ typedef struct {
 /* Get the current event being dispatched. Returns NULL outside a callback. */
 const Rml_Event* Rml_GetCurrentEvent(void);
 
-/* ── Class list ────────────────────────────────────────────────────────── */
+/* ── Class list (RmlUi 6.2: SetClass/IsClassSet/SetClassNames) ─────────── */
 
-int32_t Rml_AddClass(Rml_ElementId el, const char* cls);
-int32_t Rml_RemoveClass(Rml_ElementId el, const char* cls);
-int32_t Rml_ToggleClass(Rml_ElementId el, const char* cls);
-int32_t Rml_HasClass(Rml_ElementId el, const char* cls);
+/** Add `cls` when enabled != 0, remove it otherwise. */
+int32_t Rml_SetClass(Rml_ElementId el, const char* cls, int32_t enabled);
+/** Returns 1 if `cls` is set on `el`, 0 otherwise. */
+int32_t Rml_IsClassSet(Rml_ElementId el, const char* cls);
+/** Replace the whole class list with a whitespace-separated `names` string. */
+int32_t Rml_SetClassNames(Rml_ElementId el, const char* names);
 
 /* ── Font loading ──────────────────────────────────────────────────────── */
 

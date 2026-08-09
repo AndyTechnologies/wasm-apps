@@ -1,11 +1,11 @@
 {% include "_preamble.c.njk" %}
 
 {% if rmlui.enabled %}
-#include <glad/gl.h>
+#include "vendor/RmlUi_Include_GL3.h"
 #include <RmlUi/Core.h>
 #include <RmlUi/Debugger.h>
-#include <RmlUi_GL3/GL3RenderInterface.h>
-#include <RmlUi_SDL/SDL3SystemInterface.h>
+#include <RmlUi/Backends/RmlUi_Renderer_GL3.h>
+#include <RmlUi/Backends/RmlUi_Platform_SDL.h>
 
 {% include "_rmlui-state.c.njk" %}
 {% include "_embedded-resources.c.njk" %}
@@ -65,17 +65,13 @@ int main(int argc, char *argv[]) {
     gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
     SDL_GL_MakeCurrent(_rmluiWindow, _rmluiGlContext);
 
-    _rmluiSystemInterface = new RmlSDL_SystemInterface_SDL(_rmluiWindow);
+    _rmluiSystemInterface = new SystemInterface_SDL(_rmluiWindow);
     Rml::SetSystemInterface(_rmluiSystemInterface);
 
-    _rmluiRenderInterface = new RmlGL3_RenderInterface_GL3();
+    _rmluiRenderInterface = new RenderInterface_GL3();
     Rml::SetRenderInterface(_rmluiRenderInterface);
 
     Rml::Initialise();
-
-    {% if rmlui.debugger %}
-    Rml::Debugger::Initialise();
-    {% endif %}
 
     // Load default fonts
 {% if rmlui.resources.defaultFont %}

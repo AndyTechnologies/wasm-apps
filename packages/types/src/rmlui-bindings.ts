@@ -12,8 +12,11 @@ export declare function rawRml_ReleaseContext(ctx: i32): void;
 // @external("env", "Rml_LoadDocument")
 export declare function rawRml_LoadDocument(ctx: i32, path: string): i32;
 
-// @external("env", "Rml_LoadDocumentFromString")
-export declare function rawRml_LoadDocumentFromString(ctx: i32, rml: string): i32;
+// @external("env", "Rml_LoadDocumentFromMemory")
+export declare function rawRml_LoadDocumentFromMemory(ctx: i32, rml: string, source_url: string): i32;
+
+// @external("env", "Rml_LoadDocumentFromBuffer")
+export declare function rawRml_LoadDocumentFromBuffer(ctx: i32, data: i32, len: i32): i32;
 
 // @external("env", "Rml_ShowDocument")
 export declare function rawRml_ShowDocument(doc: i32): void;
@@ -23,6 +26,12 @@ export declare function rawRml_HideDocument(doc: i32): void;
 
 // @external("env", "Rml_CloseDocument")
 export declare function rawRml_CloseDocument(doc: i32): void;
+
+// @external("env", "Rml_GetNumDocuments")
+export declare function rawRml_GetNumDocuments(ctx: i32): i32;
+
+// @external("env", "Rml_GetDocument")
+export declare function rawRml_GetDocument(ctx: i32, index: i32): i32;
 
 // @external("env", "Rml_CreateElement")
 export declare function rawRml_CreateElement(tag: string): i32;
@@ -81,17 +90,17 @@ export declare function rawRml_AddEventListener(el: i32, event: string, cb_id: i
 // @external("env", "Rml_RemoveEventListener")
 export declare function rawRml_RemoveEventListener(el: i32, event: string): i32;
 
-// @external("env", "Rml_AddClass")
-export declare function rawRml_AddClass(el: i32, cls: string): i32;
+// @external("env", "Rml_GetCurrentEvent")
+export declare function rawRml_GetCurrentEvent(): i32;
 
-// @external("env", "Rml_RemoveClass")
-export declare function rawRml_RemoveClass(el: i32, cls: string): i32;
+// @external("env", "Rml_SetClass")
+export declare function rawRml_SetClass(el: i32, cls: string, enabled: i32): i32;
 
-// @external("env", "Rml_ToggleClass")
-export declare function rawRml_ToggleClass(el: i32, cls: string): i32;
+// @external("env", "Rml_IsClassSet")
+export declare function rawRml_IsClassSet(el: i32, cls: string): i32;
 
-// @external("env", "Rml_HasClass")
-export declare function rawRml_HasClass(el: i32, cls: string): i32;
+// @external("env", "Rml_SetClassNames")
+export declare function rawRml_SetClassNames(el: i32, names: string): i32;
 
 // @external("env", "Rml_LoadFont")
 export declare function rawRml_LoadFont(path: string): i32;
@@ -104,6 +113,9 @@ export declare function rawRml_LoadTexture(path: string): i32;
 
 // @external("env", "Rml_LoadTextureFromBuffer")
 export declare function rawRml_LoadTextureFromBuffer(name: string, data: i32, len: i32): i32;
+
+// @external("env", "Rml_GetTextureDimensions")
+export declare function rawRml_GetTextureDimensions(name: string, w: i32, h: i32): i32;
 
 // @external("env", "RmlUI_ProcessSdlEvents")
 export declare function rawRmlUI_ProcessSdlEvents(): void;
@@ -137,6 +149,12 @@ export declare function rawRml_GetBody(ctx: i32): i32;
 
 // @external("env", "Rml_GetHead")
 export declare function rawRml_GetHead(ctx: i32): i32;
+
+// @external("env", "Rml_SetResourcePath")
+export declare function rawRml_SetResourcePath(ctx: i32, path_list: string): i32;
+
+// @external("env", "Rml_RegisterResourceProvider")
+export declare function rawRml_RegisterResourceProvider(ctx: i32, provider: i32): i32;
 
 // @external("env", "Rml_DebuggerToggle")
 export declare function rawRml_DebuggerToggle(): void;
@@ -176,9 +194,19 @@ export function loadDocument(ctx: i32, path: string): i32 {
   return result;
 }
 
-/** Safe wrapper around `Rml_LoadDocumentFromString`. */
-export function loadDocumentFromString(ctx: i32, rml: string): i32 {
-  const result = rawRml_LoadDocumentFromString(ctx, rml);
+/** Safe wrapper around `Rml_LoadDocumentFromMemory`. */
+export function loadDocumentFromMemory(ctx: i32, rml: string, source_url: string): i32 {
+  const result = rawRml_LoadDocumentFromMemory(ctx, rml, source_url);
+  if (result < 0) {
+    // Caller should check return value
+    return result;
+  }
+  return result;
+}
+
+/** Safe wrapper around `Rml_LoadDocumentFromBuffer`. */
+export function loadDocumentFromBuffer(ctx: i32, data: i32, len: i32): i32 {
+  const result = rawRml_LoadDocumentFromBuffer(ctx, data, len);
   if (result < 0) {
     // Caller should check return value
     return result;
@@ -199,6 +227,26 @@ export function hideDocument(doc: i32): void {
 /** Safe wrapper around `Rml_CloseDocument`. */
 export function closeDocument(doc: i32): void {
   rawRml_CloseDocument(doc);
+}
+
+/** Safe wrapper around `Rml_GetNumDocuments`. */
+export function getNumDocuments(ctx: i32): i32 {
+  const result = rawRml_GetNumDocuments(ctx);
+  if (result < 0) {
+    // Caller should check return value
+    return result;
+  }
+  return result;
+}
+
+/** Safe wrapper around `Rml_GetDocument`. */
+export function getDocument(ctx: i32, index: i32): i32 {
+  const result = rawRml_GetDocument(ctx, index);
+  if (result < 0) {
+    // Caller should check return value
+    return result;
+  }
+  return result;
 }
 
 /** Safe wrapper around `Rml_CreateElement`. */
@@ -274,9 +322,9 @@ export function setAttribute(el: i32, name: string, value: string): i32 {
 /** Safe wrapper around `Rml_GetAttribute`. */
 export function getAttribute(el: i32, name: string): string {
   const ptr = rawRml_GetAttribute(el, name);
-  if (ptr === 0) return "";
+  if (ptr === 0) return '';
   // Read null-terminated string from WASM memory at ptr
-  let result = "";
+  let result = '';
   let i = ptr;
   while (load<u8>(i) !== 0) {
     result += String.fromCharCode(load<u8>(i));
@@ -318,9 +366,9 @@ export function setTextContent(el: i32, text: string): i32 {
 /** Safe wrapper around `Rml_GetTextContent`. */
 export function getTextContent(el: i32): string {
   const ptr = rawRml_GetTextContent(el);
-  if (ptr === 0) return "";
+  if (ptr === 0) return '';
   // Read null-terminated string from WASM memory at ptr
-  let result = "";
+  let result = '';
   let i = ptr;
   while (load<u8>(i) !== 0) {
     result += String.fromCharCode(load<u8>(i));
@@ -342,9 +390,9 @@ export function setInnerHTML(el: i32, html: string): i32 {
 /** Safe wrapper around `Rml_GetInnerHTML`. */
 export function getInnerHTML(el: i32): string {
   const ptr = rawRml_GetInnerHTML(el);
-  if (ptr === 0) return "";
+  if (ptr === 0) return '';
   // Read null-terminated string from WASM memory at ptr
-  let result = "";
+  let result = '';
   let i = ptr;
   while (load<u8>(i) !== 0) {
     result += String.fromCharCode(load<u8>(i));
@@ -366,9 +414,9 @@ export function setStyleProperty(el: i32, prop: string, value: string): i32 {
 /** Safe wrapper around `Rml_GetStyleProperty`. */
 export function getStyleProperty(el: i32, prop: string): string {
   const ptr = rawRml_GetStyleProperty(el, prop);
-  if (ptr === 0) return "";
+  if (ptr === 0) return '';
   // Read null-terminated string from WASM memory at ptr
-  let result = "";
+  let result = '';
   let i = ptr;
   while (load<u8>(i) !== 0) {
     result += String.fromCharCode(load<u8>(i));
@@ -407,9 +455,9 @@ export function removeEventListener(el: i32, event: string): i32 {
   return result;
 }
 
-/** Safe wrapper around `Rml_AddClass`. */
-export function addClass(el: i32, cls: string): i32 {
-  const result = rawRml_AddClass(el, cls);
+/** Safe wrapper around `Rml_GetCurrentEvent`. */
+export function getCurrentEvent(): i32 {
+  const result = rawRml_GetCurrentEvent();
   if (result < 0) {
     // Caller should check return value
     return result;
@@ -417,9 +465,9 @@ export function addClass(el: i32, cls: string): i32 {
   return result;
 }
 
-/** Safe wrapper around `Rml_RemoveClass`. */
-export function removeClass(el: i32, cls: string): i32 {
-  const result = rawRml_RemoveClass(el, cls);
+/** Safe wrapper around `Rml_SetClass`. */
+export function setClass(el: i32, cls: string, enabled: i32): i32 {
+  const result = rawRml_SetClass(el, cls, enabled);
   if (result < 0) {
     // Caller should check return value
     return result;
@@ -427,9 +475,9 @@ export function removeClass(el: i32, cls: string): i32 {
   return result;
 }
 
-/** Safe wrapper around `Rml_ToggleClass`. */
-export function toggleClass(el: i32, cls: string): i32 {
-  const result = rawRml_ToggleClass(el, cls);
+/** Safe wrapper around `Rml_IsClassSet`. */
+export function isClassSet(el: i32, cls: string): i32 {
+  const result = rawRml_IsClassSet(el, cls);
   if (result < 0) {
     // Caller should check return value
     return result;
@@ -437,9 +485,9 @@ export function toggleClass(el: i32, cls: string): i32 {
   return result;
 }
 
-/** Safe wrapper around `Rml_HasClass`. */
-export function hasClass(el: i32, cls: string): i32 {
-  const result = rawRml_HasClass(el, cls);
+/** Safe wrapper around `Rml_SetClassNames`. */
+export function setClassNames(el: i32, names: string): i32 {
+  const result = rawRml_SetClassNames(el, names);
   if (result < 0) {
     // Caller should check return value
     return result;
@@ -480,6 +528,16 @@ export function loadTexture(path: string): i32 {
 /** Safe wrapper around `Rml_LoadTextureFromBuffer`. */
 export function loadTextureFromBuffer(name: string, data: i32, len: i32): i32 {
   const result = rawRml_LoadTextureFromBuffer(name, data, len);
+  if (result < 0) {
+    // Caller should check return value
+    return result;
+  }
+  return result;
+}
+
+/** Safe wrapper around `Rml_GetTextureDimensions`. */
+export function getTextureDimensions(name: string, w: i32, h: i32): i32 {
+  const result = rawRml_GetTextureDimensions(name, w, h);
   if (result < 0) {
     // Caller should check return value
     return result;
@@ -537,6 +595,21 @@ export function querySelector(el: i32, selector: string): i32 {
   return result;
 }
 
+/** Safe wrapper around `Rml_QuerySelectorAll`. */
+export function querySelectorAll(el: i32, selector: string): i32 {
+  const result = rawRml_QuerySelectorAll(el, selector);
+  if (result < 0) {
+    // Caller should check return value
+    return result;
+  }
+  return result;
+}
+
+/** Safe wrapper around `Rml_FreeNodeList`. */
+export function freeNodeList(elements: i32): void {
+  rawRml_FreeNodeList(elements);
+}
+
 /** Safe wrapper around `Rml_GetBody`. */
 export function getBody(ctx: i32): i32 {
   const result = rawRml_GetBody(ctx);
@@ -557,6 +630,26 @@ export function getHead(ctx: i32): i32 {
   return result;
 }
 
+/** Safe wrapper around `Rml_SetResourcePath`. */
+export function setResourcePath(ctx: i32, path_list: string): i32 {
+  const result = rawRml_SetResourcePath(ctx, path_list);
+  if (result < 0) {
+    // Caller should check return value
+    return result;
+  }
+  return result;
+}
+
+/** Safe wrapper around `Rml_RegisterResourceProvider`. */
+export function registerResourceProvider(ctx: i32, provider: i32): i32 {
+  const result = rawRml_RegisterResourceProvider(ctx, provider);
+  if (result < 0) {
+    // Caller should check return value
+    return result;
+  }
+  return result;
+}
+
 /** Safe wrapper around `Rml_DebuggerToggle`. */
 export function debuggerToggle(): void {
   rawRml_DebuggerToggle();
@@ -569,29 +662,29 @@ export class Element {
   // Child management
   appendChild(child: Element): Element {
     const result = rawRml_AppendChild(this.id, child.id);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
     return child;
   }
 
   removeChild(child: Element): void {
     const result = rawRml_RemoveChild(this.id, child.id);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   insertBefore(child: Element, ref: Element): void {
     const result = rawRml_InsertBefore(this.id, child.id, ref.id);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   replaceChild(newChild: Element, oldChild: Element): void {
     const result = rawRml_ReplaceChild(this.id, newChild.id, oldChild.id);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   // Attributes
   setAttribute(name: string, value: string): void {
     const result = rawRml_SetAttribute(this.id, name, value);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   getAttribute(name: string): string {
@@ -600,7 +693,7 @@ export class Element {
 
   removeAttribute(name: string): void {
     const result = rawRml_RemoveAttribute(this.id, name);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   hasAttribute(name: string): bool {
@@ -610,7 +703,7 @@ export class Element {
   // Content
   set textContent(text: string) {
     const result = rawRml_SetTextContent(this.id, text);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   get textContent(): string {
@@ -619,7 +712,7 @@ export class Element {
 
   set innerHTML(html: string) {
     const result = rawRml_SetInnerHTML(this.id, html);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   get innerHTML(): string {
@@ -629,7 +722,7 @@ export class Element {
   // Style
   setStyleProperty(prop: string, value: string): void {
     const result = rawRml_SetStyleProperty(this.id, prop, value);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   getStyleProperty(prop: string): string {
@@ -638,38 +731,49 @@ export class Element {
 
   setStyle(css: string): void {
     const result = rawRml_SetStyle(this.id, css);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   // Events
   addEventListener(event: string, cb_id: i32): void {
     const result = rawRml_AddEventListener(this.id, event, cb_id);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   removeEventListener(event: string): void {
     const result = rawRml_RemoveEventListener(this.id, event);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
   }
 
   // Class list
+  setClass(cls: string, enabled: bool): void {
+    const result = rawRml_SetClass(this.id, cls, enabled ? 1 : 0);
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
+  }
+
+  isClassSet(cls: string): bool {
+    return rawRml_IsClassSet(this.id, cls) > 0;
+  }
+
+  setClassNames(names: string): void {
+    const result = rawRml_SetClassNames(this.id, names);
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
+  }
+
   addClass(cls: string): void {
-    const result = rawRml_AddClass(this.id, cls);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    this.setClass(cls, true);
   }
 
   removeClass(cls: string): void {
-    const result = rawRml_RemoveClass(this.id, cls);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    this.setClass(cls, false);
   }
 
   toggleClass(cls: string): void {
-    const result = rawRml_ToggleClass(this.id, cls);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    this.setClass(cls, !this.isClassSet(cls));
   }
 
   hasClass(cls: string): bool {
-    return rawRml_HasClass(this.id, cls) > 0;
+    return this.isClassSet(cls);
   }
 
   // Query
@@ -695,7 +799,10 @@ export class Element {
 
 // ── Document class ────────────────────────────────────────────────────
 export class Document {
-  constructor(public ctx: i32, public docId: i32) {}
+  constructor(
+    public ctx: i32,
+    public docId: i32,
+  ) {}
 
   get body(): Element | null {
     const result = rawRml_GetBody(this.ctx);
@@ -717,13 +824,13 @@ export class Document {
 
   createElement(tag: string): Element {
     const result = rawRml_CreateElement(tag);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
     return new Element(result);
   }
 
   createTextNode(text: string): Element {
     const result = rawRml_CreateTextNode(text);
-    if (result < 0) throw new Error("RmlUI error: " + result.toString());
+    if (result < 0) throw new Error('RmlUI error: ' + result.toString());
     return new Element(result);
   }
 
