@@ -491,8 +491,9 @@ export async function downloadRmluiTarball(destPath, url = rmluiTarballUrl()) {
  * @param {string} destDir
  */
 export function extractRmluiTarball(tarballPath, destDir) {
+  // cwd = destDir: en Windows bsdtar interpreta "-C C:\..." como host remoto.
   fs.mkdirSync(destDir, { recursive: true });
-  execFileSync('tar', ['-xzf', tarballPath, '-C', destDir, '--strip-components=1'], { stdio: 'pipe' });
+  execFileSync('tar', ['-xzf', tarballPath, '--strip-components=1'], { cwd: destDir, stdio: 'pipe' });
 }
 
 /** Headers de backends + Core que deben existir tras extraer el tarball. */
