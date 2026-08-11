@@ -74,7 +74,7 @@ jobs:
           key: wasm-linker-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('packages/linker/CMakeLists.txt') }}
       - name: Setup system deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils lld xvfb libfreetype-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils lld xvfb libfreetype-dev libx11-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev libxfixes-dev libxinerama-dev libxkbcommon-dev libwayland-dev libdecor-0-dev libpulse-dev
         shell: bash
       - name: Setup system deps (macOS)
         if: runner.os == 'macOS'
