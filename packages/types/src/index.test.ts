@@ -190,6 +190,19 @@ describe('WasmArtifact with toolchainId', () => {
   });
 });
 
+describe('WappConfig with mounts', () => {
+  it('acepta mounts opcional en WappConfig', () => {
+    const config: WappConfig = {
+      mounts: [
+        { host: '/home/user/data', guest: '/data' },
+        { host: './config', guest: '/etc/app' },
+      ],
+    };
+    expect(config.mounts).toHaveLength(2);
+    expect(config.mounts![0].guest).toBe('/data');
+  });
+});
+
 describe('WappConfig with toolchains and linker', () => {
   it('accepts compiler.toolchains with toolchain overrides', () => {
     const config: WappConfig = {

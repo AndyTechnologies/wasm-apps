@@ -1,0 +1,35 @@
+{# ── Embedded resources (arrays unsigned char) ────────────────────────── #}
+{# Cada recurso se define como un array unsigned char incrustado.        #}
+{# La convención de nombre es _resource_<nombre_sanitizado>[].           #}
+{# El tamaño se expone como _resource_<nombre_sanitizado>_len.          #}
+
+{% if rmlui.embeddedResources.length %}
+// ── Embedded resources ────────────────────────────────────────────────────
+{% for res in rmlui.embeddedResources %}
+// {{ res.name }} ({{ res.mimeType }}, {{ res.data.length }} bytes)
+static const unsigned char _resource_{{ res.safeName }}[] = {
+{% for i in range(0, res.data.length, 12) -%}
+  {% for j in range(0, 12) if i + j < res.data.length -%}
+  0x{{ '%02x' | format(res.data[i + j]) }}{{ ',' if i + j < res.data.length - 1 }}
+  {%- endfor %}
+{% endfor %}
+};
+static const size_t _resource_{{ res.safeName }}_len = {{ res.data.length }};
+
+{% endfor %}
+{% endif %}
+
+// ── Embedded resource accessor ────────────────────────────────────────────
+extern "C" const unsigned char* Rml_GetEmbeddedResource(const char* name, size_t* out_len) {
+  if (!name) { if (out_len) *out_len = 0; return nullptr; }
+{% if rmlui.embeddedResources.length %}
+{% for res in rmlui.embeddedResources %}
+  if (std::strcmp(name, "{{ res.name }}") == 0) {
+    if (out_len) *out_len = _resource_{{ res.safeName }}_len;
+    return _resource_{{ res.safeName }};
+  }
+{% endfor %}
+{% endif %}
+  if (out_len) *out_len = 0;
+  return nullptr;
+}

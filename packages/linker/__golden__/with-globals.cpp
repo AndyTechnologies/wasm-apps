@@ -130,6 +130,7 @@ int main(int argc, char *argv[]) {
     auto ctx = store.context();
     Linker linker(engine);
     
+    
   _check_result(linker.define(ctx, "env", "Math.PI", Global::wrap(ctx, Val(double(3.141592653589793)))), "define env.Math.PI");
 
   auto mod0 = Module::compile(engine, Span<uint8_t>(const_cast<uint8_t*>(wasm_bytes_0), wasm_len_0));

@@ -130,6 +130,7 @@ int main(int argc, char *argv[]) {
     auto ctx = store.context();
     Linker linker(engine);
     
+    
 
   auto mod0 = Module::compile(engine, Span<uint8_t>(const_cast<uint8_t*>(wasm_bytes_0), wasm_len_0));
   if (!mod0) { std::cerr << "Error compilando modulo: " << mod0.err().message() << std::endl; return 1; }

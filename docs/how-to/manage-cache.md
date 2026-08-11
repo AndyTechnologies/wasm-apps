@@ -25,6 +25,22 @@ Elimina las tres cachés. La siguiente compilación será desde cero.
 | **Caché del compilador** | `.wapp_cache/compiler/`           | `.wasm`, `.d.ts`, `.js`, sourcemaps compilados       | Cambios en código fuente, flags del compilador, o **toolchainId** |
 | **Manifiesto de build**  | `.wapp_build/build-manifest.json` | Hashes WASM + opciones del linker + **templateHash** | Cambios en `.wasm`, opciones del linker, o **templates Nunjucks** |
 | **Caché de descarga**    | `~/.wasm-linker/`                 | Archivo Wasmtime C-API                               | `wapp setup` o `cache clear`                                      |
+| **Caché de deps RmlUI**  | `~/.wasm-linker/rmlui/`           | SDL3, RmlUi, fuentes y markers de versión            | `wapp setup` (re-descarga si el marker falta)                     |
+
+### Caché de dependencias RmlUI
+
+El plugin `rmlui-plugin` descarga y compila sus dependencias nativas una sola vez en `~/.wasm-linker/rmlui/`:
+
+| Subdirectorio | Contenido                                                            |
+| ------------- | -------------------------------------------------------------------- |
+| `sdl/`        | SDL3 3.2.4 (tarball de fuentes; win32 usa el VC.zip precompilado)    |
+| `rmlui/`      | RmlUi 6.2 (tarball de fuentes, build CMake estático)                 |
+| `fonts/`      | LatoLatin (Regular/Bold/Italic) + NotoEmoji, usadas por los ejemplos |
+| `src/`        | Fuentes descargadas (tarballs originales)                            |
+
+Versiones fijadas: **RmlUi 6.2**, **SDL3 3.2.4**, **Wasmtime 46.0.1** (esta última en `~/.wasm-linker/wasmtime-*`).
+
+Cada dependencia deja un marker `{dep}.{version}.ok` (ej: `rmlui.6.2.ok`, `sdl.3.2.4.ok`); si el marker falta o el checksum SHA256 no coincide, `wapp setup` re-descarga y purga la entrada corrupta. En Linux/macOS el build de SDL3 tiene un fallback a compilación de fuentes si el binario 404.
 
 ### Toolchain-aware cache key
 

@@ -1,6 +1,3 @@
-    delete render_interface;
-    delete system_interface;
-    Rml::Shutdown();
-    SDL_GL_DestroyContext(gl_context);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+// Shutdown RmlUI and SDL
+// Uses file-scope statics from _rmlui-state.c.njk
+RmlUI_Shutdown();

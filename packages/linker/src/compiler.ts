@@ -1,13 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
-import type { NativeAppOptions } from '@wasm-apps/types';
+import type { NativeAppOptions, ExtraLib } from '@wasm-apps/types';
 import { CMakeError, LinkerError, ConfigError, logger } from '@wasm-apps/types';
 
 const require = createRequire(import.meta.url);
 const CMAKE_JS_BIN = require.resolve('cmake-js/bin/cmake-js');
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Compila el código C++ generado a un binario nativo usando cmake-js y CMake.
@@ -32,6 +36,20 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
 
     const cppFile = path.join(srcDir, 'main.cpp');
     await fs.promises.writeFile(cppFile, cppSource);
+
+    // Copiar assets vendor/ del template (p. ej. vendor/RmlUi_Include_GL3.h)
+    // para que los #include relativos de main.cpp resuelvan en el build.
+    if (options.linker?.templatePath) {
+      const vendorSrc = path.join(options.linker.templatePath, 'vendor');
+      if (fs.existsSync(vendorSrc)) {
+        await fs.promises.cp(vendorSrc, path.join(srcDir, 'vendor'), { recursive: true });
+      }
+      // rmlui-abi.h (definición canónica del ABI) junto al main.cpp.
+      const abiHeader = path.resolve(__dirname, '../../types/src/rmlui-abi.h');
+      if (fs.existsSync(abiHeader)) {
+        await fs.promises.copyFile(abiHeader, path.join(srcDir, 'rmlui-abi.h'));
+      }
+    }
 
     const cmakeContent = extraLibs ? generateCMakeListsWithExtras(options.wasmtimePath, extraLibs) : generateCMakeLists(options.wasmtimePath);
     await fs.promises.writeFile(path.join(buildDir, 'CMakeLists.txt'), cmakeContent);
@@ -92,14 +110,6 @@ function escapeCMakeString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$\{/g, '\\${');
 }
 
-export interface ExtraLib {
-  name: string;
-  includeDir: string;
-  libDir: string;
-  libs: string[];
-  frameworks?: string[];
-}
-
 /** Genera un CMakeLists.txt para el proyecto wasm-linker. */
 function generateCMakeLists(wasmtimePath?: string): string {
   return `cmake_minimum_required(VERSION 3.10)
@@ -145,7 +155,23 @@ link_directories("${wasmtimePath ? '${WASMTIME_DIR}/lib' : ''}")
     }
   }
 
-  cmake += `\nadd_executable(wasm-linker src/main.cpp)\n\n`;
+  let sourcesList = 'src/main.cpp';
+  if (extraLibs && extraLibs.length > 0) {
+    for (const lib of extraLibs) {
+      for (const src of lib.sources ?? []) {
+        sourcesList += ` ${escapeCMakeString(src)}`;
+      }
+    }
+  }
+  if (extraLibs && extraLibs.length > 0) {
+    for (const lib of extraLibs) {
+      for (const d of lib.defines ?? []) {
+        cmake += `add_compile_definitions(${d})\n`;
+      }
+    }
+  }
+
+  cmake += `\nadd_executable(wasm-linker ${sourcesList})\n\n`;
 
   let linkLibs = wasmtimePath ? 'wasmtime' : 'wasmtime::wasmtime';
   if (extraLibs && extraLibs.length > 0) {

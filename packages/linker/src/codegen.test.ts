@@ -54,6 +54,27 @@ describe('validateEntryExport', () => {
   });
 });
 
+describe('generateCCode with mounts', () => {
+  it('generates preopen_dir lines for each mount when wasi is true', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const mounts = [
+      { host: '/home/user/data', guest: '/data' },
+      { host: '/home/user/config', guest: '/etc/app' },
+    ];
+    const code = generateCCode(link, '_start', true, undefined, mounts);
+    expect(code).toContain('wasi_config.preopen_dir("/home/user/data", "/data", 3, 3);');
+    expect(code).toContain('wasi_config.preopen_dir("/home/user/config", "/etc/app", 3, 3);');
+  });
+
+  it('does not generate preopen_dir when mounts is empty', () => {
+    const mod = makeModule('test', ['_start']);
+    const link = makeResolved([mod]);
+    const code = generateCCode(link, '_start', false, undefined, []);
+    expect(code).not.toContain('preopen_dir');
+  });
+});
+
 describe('generateCCode', () => {
   it('generates valid C++ with minimal module', () => {
     const mod = makeModule('test', ['_start']);

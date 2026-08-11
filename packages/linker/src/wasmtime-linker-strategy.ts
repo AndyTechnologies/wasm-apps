@@ -3,6 +3,7 @@ import type { ILinkerStrategy, NativeAppOptions, WasmModuleInfo, WasmImportFuncT
 import { resolveDependencies } from './linker.js';
 import { generateCCode } from './codegen.js';
 import { compileCpp } from './compiler.js';
+import { getRmluiExtraLibs } from './rmlui-plugin.js';
 
 export class WasmtimeLinkerStrategy implements ILinkerStrategy {
   readonly name = 'wasmtime';
@@ -18,8 +19,16 @@ export class WasmtimeLinkerStrategy implements ILinkerStrategy {
     }
 
     const resolved = resolveDependencies(modules, options.moduleMatching);
-    const cpp = generateCCode(resolved, options.entry, options.wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined);
-    await compileCpp(cpp, outputPath, options);
+    const cpp = generateCCode(
+      resolved,
+      options.entry,
+      options.wasi,
+      allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined,
+      options.mounts,
+      options.linker?.templatePath,
+    );
+    const extraLibs = getRmluiExtraLibs();
+    await compileCpp(cpp, outputPath, options, false, extraLibs.length > 0 ? extraLibs : undefined);
 
     return outputPath;
   }

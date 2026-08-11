@@ -1,0 +1,6 @@
+{
+  "name": "rmlui-bindgen",
+  "type": "module",
+  "private": true,
+  "description": "Code generator for RmlUI multi-language bindings from C ABI header"
+}

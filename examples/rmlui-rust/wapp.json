@@ -1,0 +1,21 @@
+{
+  "sourceDir": "src",
+  "outDir": "wasm-out",
+  "output": "rmlui-rust",
+  "entry": "_start",
+  "wasi": false,
+  "plugins": [
+    {
+      "id": "rmlui-plugin",
+      "enabled": true,
+      "config": {
+        "window": {
+          "title": "RmlUI Rust Example",
+          "width": 1024,
+          "height": 768
+        },
+        "debugger": false
+      }
+    }
+  ]
+}

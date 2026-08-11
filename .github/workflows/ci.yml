@@ -74,11 +74,11 @@ jobs:
           key: wasm-linker-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('packages/linker/CMakeLists.txt') }}
       - name: Setup system deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils lld
+        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils lld xvfb libfreetype-dev libx11-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev libxfixes-dev libxinerama-dev libxkbcommon-dev libwayland-dev libdecor-0-dev libpulse-dev libgl-dev libgl1-mesa-dev mesa-common-dev
         shell: bash
       - name: Setup system deps (macOS)
         if: runner.os == 'macOS'
-        run: brew install cmake xz llvm && echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+        run: brew install cmake xz llvm freetype && echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
         shell: bash
       - name: Setup Rust wasm32 target
         run: rustup target add wasm32-unknown-unknown
@@ -88,4 +88,12 @@ jobs:
         shell: bash
       - name: Integration tests (requires wasmtime + cmake)
         run: pnpm run test:integration
+        shell: bash
+      - name: 'RmlUI runtime smoke (Linux: Xvfb + llvmpipe GL3)'
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/rmlui-smoke.mjs
+        shell: bash
+      - name: 'RmlUI runtime smoke (macOS: ventana cocoa + GL3)'
+        if: runner.os == 'macOS'
+        run: node scripts/rmlui-smoke.mjs
         shell: bash

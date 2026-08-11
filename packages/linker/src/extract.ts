@@ -56,6 +56,39 @@ export function extractArchive(archivePath: string, destDir: string): Promise<vo
   });
 }
 
+/** Extrae un tarball .tar.gz (gzip). Mismas protecciones que extractArchive. */
+export function extractTarGz(archivePath: string, destDir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    fs.mkdirSync(destDir, { recursive: true });
+
+    const extract = tar.x({
+      C: destDir,
+      gzip: true,
+      filter: (filePath: string, _entry: any) => {
+        if (path.isAbsolute(filePath)) {
+          throw new DownloadError(`Absolute path rejected in tar archive: ${filePath}`, archivePath);
+        }
+        if (_entry.type === 'SymbolicLink') {
+          throw new DownloadError(`Symlink rejected in tar archive: ${filePath}`, archivePath);
+        }
+        return true;
+      },
+    });
+    const readStream = fs.createReadStream(archivePath);
+
+    const onError = (err: Error, msg: string) => {
+      destroyStreams(readStream, extract);
+      reject(new DownloadError(`${msg}: ${err.message}`, archivePath, undefined, err));
+    };
+
+    readStream
+      .on('error', (err: Error) => onError(err, 'Read failed'))
+      .pipe(extract)
+      .on('error', (err: Error) => onError(err, 'gzip extraction failed'))
+      .on('finish', () => resolve());
+  });
+}
+
 function findNextLocalHeader(buffer: Buffer, startOffset: number): number {
   const end = Math.min(startOffset + MAX_ZIP_SCAN_BYTES, buffer.length - 30);
   for (let i = startOffset; i < end; i++) {

@@ -1,0 +1,9 @@
+{
+  "rmlui": {
+    "version": "6.2",
+    "tarball": "https://github.com/mikke89/RmlUi/archive/refs/tags/6.2.tar.gz"
+  },
+  "sdl3": {
+    "version": "3.2.4"
+  }
+}

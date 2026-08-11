@@ -1,0 +1,25 @@
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: LatoLatin;
+  padding: 20px;
+}
+
+h1 {
+  color: #e94560;
+  font-size: 28px;
+}
+
+p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+div#output {
+  background: #16213e;
+  border-width: 1px;
+  border-color: #0f3460;
+  padding: 12px;
+  margin-top: 15px;
+  border-radius: 4px;
+}

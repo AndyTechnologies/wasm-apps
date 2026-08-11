@@ -1,0 +1,49 @@
+body {
+  background: #16213e;
+  color: #e0e0e0;
+  font-family: LatoLatin;
+  padding: 20px;
+}
+
+h1 {
+  color: #0f3460;
+  font-size: 24px;
+  margin-bottom: 15px;
+}
+
+p.intro {
+  color: #a0a0ff;
+  font-style: italic;
+}
+
+div#content-area {
+  border-width: 1px;
+  border-color: #333;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+div#output-area {
+  border-width: 1px;
+  border-color: #444;
+  padding: 10px;
+  background: #1a1a2e;
+}
+
+.highlight {
+  background: #533483;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 3px;
+}
+
+.confirmed {
+  border-left-width: 3px;
+  border-left-color: #00ff88;
+  padding-left: 8px;
+}
+
+.wasm-greeting {
+  font-size: 18px;
+  font-weight: bold;
+}

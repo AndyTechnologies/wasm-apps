@@ -11,6 +11,8 @@ import type {
   TemplateExportEntry,
   TemplateMountEntry,
 } from './template-context.js';
+import { getRmluiConfig } from './rmlui-plugin.js';
+import { getFontsCacheDir, getRmluiCacheDir } from './rmlui-dl.js';
 
 /**
  * Permisos WASI para preopens.
@@ -232,6 +234,26 @@ function buildTemplateContext(
     });
   }
 
+  // Check if RmlUI plugin is active and populate the rmlui template context
+  const rmluiState = getRmluiConfig();
+  const rmlui = rmluiState.isActive
+    ? {
+        enabled: true,
+        window: {
+          title: rmluiState.config.window?.title ?? 'Wasm App',
+          width: rmluiState.config.window?.width ?? 1024,
+          height: rmluiState.config.window?.height ?? 768,
+          resizable: rmluiState.config.window?.resizable ?? true,
+        },
+        debugger: rmluiState.config.debugger ?? false,
+        resources: {
+          searchPaths: rmluiState.config.resources?.searchPaths ?? [],
+          defaultFont: rmluiState.config.resources?.defaultFont,
+          fontsDir: getFontsCacheDir(getRmluiCacheDir()),
+        },
+      }
+    : undefined;
+
   // Construir entries de preopens WASI
   const templateMounts: TemplateMountEntry[] = mounts.map((mount) => ({
     host: escapeCppString(mount.host),
@@ -250,6 +272,7 @@ function buildTemplateContext(
     modules: templateModules,
     hostFunctions: templateHostFunctions,
     globals: templateGlobals,
+    rmlui,
     mounts: templateMounts,
   };
 }
@@ -269,7 +292,14 @@ export function validateEntryExport(link: ResolvedLink, entryPoint: string): voi
   throw new LinkerError(`No se encontro la exportacion '${entryPoint}' en ningun modulo compilado.`);
 }
 
-export function generateCCode(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], mounts: MountSpec[] = []): string {
+export function generateCCode(
+  link: ResolvedLink,
+  entryPoint: string,
+  wasi: boolean,
+  importFuncTypes?: WasmImportFuncType[],
+  mounts: MountSpec[] = [],
+  templatePath?: string,
+): string {
   const context = buildTemplateContext(link, entryPoint, wasi, importFuncTypes, mounts);
-  return renderTemplate(context);
+  return renderTemplate(context, templatePath);
 }

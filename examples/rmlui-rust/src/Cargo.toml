@@ -1,0 +1,16 @@
+[package]
+name = "rmlui-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "lib.wasm.rs"
+
+[profile.release]
+opt-level = "s"
+lto = true
+
+# no_std — the RmlUI host functions don't need std
+# If you need alloc, enable the alloc feature
+[dependencies]

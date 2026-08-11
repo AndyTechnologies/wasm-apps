@@ -7,7 +7,8 @@ import {
   type ICodegenStrategy,
   type ModuleMatchingStrategy,
   type WasmModuleInfo,
-  type CacheInfo,
+  type NativeAppOptions,
+  type MountSpec,
   LinkerError,
   logger,
 } from '@wasm-apps/types';
@@ -33,6 +34,7 @@ export class NativeAppBuilder {
   private codegenStrategy: ICodegenStrategy;
   private templateDir?: string;
   private validateBeforeBuild = true;
+  private mounts?: MountSpec[];
 
   constructor(linkerStrategy?: ILinkerStrategy, codegenStrategy?: ICodegenStrategy, wasmtimeVersion?: string) {
     this.linkerStrategy = linkerStrategy || new WasmtimeLinkerStrategy();
@@ -94,6 +96,11 @@ export class NativeAppBuilder {
 
   setValidateBeforeBuild(validate: boolean): this {
     this.validateBeforeBuild = validate;
+    return this;
+  }
+
+  setMounts(mounts: MountSpec[]): this {
+    this.mounts = mounts;
     return this;
   }
 
@@ -159,6 +166,7 @@ export class NativeAppBuilder {
       wasmtimePath: resolvedPath || undefined,
       wasmtimeVersion: this.wasmtimeVersion,
       templateHash,
+      mounts: this.mounts,
     });
   }
 
@@ -213,7 +221,11 @@ export class NativeAppBuilder {
       wasi: this.wasi,
       moduleMatching: this.moduleMatching,
       wasmtimePath: resolvedWasmtimePath,
-    };
+      linker: {
+        templatePath: this.templateDir,
+      },
+      mounts: this.mounts,
+    } satisfies NativeAppOptions;
 
     const result = await this.linkerStrategy.link(this.resolvedModules, nativeOptions);
 
@@ -228,6 +240,7 @@ export class NativeAppBuilder {
       wasmtimePath: resolvedWasmtimePath || '',
       wasmtimeVersion: this.wasmtimeVersion,
       templateHash,
+      mounts: this.mounts,
     });
 
     if (!quiet) logger.success(`Built: ${outputPath}`);

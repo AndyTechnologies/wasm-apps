@@ -1,0 +1,13 @@
+<rml>
+<head>
+  <title>RmlUI Rust Example</title>
+  <link type="text/rcss" href="style.rcss"/>
+</head>
+<body id="main">
+  <h1>Hello from Rust WASM!</h1>
+  <p>This document is rendered using RmlUI + SDL3 + OpenGL 3.</p>
+  <div id="output">
+    <p>Status: Initialized</p>
+  </div>
+</body>
+</rml>

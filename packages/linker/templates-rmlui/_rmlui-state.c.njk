@@ -1,0 +1,882 @@
+// ── RmlUI bridge shared state ─────────────────────────────────────────────
+// File-scope statics accessible to both native render loop functions and
+// WASM host function lambdas.
+
+// Opaque handle types (WASM ABI): canonical definitions live in
+// rmlui-abi.h (copied next to main.cpp by the compiler), which also declares
+// the full C ABI surface. Keep this file free of duplicate typedefs.
+#include "rmlui-abi.h"
+
+// ── WASM string readers (same contract as templates/_string-reader.c.njk) ──
+static std::string _readAsString(Caller& caller, int32_t ptr) {
+  if (ptr <= 0) return "";
+  auto mem = caller.get_export("memory");
+  if (!mem) return "";
+  auto* memory = std::get_if<wasmtime::Memory>(&*mem);
+  if (!memory) return "";
+  auto ctx = caller.context();
+  auto span = memory->data(ctx);
+  auto* data = span.data();
+  auto sz = span.size();
+  if (ptr < 4 || (uint32_t)ptr > (uint32_t)sz) return "";
+  int32_t len; std::memcpy(&len, data + ptr - 4, sizeof(len)); len >>= 1;
+  if (len < 0 || len > 65536) return "";
+  if (ptr + (int32_t)(len * 2) > (int32_t)sz) return "";
+  uint16_t* chars = reinterpret_cast<uint16_t*>(data + ptr);
+  std::string result;
+  result.reserve(len + 1);
+  for (int32_t i = 0; i < len; i++) {
+    uint16_t c = chars[i];
+    if (c == 0) break;
+    if (c < 0x80) {
+      result += (char)c;
+    } else if (c < 0x800) {
+      result += (char)(0xC0 | (c >> 6));
+      result += (char)(0x80 | (c & 0x3F));
+    } else {
+      result += (char)(0xE0 | (c >> 12));
+      result += (char)(0x80 | ((c >> 6) & 0x3F));
+      result += (char)(0x80 | (c & 0x3F));
+    }
+  }
+  return result;
+}
+
+static std::string _readAsStringNT(Caller& caller, int32_t ptr) {
+  if (ptr <= 0) return "";
+  auto mem = caller.get_export("memory");
+  if (!mem) return "";
+  auto* memory = std::get_if<wasmtime::Memory>(&*mem);
+  if (!memory) return "";
+  auto ctx = caller.context();
+  auto span = memory->data(ctx);
+  auto* data = span.data();
+  auto sz = span.size();
+  if (ptr >= (int32_t)sz) return "";
+  size_t mlen = _wasm_strnlen(reinterpret_cast<const char*>(data + ptr), sz - ptr);
+  return std::string(reinterpret_cast<const char*>(data + ptr), mlen);
+}
+
+// Display / Render
+static SDL_Window* _rmluiWindow = nullptr;
+static SDL_GLContext _rmluiGlContext = nullptr;
+static RenderInterface_GL3* _rmluiRenderInterface = nullptr;
+static SystemInterface_SDL* _rmluiSystemInterface = nullptr;
+
+// RmlUI context registry
+static std::unordered_map<Rml_ContextId, Rml::Context*> _rmluiContexts;
+static Rml_ContextId _rmluiNextContextId = 1;
+
+// Element ID → Rml::Element* map
+static std::unordered_map<Rml_ElementId, Rml::Element*> _rmluiElements;
+static Rml_ElementId _rmluiNextElementId = 1;
+
+// Callback registry
+static std::unordered_map<Rml_CallbackId, std::function<void()>> _rmluiCallbacks;
+static Rml_CallbackId _rmluiNextCallbackId = 1;
+
+// Single-slot string buffers for attribute / content / style getters
+static char _rmluiAttrBuf[4096];
+static char _rmluiContentBuf[4096];
+static char _rmluiHTMLBuf[4096];
+static char _rmluiStyleBuf[4096];
+
+// Loop control
+static bool _rmluiRunning = true;
+
+// ── WASM string writer (UCS‑2 / AssemblyScript convention) ────────────────
+// Allocates WASM memory via __new, writes a UCS‑2 length-prefixed string,
+// returns the pointer.
+static int32_t _writeString(Caller& caller, const std::string& str, int32_t extraBytes = 0) {
+  if (str.empty() && extraBytes == 0) return 0;
+  auto _mem = caller.get_export("memory");
+  if (!_mem) return 0;
+  auto* _memory = std::get_if<wasmtime::Memory>(&*_mem);
+  if (!_memory) return 0;
+  auto _ctx2 = caller.context();
+  auto _span = _memory->data(_ctx2);
+  auto* _data = _span.data();
+  auto _sz = _span.size();
+
+  // Count UCS‑2 code units needed
+  int32_t ucsLen = 0;
+  for (size_t _i = 0; _i < str.length(); ) {
+    unsigned char _c = (unsigned char)str[_i];
+    if (_c < 0x80)               { ucsLen++; _i++; }
+    else if (_c < 0xE0)          { ucsLen++; _i += 2; }
+    else if (_c < 0xF0)          { ucsLen++; _i += 3; }
+    else                         { ucsLen += 2; _i += 4; }
+  }
+  int32_t allocSz = 4 + ucsLen * 2 + (extraBytes > 0 ? extraBytes : 0);
+
+  auto _new_fn = caller.get_export("__new");
+  if (!_new_fn) return 0;
+  auto* _new = std::get_if<wasmtime::Func>(&*_new_fn);
+  if (!_new) return 0;
+
+  auto _ptr_result = _new->call(_ctx2, {Val(int32_t(allocSz)), Val(int32_t(0))});
+  if (!_ptr_result) return 0;
+  auto _vals = _ptr_result.ok();
+  if (_vals.empty()) return 0;
+  int32_t _ptr = _vals[0].i32();
+  if (_ptr <= 0 || _ptr + allocSz > (int32_t)_sz) return 0;
+
+  // Write length prefix
+  *reinterpret_cast<int32_t*>(_data + _ptr) = ucsLen;
+
+  // Write UCS‑2 data
+  uint16_t* _dest = reinterpret_cast<uint16_t*>(_data + _ptr + 4);
+  size_t _di = 0;
+  for (size_t _i = 0; _i < str.length(); ) {
+    unsigned char _c = (unsigned char)str[_i];
+    if (_c < 0x80) {
+      _dest[_di++] = (uint16_t)_c; _i++;
+    } else if (_c < 0xE0) {
+      _dest[_di++] = (uint16_t)(((_c & 0x1F) << 6) | ((unsigned char)str[_i+1] & 0x3F));
+      _i += 2;
+    } else if (_c < 0xF0) {
+      _dest[_di++] = (uint16_t)(((_c & 0x0F) << 12) | (((unsigned char)str[_i+1] & 0x3F) << 6) | ((unsigned char)str[_i+2] & 0x3F));
+      _i += 3;
+    } else {
+      uint32_t _cp = ((_c & 0x07) << 18) | (((unsigned char)str[_i+1] & 0x3F) << 12) | (((unsigned char)str[_i+2] & 0x3F) << 6) | ((unsigned char)str[_i+3] & 0x3F);
+      _cp -= 0x10000;
+      _dest[_di++] = (uint16_t)(0xD800 | (_cp >> 10));
+      _dest[_di++] = (uint16_t)(0xDC00 | (_cp & 0x3FF));
+      _i += 4;
+    }
+  }
+  return _ptr;
+}
+
+// ── C ABI implementations ─────────────────────────────────────────────────
+// These are called by WASM host function wrappers AND directly by native
+// C++ code (e.g. the C++ RAII wrappers).
+
+// ── Context lifecycle ────────────────────────────────────────────────────
+extern "C" Rml_ContextId Rml_CreateContext(const char* name, int w, int h) {
+  if (!name) return 0;
+  // Reutilizar un contexto existente con el mismo nombre (p. ej. "main",
+  // creado C++-side para inicializar el debugger en main.c.njk).
+  if (Rml::Context* existing = Rml::GetContext(name)) {
+    existing->SetDimensions(Rml::Vector2i(w, h));
+    for (auto& kv : _rmluiContexts) {
+      if (kv.second == existing) return kv.first;
+    }
+    Rml_ContextId id = _rmluiNextContextId++;
+    _rmluiContexts[id] = existing;
+    return id;
+  }
+  Rml::Context* ctx = Rml::CreateContext(name, Rml::Vector2i(w, h));
+  if (!ctx) return 0;
+  Rml_ContextId id = _rmluiNextContextId++;
+  _rmluiContexts[id] = ctx;
+  return id;
+}
+
+extern "C" void Rml_ReleaseContext(Rml_ContextId ctx) {
+  auto it = _rmluiContexts.find(ctx);
+  if (it != _rmluiContexts.end()) {
+    Rml::RemoveContext(it->second->GetName());
+    _rmluiContexts.erase(it);
+  }
+}
+
+// ── Document loading ──────────────────────────────────────────────────────
+extern "C" Rml_DocumentId Rml_LoadDocument(Rml_ContextId ctx, const char* path) {
+  if (!path) return 0;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return 0;
+  Rml::ElementDocument* doc = it->second->LoadDocument(path);
+  if (!doc) return 0;
+  Rml_ElementId id = _rmluiNextElementId++;
+  _rmluiElements[id] = doc;
+  return id;
+}
+
+// RmlUi 6.2: la carga desde string se renombró (nuevo nombre abajo);
+// el símbolo legacy de 6.1 fue eliminado del ABI.
+// NULL source_url → default "[document from memory]" (used for resolution
+// of relative embedded resources).
+extern "C" Rml_DocumentId Rml_LoadDocumentFromMemory(Rml_ContextId ctx, const char* rml, const char* source_url) {
+  if (!rml) return 0;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return 0;
+  Rml::ElementDocument* doc = it->second->LoadDocumentFromMemory(rml, source_url ? source_url : "[document from memory]");
+  if (!doc) return 0;
+  Rml_ElementId id = _rmluiNextElementId++;
+  _rmluiElements[id] = doc;
+  return id;
+}
+
+// RmlUi 6.2: index-based document enumeration (name-based removed).
+extern "C" int32_t Rml_GetNumDocuments(Rml_ContextId ctx) {
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return 0;
+  return (int32_t)it->second->GetNumDocuments();
+}
+
+extern "C" Rml_ElementId Rml_GetDocument(Rml_ContextId ctx, int32_t index) {
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return 0;
+  if (index < 0 || index >= (int32_t)it->second->GetNumDocuments()) return 0;
+  Rml::ElementDocument* doc = it->second->GetDocument(index);
+  if (!doc) return 0;
+  Rml_ElementId id = _rmluiNextElementId++;
+  _rmluiElements[id] = doc;
+  return id;
+}
+
+extern "C" void Rml_ShowDocument(Rml_DocumentId doc) {
+  auto it = _rmluiElements.find(doc);
+  if (it != _rmluiElements.end()) {
+    Rml::ElementDocument* d = dynamic_cast<Rml::ElementDocument*>(it->second);
+    if (d) d->Show();
+  }
+}
+
+extern "C" void Rml_HideDocument(Rml_DocumentId doc) {
+  auto it = _rmluiElements.find(doc);
+  if (it != _rmluiElements.end()) {
+    Rml::ElementDocument* d = dynamic_cast<Rml::ElementDocument*>(it->second);
+    if (d) d->Hide();
+  }
+}
+
+extern "C" void Rml_CloseDocument(Rml_DocumentId doc) {
+  auto it = _rmluiElements.find(doc);
+  if (it != _rmluiElements.end()) {
+    Rml::ElementDocument* d = dynamic_cast<Rml::ElementDocument*>(it->second);
+    if (d) d->Close();
+    _rmluiElements.erase(it);
+  }
+}
+
+extern "C" Rml_DocumentId Rml_LoadDocumentFromBuffer(Rml_ContextId ctx, const void* data, int32_t len) {
+  if (!data || len <= 0) return 0;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return 0;
+  std::string rmlStr(static_cast<const char*>(data), static_cast<size_t>(len));
+  // RmlUi 6.2: LoadDocumentFromMemory with default "[document from memory]".
+  Rml::ElementDocument* doc = it->second->LoadDocumentFromMemory(rmlStr);
+  if (!doc) return 0;
+  Rml_ElementId id = _rmluiNextElementId++;
+  _rmluiElements[id] = doc;
+  return id;
+}
+
+// ── Element tree construction ─────────────────────────────────────────────
+extern "C" Rml_ElementId Rml_CreateElement(const char* tag) {
+  if (!tag) return 0;
+  Rml::ElementPtr el = Rml::Factory::InstanceElement(nullptr, tag, tag, Rml::XMLAttributes());
+  if (!el) return 0;
+  Rml_ElementId id = _rmluiNextElementId++;
+  _rmluiElements[id] = el.release(); // transfer ownership
+  return id;
+}
+
+extern "C" Rml_ElementId Rml_CreateTextNode(const char* text) {
+  if (!text) return 0;
+  // RmlUi 6.2: Factory::InstanceElement with the "#text" instancer creates a
+  // text element; Factory::InstanceTextElement no longer exists.
+  Rml::XMLAttributes attrs;
+  Rml::ElementPtr el = Rml::Factory::InstanceElement(nullptr, "#text", "text", attrs);
+  if (!el) return 0;
+  auto* textEl = dynamic_cast<Rml::ElementText*>(el.get());
+  if (textEl) textEl->SetText(text);
+  Rml_ElementId id = _rmluiNextElementId++;
+  _rmluiElements[id] = el.release();
+  return id;
+}
+
+// RmlUi 6.2 ownership contract (see rmlui-abi.h): AppendChild/InsertBefore/
+// ReplaceChild take ownership via ElementPtr; the caller must not attach an
+// element that already has a parent (would be double-owned). RemoveChild
+// returns ownership to the caller via ElementPtr::release().
+extern "C" int32_t Rml_AppendChild(Rml_ElementId parent, Rml_ElementId child) {
+  auto pit = _rmluiElements.find(parent);
+  auto cit = _rmluiElements.find(child);
+  if (pit == _rmluiElements.end() || cit == _rmluiElements.end())
+    return RMLUI_ERR_INVALID_HANDLE;
+  // Pre-check: child already attached → caller keeps ownership, nothing moved.
+  if (cit->second->GetParentNode())
+    return RMLUI_ERR_INVALID_HANDLE;
+  Rml::ElementPtr owned(cit->second);
+  pit->second->AppendChild(std::move(owned));
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_RemoveChild(Rml_ElementId parent, Rml_ElementId child) {
+  auto pit = _rmluiElements.find(parent);
+  auto cit = _rmluiElements.find(child);
+  if (pit == _rmluiElements.end() || cit == _rmluiElements.end())
+    return RMLUI_ERR_INVALID_HANDLE;
+  // .release(): element stays alive (caller-owned), re-append stays valid.
+  pit->second->RemoveChild(cit->second).release();
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_InsertBefore(Rml_ElementId parent, Rml_ElementId child, Rml_ElementId ref) {
+  auto pit = _rmluiElements.find(parent);
+  auto cit = _rmluiElements.find(child);
+  auto rit = _rmluiElements.find(ref);
+  if (pit == _rmluiElements.end() || cit == _rmluiElements.end() || rit == _rmluiElements.end())
+    return RMLUI_ERR_INVALID_HANDLE;
+  if (cit->second->GetParentNode())
+    return RMLUI_ERR_INVALID_HANDLE;
+  Rml::ElementPtr owned(cit->second);
+  pit->second->InsertBefore(std::move(owned), rit->second);
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_ReplaceChild(Rml_ElementId parent, Rml_ElementId newChild, Rml_ElementId oldChild) {
+  auto pit = _rmluiElements.find(parent);
+  auto nit = _rmluiElements.find(newChild);
+  auto oit = _rmluiElements.find(oldChild);
+  if (pit == _rmluiElements.end() || nit == _rmluiElements.end() || oit == _rmluiElements.end())
+    return RMLUI_ERR_INVALID_HANDLE;
+  if (nit->second->GetParentNode())
+    return RMLUI_ERR_INVALID_HANDLE;
+  Rml::ElementPtr owned(nit->second);
+  // .release(): replaced element stays alive (caller-owned, re-append valid).
+  pit->second->ReplaceChild(std::move(owned), oit->second).release();
+  return RMLUI_OK;
+}
+
+// ── Attributes and content ────────────────────────────────────────────────
+extern "C" int32_t Rml_SetAttribute(Rml_ElementId el, const char* name, const char* value) {
+  if (!name || !value) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  it->second->SetAttribute(name, Rml::String(value));
+  return RMLUI_OK;
+}
+
+// RmlUi 6.2: GetAttribute returns const Variant* — NULL when the attribute
+// is missing, non-NULL when present (including an empty string, which is
+// copied to _rmluiAttrBuf so the returned pointer is never null).
+extern "C" const char* Rml_GetAttribute(Rml_ElementId el, const char* name) {
+  if (!name) return nullptr;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return nullptr;
+  const Rml::Variant* val = it->second->GetAttribute(name);
+  if (!val) return nullptr;
+  Rml::String attr = val->Get<Rml::String>();
+  strncpy(_rmluiAttrBuf, attr.c_str(), sizeof(_rmluiAttrBuf) - 1);
+  _rmluiAttrBuf[sizeof(_rmluiAttrBuf) - 1] = '\0';
+  return _rmluiAttrBuf;
+}
+
+extern "C" int32_t Rml_RemoveAttribute(Rml_ElementId el, const char* name) {
+  if (!name) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  it->second->RemoveAttribute(name);
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_HasAttribute(Rml_ElementId el, const char* name) {
+  if (!name) return 0;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return 0;
+  return it->second->HasAttribute(name) ? 1 : 0;
+}
+
+extern "C" int32_t Rml_SetTextContent(Rml_ElementId el, const char* text) {
+  if (!text) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // RmlUi 6.2 has no Element::SetTextContent: replace children with a
+  // text node (or nodes) instanced from the raw string.
+  Rml::Element* child;
+  while ((child = it->second->GetFirstChild())) it->second->RemoveChild(child);
+  Rml::Factory::InstanceElementText(it->second, text);
+  return RMLUI_OK;
+}
+
+extern "C" const char* Rml_GetTextContent(Rml_ElementId el) {
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return nullptr;
+  // GetInnerRML() returns the flat inner RML — for a text-only element this
+  // is the text content.
+  Rml::String val = it->second->GetInnerRML();
+  strncpy(_rmluiContentBuf, val.c_str(), sizeof(_rmluiContentBuf) - 1);
+  _rmluiContentBuf[sizeof(_rmluiContentBuf) - 1] = '\0';
+  return _rmluiContentBuf;
+}
+
+extern "C" int32_t Rml_SetInnerHTML(Rml_ElementId el, const char* html) {
+  if (!html) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // RmlUi 6.2 renamed SetInnerHTML → SetInnerRML.
+  it->second->SetInnerRML(html);
+  return RMLUI_OK;
+}
+
+extern "C" const char* Rml_GetInnerHTML(Rml_ElementId el) {
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return nullptr;
+  Rml::String val = it->second->GetInnerRML();
+  strncpy(_rmluiHTMLBuf, val.c_str(), sizeof(_rmluiHTMLBuf) - 1);
+  _rmluiHTMLBuf[sizeof(_rmluiHTMLBuf) - 1] = '\0';
+  return _rmluiHTMLBuf;
+}
+
+// ── Style properties ──────────────────────────────────────────────────────
+extern "C" int32_t Rml_SetStyleProperty(Rml_ElementId el, const char* prop, const char* value) {
+  if (!prop || !value) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  return it->second->SetProperty(prop, value) ? RMLUI_OK : RMLUI_ERR_INTERNAL;
+}
+
+extern "C" const char* Rml_GetStyleProperty(Rml_ElementId el, const char* prop) {
+  if (!prop) return nullptr;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return nullptr;
+  Rml::String val = it->second->GetProperty(prop)->ToString();
+  strncpy(_rmluiStyleBuf, val.c_str(), sizeof(_rmluiStyleBuf) - 1);
+  _rmluiStyleBuf[sizeof(_rmluiStyleBuf) - 1] = '\0';
+  return _rmluiStyleBuf;
+}
+
+extern "C" int32_t Rml_SetStyle(Rml_ElementId el, const char* css_text) {
+  if (!css_text) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // Parse CSS text line by line, apply each declaration
+  std::istringstream stream(css_text);
+  std::string line;
+  while (std::getline(stream, line)) {
+    auto colon = line.find(':');
+    if (colon != std::string::npos) {
+      std::string prop = line.substr(0, colon);
+      std::string val = line.substr(colon + 1);
+      // Trim whitespace
+      prop.erase(0, prop.find_first_not_of(" \t\r\n"));
+      prop.erase(prop.find_last_not_of(" \t\r\n") + 1);
+      val.erase(0, val.find_first_not_of(" \t\r\n"));
+      val.erase(val.find_last_not_of(" \t\r\n") + 1);
+      if (!prop.empty()) {
+        it->second->SetProperty(prop, val);
+      }
+    }
+  }
+  return RMLUI_OK;
+}
+
+// ── Events ────────────────────────────────────────────────────────────────
+
+/** Thread-local current event for Rml_GetCurrentEvent(). */
+static thread_local Rml_Event _rmluiCurrentEvent = {nullptr, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0, 0}};
+
+/** Reentrancy guard for event dispatch. */
+static thread_local bool _rmluiInEventDispatch = false;
+
+static void _rmluiEventDispatch(Rml::Element* element, const Rml::Event& event, Rml_CallbackId cbId) {
+  if (_rmluiInEventDispatch) return; // defer to next frame
+  _rmluiInEventDispatch = true;
+  // Populate the thread-local event struct with real event data
+  _rmluiCurrentEvent.type = event.GetType().c_str();
+  _rmluiCurrentEvent.target_id = 0; // resolved below
+  _rmluiCurrentEvent.mouse_screen_x = event.GetParameter<int>("mouse_screen_x", 0);
+  _rmluiCurrentEvent.mouse_screen_y = event.GetParameter<int>("mouse_screen_y", 0);
+  _rmluiCurrentEvent.key_code = event.GetParameter<int>("key_identifier", 0);
+  _rmluiCurrentEvent.key_modifiers = event.GetParameter<int>("key_modifier_state", 0);
+  _rmluiCurrentEvent.prevent_default = 0;
+  _rmluiCurrentEvent.stop_propagation = 0;
+
+  // Resolve target element ID
+  Rml::Element* target = event.GetTargetElement();
+  if (target) {
+    for (const auto& pair : _rmluiElements) {
+      if (pair.second == target) {
+        _rmluiCurrentEvent.target_id = pair.first;
+        break;
+      }
+    }
+  }
+
+  auto cit = _rmluiCallbacks.find(cbId);
+  if (cit != _rmluiCallbacks.end()) {
+    cit->second();
+  }
+
+  // Apply prevent_default / stop_propagation from callback
+  if (_rmluiCurrentEvent.prevent_default) {
+    const_cast<Rml::Event&>(event).StopPropagation();
+  }
+  if (_rmluiCurrentEvent.stop_propagation) {
+    const_cast<Rml::Event&>(event).StopPropagation();
+  }
+
+  // Clear current event
+  _rmluiCurrentEvent.type = nullptr;
+  _rmluiCurrentEvent.target_id = 0;
+  _rmluiInEventDispatch = false;
+}
+
+extern "C" const Rml_Event* Rml_GetCurrentEvent(void) {
+  return _rmluiCurrentEvent.type ? &_rmluiCurrentEvent : nullptr;
+}
+
+extern "C" int32_t Rml_AddEventListener(Rml_ElementId el, const char* event, Rml_CallbackId cb_id) {
+  if (!event) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // Create an EventListener that captures the callback ID
+  class BridgeListener : public Rml::EventListener {
+    Rml_CallbackId cbId_;
+  public:
+    explicit BridgeListener(Rml_CallbackId id) : cbId_(id) {}
+    void ProcessEvent(Rml::Event& event) override {
+      _rmluiEventDispatch(event.GetCurrentElement(), event, cbId_);
+    }
+    void OnDetach(Rml::Element* /*element*/) override {
+      delete this;
+    }
+  };
+  it->second->AddEventListener(event, new BridgeListener(cb_id), false);
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_RemoveEventListener(Rml_ElementId el, const char* event) {
+  if (!event) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  it->second->RemoveEventListener(event, nullptr, false);
+  return RMLUI_OK;
+}
+
+// ── Class list (RmlUi 6.2: SetClass/IsClassSet/SetClassNames) ───────────
+// The 5.x class-list API was removed in 6.2.
+// Toggle = SetClass(el, cls, !IsClassSet(el, cls)).
+extern "C" int32_t Rml_SetClass(Rml_ElementId el, const char* cls, int32_t enabled) {
+  if (!cls) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  it->second->SetClass(cls, enabled != 0);
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_IsClassSet(Rml_ElementId el, const char* cls) {
+  if (!cls) return 0;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return 0;
+  return it->second->IsClassSet(cls) ? 1 : 0;
+}
+
+extern "C" int32_t Rml_SetClassNames(Rml_ElementId el, const char* names) {
+  if (!names) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return RMLUI_ERR_INVALID_HANDLE;
+  it->second->SetClassNames(names);
+  return RMLUI_OK;
+}
+
+// ── Font loading ──────────────────────────────────────────────────────────
+extern "C" int32_t Rml_LoadFont(const char* path) {
+  if (!path) return RMLUI_ERR_NULL_PARAM;
+  return Rml::LoadFontFace(path) ? RMLUI_OK : RMLUI_ERR_INTERNAL;
+}
+
+extern "C" int32_t Rml_LoadFontFromBuffer(const char* name, const void* data, int32_t len) {
+  if (!name || !data) return RMLUI_ERR_NULL_PARAM;
+  Rml::byte* buf = new Rml::byte[len];
+  std::memcpy(buf, data, len);
+  // RmlUi 6.2: Style::FontStyle/Style::FontWeight; span lifetime is
+  // required to outlive the face (kept alive here for app lifetime).
+  bool ok = Rml::LoadFontFace(Rml::Span<const Rml::byte>(buf, len), name, Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto, false, 0);
+  if (!ok) { delete[] buf; return RMLUI_ERR_INTERNAL; }
+  return RMLUI_OK;
+}
+
+// ── Texture loading ───────────────────────────────────────────────────────
+extern "C" int32_t Rml_LoadTexture(const char* path) {
+  if (!path) return RMLUI_ERR_NULL_PARAM;
+  // RmlUI's render interface handles texture loading from file paths
+  // when textures are referenced in RCSS. This function is a no-op
+  // because RmlUI loads textures automatically through the render
+  // interface when a decorator or background-image references a path.
+  //
+  // For explicit programmatic texture generation, use
+  // Rml_LoadTextureFromBuffer instead.
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_LoadTextureFromBuffer(const char* name, const void* data, int32_t len) {
+  if (!name || !data) return RMLUI_ERR_NULL_PARAM;
+  // For v1, this is a placeholder returning unsupported.
+  // RmlUI handles textures through its render interface automatically
+  // when referenced from RCSS decorators/background-image.
+  //
+  // Future: Use Rml::Core::GetRenderInterface()->LoadTexture()
+  // or generate a raw OpenGL texture and register it with RmlUI.
+  (void)len;
+  return RMLUI_ERR_UNSUPPORTED;
+}
+
+extern "C" int32_t Rml_GetTextureDimensions(const char* name, int32_t* w, int32_t* h) {
+  (void)name;
+  if (!w || !h) return RMLUI_ERR_NULL_PARAM;
+  // In RmlUI, texture dimensions are managed internally by the render interface.
+  // For v1, return unsupported — textures should be loaded through RCSS.
+  // Future: Query the RmlUI render interface's texture cache.
+  *w = 0;
+  *h = 0;
+  return RMLUI_ERR_UNSUPPORTED;
+}
+
+// ── Render loop functions (called natively from main loop) ─────────────────
+extern "C" void RmlUI_ProcessSdlEvents(void) {
+  SDL_Event event;
+  while (SDL_PollEvent(&event)) {
+    if (event.type == SDL_EVENT_QUIT) { _rmluiRunning = false; break; }
+    Rml::Context* ctx = _rmluiContexts.empty() ? nullptr : _rmluiContexts.begin()->second;
+    if (!ctx) continue;
+    switch (event.type) {
+      case SDL_EVENT_MOUSE_MOTION:
+        ctx->ProcessMouseMove((int)event.motion.x, (int)event.motion.y, 0);
+        break;
+      case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        ctx->ProcessMouseButtonDown((int)event.button.button, 0);
+        break;
+      case SDL_EVENT_MOUSE_BUTTON_UP:
+        ctx->ProcessMouseButtonUp((int)event.button.button, 0);
+        break;
+      case SDL_EVENT_MOUSE_WHEEL:
+        ctx->ProcessMouseWheel(Rml::Vector2f((float)event.wheel.x, (float)event.wheel.y), 0);
+        break;
+      case SDL_EVENT_KEY_DOWN:
+        ctx->ProcessKeyDown(RmlSDL::ConvertKey(event.key.key), 0);
+        break;
+      case SDL_EVENT_KEY_UP:
+        ctx->ProcessKeyUp(RmlSDL::ConvertKey(event.key.key), 0);
+        break;
+      case SDL_EVENT_TEXT_INPUT:
+        ctx->ProcessTextInput(Rml::String(event.text.text));
+        break;
+      case SDL_EVENT_WINDOW_RESIZED:
+        ctx->SetDimensions(Rml::Vector2i((int)event.window.data1, (int)event.window.data2));
+        if (_rmluiRenderInterface) {
+          _rmluiRenderInterface->SetViewport((int)event.window.data1, (int)event.window.data2);
+        }
+        break;
+      default: break;
+    }
+  }
+}
+
+extern "C" void RmlUI_Update(void) {
+  for (auto& kv : _rmluiContexts) {
+    kv.second->Update();
+  }
+}
+
+extern "C" void RmlUI_Render(void) {
+  SDL_GL_MakeCurrent(_rmluiWindow, _rmluiGlContext);
+  glDisable(GL_DEPTH_TEST);
+  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  if (_rmluiRenderInterface) _rmluiRenderInterface->BeginFrame();
+  for (auto& kv : _rmluiContexts) {
+    kv.second->Render();
+  }
+  if (_rmluiRenderInterface) _rmluiRenderInterface->EndFrame();
+  SDL_GL_SwapWindow(_rmluiWindow);
+}
+
+extern "C" void RmlUI_Shutdown(void) {
+  _rmluiRunning = false;
+  _rmluiElements.clear();
+  _rmluiCallbacks.clear();
+  _rmluiContexts.clear();
+  delete _rmluiRenderInterface; _rmluiRenderInterface = nullptr;
+  delete _rmluiSystemInterface; _rmluiSystemInterface = nullptr;
+  Rml::Shutdown();
+  if (_rmluiGlContext) { SDL_GL_DestroyContext(_rmluiGlContext); _rmluiGlContext = nullptr; }
+  if (_rmluiWindow) { SDL_DestroyWindow(_rmluiWindow); _rmluiWindow = nullptr; }
+  SDL_Quit();
+}
+
+extern "C" int32_t RmlUI_IsRunning(void) {
+  return _rmluiRunning ? 1 : 0;
+}
+
+// ── Query selectors ────────────────────────────────────────────────────────
+/** Depth-first search for an element by id attribute inside `root`. */
+static Rml::Element* _rmluiFindById(Rml::Element* root, const char* id) {
+  if (!root || !id) return nullptr;
+  if (root->GetId() == id) return root;
+  for (Rml::Element* c = root->GetFirstChild(); c; c = c->GetNextSibling()) {
+    if (Rml::Element* f = _rmluiFindById(c, id)) return f;
+  }
+  return nullptr;
+}
+
+extern "C" Rml_ElementId Rml_GetElementById(Rml_ContextId ctx, const char* id) {
+  if (!id) return 0;
+  auto cit = _rmluiContexts.find(ctx);
+  if (cit == _rmluiContexts.end()) return 0;
+  // RmlUi 6.2: Context has no GetElementById — scan all loaded documents.
+  Rml::Element* el = nullptr;
+  const int numDocs = cit->second->GetNumDocuments();
+  for (int i = 0; i < numDocs && !el; i++) {
+    el = _rmluiFindById(cit->second->GetDocument(i), id);
+  }
+  if (!el) return 0;
+  // Check if already in the map
+  for (auto& kv : _rmluiElements) {
+    if (kv.second == el) return kv.first;
+  }
+  // Register if not found
+  Rml_ElementId eid = _rmluiNextElementId++;
+  _rmluiElements[eid] = el;
+  return eid;
+}
+
+extern "C" Rml_ElementId Rml_QuerySelector(Rml_ElementId el, const char* selector) {
+  if (!selector) return 0;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return 0;
+  Rml::ElementList results;
+  it->second->QuerySelectorAll(results, selector);
+  if (results.empty()) return 0;
+  Rml_ElementId eid = _rmluiNextElementId++;
+  _rmluiElements[eid] = results[0];
+  return eid;
+}
+
+/**
+ * Collect element IDs matching `selector`, registering new elements in the
+ * ID map. Returns the ID list (last entry = 0, ABI null-termination).
+ * The host wrapper copies the result into WASM memory — a native pointer
+ * would be meaningless on the WASM side.
+ */
+static std::vector<int32_t> _rmluiQuerySelectorAllIds(Rml_ElementId el, const char* selector) {
+  std::vector<int32_t> ids;
+  if (!selector) return ids;
+  auto it = _rmluiElements.find(el);
+  if (it == _rmluiElements.end()) return ids;
+  Rml::ElementList results;
+  it->second->QuerySelectorAll(results, selector);
+  ids.reserve(results.size() + 1);
+  for (Rml::Element* r : results) {
+    // Check if already in map
+    Rml_ElementId rid = 0;
+    for (auto& kv : _rmluiElements) {
+      if (kv.second == r) { rid = kv.first; break; }
+    }
+    if (rid == 0) {
+      rid = _rmluiNextElementId++;
+      _rmluiElements[rid] = r;
+    }
+    ids.push_back(rid);
+  }
+  ids.push_back(0); // null-terminated
+  return ids;
+}
+
+/** Copy a raw int32 list into WASM memory (LE bytes, no length prefix). */
+static int32_t _writeI32List(Caller& caller, const std::vector<int32_t>& ids) {
+  if (ids.empty()) return 0;
+  auto _mem = caller.get_export("memory");
+  if (!_mem) return 0;
+  auto* _memory = std::get_if<wasmtime::Memory>(&*_mem);
+  if (!_memory) return 0;
+  auto _ctx2 = caller.context();
+  auto _span = _memory->data(_ctx2);
+  auto* _data = _span.data();
+  auto _sz = _span.size();
+
+  size_t allocSz = ids.size() * sizeof(int32_t);
+  auto _new_fn = caller.get_export("__new");
+  if (!_new_fn) return 0;
+  auto* _new = std::get_if<wasmtime::Func>(&*_new_fn);
+  if (!_new) return 0;
+  auto _ptr_result = _new->call(_ctx2, {Val(int32_t(allocSz)), Val(int32_t(0))});
+  if (!_ptr_result) return 0;
+  auto _vals = _ptr_result.ok();
+  if (_vals.empty()) return 0;
+  int32_t _ptr = _vals[0].i32();
+  if (_ptr <= 0 || _ptr + (int32_t)allocSz > (int32_t)_sz) return 0;
+  memcpy(_data + _ptr, ids.data(), allocSz);
+  return _ptr;
+}
+
+extern "C" void Rml_FreeNodeList(const int32_t* elements) {
+  // List lives in WASM memory (copied by Rml_QuerySelectorAll wrapper);
+  // the AssemblyScript GC owns it. Nothing to free natively.
+  (void)elements;
+}
+
+// ── Document body / head ───────────────────────────────────────────────────
+// RmlUi 6.2 removed ElementDocument::GetBody()/GetHead(); body/head are
+// resolved by traversing the document's direct children for the tag name.
+// Do NOT take the first child: a doctype or <head> may precede <body>.
+
+/** Register an element in the ID map, returning its (possibly new) ID. */
+static Rml_ElementId _rmluiEnsureId(Rml::Element* el) {
+  if (!el) return 0;
+  for (auto& kv : _rmluiElements) {
+    if (kv.second == el) return kv.first;
+  }
+  Rml_ElementId eid = _rmluiNextElementId++;
+  _rmluiElements[eid] = el;
+  return eid;
+}
+
+/** Find a direct child of `doc` whose tag name matches `tag`. NULL if absent. */
+static Rml::Element* _rmluiFindByTag(Rml::ElementDocument* doc, const char* tag) {
+  if (!doc || !tag) return nullptr;
+  for (Rml::Element* child = doc->GetFirstChild(); child; child = child->GetNextSibling()) {
+    if (child->GetTagName() == tag) return child;
+  }
+  return nullptr;
+}
+
+extern "C" Rml_ElementId Rml_GetBody(Rml_ContextId ctx) {
+  auto cit = _rmluiContexts.find(ctx);
+  if (cit == _rmluiContexts.end()) return 0;
+  if (cit->second->GetNumDocuments() < 1) return 0;
+  Rml::Element* body = _rmluiFindByTag(cit->second->GetDocument(0), "body");
+  return _rmluiEnsureId(body); // no body → 0
+}
+
+extern "C" Rml_ElementId Rml_GetHead(Rml_ContextId ctx) {
+  auto cit = _rmluiContexts.find(ctx);
+  if (cit == _rmluiContexts.end()) return 0;
+  if (cit->second->GetNumDocuments() < 1) return 0;
+  Rml::Element* head = _rmluiFindByTag(cit->second->GetDocument(0), "head");
+  return _rmluiEnsureId(head); // no head → 0
+}
+
+// ── Resource path ──────────────────────────────────────────────────────────
+extern "C" int32_t Rml_SetResourcePath(Rml_ContextId ctx, const char* path_list) {
+  if (!path_list) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // In RmlUI, the file interface is global, not per-context.
+  // For v1, we store the path; actual search path integration
+  // requires a custom Rml::FileInterface implementation.
+  // For now, the RmlUI default file interface handles search paths
+  // configured in the RML document's <link> tags.
+  (void)path_list;
+  return RMLUI_OK;
+}
+
+extern "C" int32_t Rml_RegisterResourceProvider(Rml_ContextId ctx, const Rml_ResourceProvider* provider) {
+  if (!provider) return RMLUI_ERR_NULL_PARAM;
+  auto it = _rmluiContexts.find(ctx);
+  if (it == _rmluiContexts.end()) return RMLUI_ERR_INVALID_HANDLE;
+  // Custom resource provider registration — v1 placeholder.
+  // The provider callbacks would be stored and used during document/font loading.
+  (void)ctx; (void)provider;
+  return RMLUI_ERR_UNSUPPORTED;
+}
+
+// ── Debugger ───────────────────────────────────────────────────────────────
+extern "C" void Rml_DebuggerToggle(void) {
+  Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
+}
+

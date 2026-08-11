@@ -128,7 +128,7 @@ export interface NunjucksTemplateContext {
     enabled: boolean;
     window: { title: string; width: number; height: number; resizable: boolean };
     debugger: boolean;
-    resources: { searchPaths: string[] };
+    resources: { searchPaths: string[]; defaultFont?: string; fontsDir?: string };
   };
   /** Preopens WASI a configurar (vacío si no hay mounts). */
   mounts: TemplateMountEntry[];

@@ -32,6 +32,21 @@ export interface WasmModuleInfo {
   importFuncTypes?: WasmImportFuncType[];
 }
 
+/** Configuración del plugin RmlUI para ventanas, debugger y recursos. */
+export interface RmluiPluginConfig {
+  window?: {
+    title?: string;
+    width?: number;
+    height?: number;
+    resizable?: boolean;
+  };
+  debugger?: boolean;
+  resources?: {
+    searchPaths?: string[];
+    defaultFont?: string;
+  };
+}
+
 /** Estrategia para emparejar imports WASM con exports de otros módulos. */
 export type ModuleMatchingStrategy = 'name-only' | 'file-name';
 
@@ -87,6 +102,24 @@ export interface NativeAppOptions {
   wasmtimePath?: string;
   /** Directorios preabiertos WASI (preopens). */
   mounts?: MountSpec[];
+  /** Configuración del linker. */
+  linker?: {
+    /** Ruta a un directorio con templates Nunjucks personalizados. */
+    templatePath?: string;
+  };
+}
+
+/** Una librería extra para incluir en la compilación CMake (por ejemplo SDL3, RmlUI, GLAD). */
+export interface ExtraLib {
+  name: string;
+  includeDir: string;
+  libDir: string;
+  libs: string[];
+  frameworks?: string[];
+  /** Fuentes .cpp adicionales (rutas absolutas) que se compilan junto a main.cpp. */
+  sources?: string[];
+  /** Definiciones de compilación (defines) aplicadas a todos los TUs del target. */
+  defines?: string[];
 }
 
 /** Variante del runtime de AssemblyScript. */
@@ -223,7 +256,7 @@ export interface ILinkerStrategy {
 /** Estrategia de generación de código C++. */
 export interface ICodegenStrategy {
   readonly name: string;
-  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string;
+  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], mounts?: MountSpec[], templatePath?: string): string;
 }
 
 // ──────────────────────────────────────────

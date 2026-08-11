@@ -69,3 +69,6 @@ todo.*
 *.todo.md
 # Local AI runtime state
 .atl/
+
+# Estado local de memoria del agente (Engram)
+.engram/

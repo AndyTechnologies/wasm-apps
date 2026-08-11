@@ -1,10 +1,10 @@
-import type { ICodegenStrategy, ResolvedLink, WasmImportFuncType } from '@wasm-apps/types';
+import type { ICodegenStrategy, ResolvedLink, WasmImportFuncType, MountSpec } from '@wasm-apps/types';
 import { generateCCode } from './codegen.js';
 
 export class DefaultCodegenStrategy implements ICodegenStrategy {
   readonly name = 'default';
 
-  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[]): string {
-    return generateCCode(link, entryPoint, wasi, importFuncTypes);
+  generate(link: ResolvedLink, entryPoint: string, wasi: boolean, importFuncTypes?: WasmImportFuncType[], mounts?: MountSpec[], templatePath?: string): string {
+    return generateCCode(link, entryPoint, wasi, importFuncTypes, mounts, templatePath);
   }
 }

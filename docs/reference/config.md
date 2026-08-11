@@ -138,6 +138,48 @@ _array de objetos, opcional_
 
 Lista de plugins del pipeline. Ver `docs/USER_PLUGINS.md`.
 
+Todos los plugins vienen **deshabilitados por defecto** (`enabled: false`); un plugin solo se carga si aparece en la configuración con `"enabled": true`. Esto aplica también a los plugins internos como `rmlui-plugin`.
+
+#### plugins.rmlui-plugin
+
+_object, opcional_
+
+Plugin de RmlUI (GUI nativa con SDL3 + OpenGL 3). Habilita el pipeline RmlUi 6.2: los imports `env.Rml_*` del WASM (AssemblyScript, C++ o Rust) se resuelven contra la API host real, y el ejecutable nativo resultante abre una ventana con el motor de RmlUi.
+
+| Campo                   | Tipo    | Por defecto           | Descripción                                                                   |
+| ----------------------- | ------- | --------------------- | ----------------------------------------------------------------------------- |
+| `id`                    | string  | —                     | `"rmlui-plugin"`                                                              |
+| `enabled`               | boolean | `false`               | Cargar el plugin (todos los plugins vienen deshabilitados)                    |
+| `window.title`          | string  | `"RmlUI App"`         | Título de la ventana SDL3                                                     |
+| `window.width`          | number  | `800`                 | Ancho de la ventana                                                           |
+| `window.height`         | number  | `600`                 | Alto de la ventana                                                            |
+| `window.resizable`      | boolean | `false`               | Ventana redimensionable (se reajusta el viewport GL3)                         |
+| `debugger`              | boolean | `false`               | Inicializar RmlUi Debugger (toggle con F8 en el loop nativo)                  |
+| `resources.searchPaths` | array   | —                     | Directorios de búsqueda para `loadDocument` (relativos al cwd del ejecutable) |
+| `resources.defaultFont` | string  | LatoLatin + NotoEmoji | Fuente por defecto; el resto de fuentes se omiten                             |
+
+Notas:
+
+- El ABI host (`Rml_*`) se declara en `packages/types/src/rmlui-abi.h`; las bindings por lenguaje se generan con `scripts/rmlui-bindgen`.
+- El ejecutable linkea `rmlui_core` + `rmlui_debugger` + SDL3 estáticos, compilados desde el tarball fijado (ver `docs/how-to/manage-cache.md`).
+- Los backends SDL/GL3 se compilan junto al ejecutable; el render exige `SetViewport` explícito (el linker lo inyecta y lo refresca en `WINDOW_RESIZED`).
+
+Ejemplo mínimo:
+
+```json
+{
+  "plugins": [
+    {
+      "id": "rmlui-plugin",
+      "enabled": true,
+      "config": {
+        "window": { "title": "Mi App", "width": 800, "height": 600 }
+      }
+    }
+  ]
+}
+```
+
 ### compiler
 
 _object_
