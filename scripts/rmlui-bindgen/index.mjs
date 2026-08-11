@@ -491,10 +491,13 @@ export async function downloadRmluiTarball(destPath, url = rmluiTarballUrl()) {
  * @param {string} destDir
  */
 export function extractRmluiTarball(tarballPath, destDir) {
-  // --force-local: en Windows bsdtar interpreta "C:\..." como host remoto
-  // (scp-style); el flag fuerza a tratarlo como archivo local.
+  // tar corre con cwd = destDir y el tarball como ruta RELATIVA: en Windows
+  // bsdtar interpreta "C:\..." (o "-C C:\...") como host remoto tipo scp;
+  // una ruta relativa nunca matchea esa sintaxis. No usar --force-local:
+  // el bsdtar de macOS no lo implementa (solo GNU tar de Linux).
   fs.mkdirSync(destDir, { recursive: true });
-  execFileSync('tar', ['-xzf', tarballPath, '-C', destDir, '--strip-components=1', '--force-local'], { stdio: 'pipe' });
+  const relativeTarball = path.relative(destDir, tarballPath);
+  execFileSync('tar', ['-xzf', relativeTarball, '--strip-components=1'], { cwd: destDir, stdio: 'pipe' });
 }
 
 /** Headers de backends + Core que deben existir tras extraer el tarball. */
