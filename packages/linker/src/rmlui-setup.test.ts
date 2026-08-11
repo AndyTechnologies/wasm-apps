@@ -156,8 +156,12 @@ describe('rmlui-setup: fallback source-build (T-022)', () => {
     expect(cmakeCalls.length).toBeGreaterThanOrEqual(expectedMin);
     const configure = cmakeCalls.find(([, args]) => args.includes('-S'));
     expect(configure).toBeDefined();
-    const install = cmakeCalls.find(([, args]) => args.includes('--install'));
-    expect(install).toBeDefined();
+    if (process.platform !== 'win32') {
+      // --install solo existe en el source-build de SDL3 (linux/macOS);
+      // win32 extrae el VC.zip precompilado directamente.
+      const install = cmakeCalls.find(([, args]) => args.includes('--install'));
+      expect(install).toBeDefined();
+    }
     expect(existsSync(join(homeDir, '.wasm-linker', 'rmlui', 'sdl', 'sdl.3.2.4.ok'))).toBe(true);
   });
 

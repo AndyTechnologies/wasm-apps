@@ -72,7 +72,8 @@ describe('rmlui-bindgen: tarball extraction (R-006)', () => {
     writeFileSync(join(pkgRoot, 'Backends', 'RmlUi_Include_GL3.h'), '#define glFixture 1\n');
     writeFileSync(join(pkgRoot, 'Include', 'RmlUi', 'Core.h'), '#pragma once\n');
     tarballPath = join(fixtureRoot, 'rmlui-6.2.tar.gz');
-    execFileSync('tar', ['-czf', tarballPath, '-C', fixtureRoot, 'RmlUi-6.2'], { stdio: 'pipe' });
+    // cwd relativo: en Windows bsdtar interpreta "-C C:\..." como host remoto.
+    execFileSync('tar', ['-czf', 'rmlui-6.2.tar.gz', 'RmlUi-6.2'], { cwd: fixtureRoot, stdio: 'pipe' });
     destDir = join(fixtureRoot, 'out');
   });
 
