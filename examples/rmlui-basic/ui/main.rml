@@ -2,7 +2,7 @@
 <rml>
   <head>
     <title>RmlUI Basic Example</title>
-    <link type="text/rcss" href="ui/style.rcss" />
+    <link type="text/rcss" href="style.rcss" />
   </head>
   <body id="root">
     <h1>RmlUI + wasm-apps</h1>

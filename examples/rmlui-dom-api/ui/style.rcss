@@ -17,13 +17,15 @@ p.intro {
 }
 
 div#content-area {
-  border: 1px solid #333;
+  border-width: 1px;
+  border-color: #333;
   padding: 15px;
   margin-bottom: 15px;
 }
 
 div#output-area {
-  border: 1px solid #444;
+  border-width: 1px;
+  border-color: #444;
   padding: 10px;
   background: #1a1a2e;
 }
@@ -36,7 +38,8 @@ div#output-area {
 }
 
 .confirmed {
-  border-left: 3px solid #00ff88;
+  border-left-width: 3px;
+  border-left-color: #00ff88;
   padding-left: 8px;
 }
 

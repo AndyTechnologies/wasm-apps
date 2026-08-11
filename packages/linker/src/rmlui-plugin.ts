@@ -47,7 +47,7 @@ function string1I32(name: string, strArgIndex: number, extraScalarIndices: numbe
   const scalars = extraScalarIndices.map((i) => `args[${i}].i32()`).join(', ');
   const callArgs = scalars ? `tag.c_str(), ${scalars}` : `tag.c_str()`;
   return `
-    std::string tag = _readAsStringNT(caller, args[${strArgIndex}].i32());
+    std::string tag = _readAsString(caller, args[${strArgIndex}].i32());
     results[0] = Val(int32_t(::${name}(${callArgs})));
     return std::monostate{};`;
 }
@@ -59,8 +59,8 @@ function string1I32(name: string, strArgIndex: number, extraScalarIndices: numbe
 function handleStringStringI32(name: string, handleIdx: number, str1Idx: number, str2Idx: number): string {
   return `
     Rml_ElementId el = args[${handleIdx}].i32();
-    std::string p1 = _readAsStringNT(caller, args[${str1Idx}].i32());
-    std::string p2 = _readAsStringNT(caller, args[${str2Idx}].i32());
+    std::string p1 = _readAsString(caller, args[${str1Idx}].i32());
+    std::string p2 = _readAsString(caller, args[${str2Idx}].i32());
     results[0] = Val(int32_t(::${name}(el, p1.c_str(), p2.c_str())));
     return std::monostate{};`;
 }
@@ -71,7 +71,7 @@ function handleStringStringI32(name: string, handleIdx: number, str1Idx: number,
 function handleStringI32(name: string, handleIdx: number, strIdx: number): string {
   return `
     Rml_ElementId el = args[${handleIdx}].i32();
-    std::string s = _readAsStringNT(caller, args[${strIdx}].i32());
+    std::string s = _readAsString(caller, args[${strIdx}].i32());
     results[0] = Val(int32_t(::${name}(el, s.c_str())));
     return std::monostate{};`;
 }
@@ -83,7 +83,7 @@ function handleStringI32(name: string, handleIdx: number, strIdx: number): strin
 function handleStringStringReturn(name: string, handleIdx: number, strIdx: number): string {
   return `
     Rml_ElementId el = args[${handleIdx}].i32();
-    std::string s = _readAsStringNT(caller, args[${strIdx}].i32());
+    std::string s = _readAsString(caller, args[${strIdx}].i32());
     const char* val = ::${name}(el, s.c_str());
     if (val) {
       results[0] = Val(int32_t(_writeString(caller, val)));
@@ -114,7 +114,7 @@ function handleStringReturn(name: string, handleIdx: number): string {
 function contextStringHandle(name: string): string {
   return `
     Rml_ContextId ctx = args[0].i32();
-    std::string s = _readAsStringNT(caller, args[1].i32());
+    std::string s = _readAsString(caller, args[1].i32());
     results[0] = Val(int32_t(::${name}(ctx, s.c_str())));
     return std::monostate{};`;
 }
@@ -124,7 +124,7 @@ function contextStringHandle(name: string): string {
  */
 function contextStringIIHandle(name: string): string {
   return `
-    std::string name = _readAsStringNT(caller, args[0].i32());
+    std::string name = _readAsString(caller, args[0].i32());
     int w = args[1].i32();
     int h = args[2].i32();
     results[0] = Val(int32_t(::${name}(name.c_str(), w, h)));
@@ -169,8 +169,8 @@ const rmluiPlugin: WasmPlugin = {
       if (_params.length >= 3) {
         return `
     Rml_ContextId c = args[0].i32();
-    std::string rml = _readAsStringNT(caller, args[1].i32());
-    std::string sourceUrl = _readAsStringNT(caller, args[2].i32());
+    std::string rml = _readAsString(caller, args[1].i32());
+    std::string sourceUrl = _readAsString(caller, args[2].i32());
     results[0] = Val(int32_t(::Rml_LoadDocumentFromMemory(c, rml.c_str(), sourceUrl.c_str())));
     return std::monostate{};`;
       }
@@ -224,7 +224,7 @@ const rmluiPlugin: WasmPlugin = {
       if (_params.length >= 3) {
         return `
     Rml_ElementId el = args[0].i32();
-    std::string event = _readAsStringNT(caller, args[1].i32());
+    std::string event = _readAsString(caller, args[1].i32());
     Rml_CallbackId cbId = args[2].i32();
     results[0] = Val(int32_t(::Rml_AddEventListener(el, event.c_str(), cbId)));
     return std::monostate{};`;
@@ -240,7 +240,7 @@ const rmluiPlugin: WasmPlugin = {
       if (_params.length >= 3) {
         return `
     Rml_ElementId el = args[0].i32();
-    std::string cls = _readAsStringNT(caller, args[1].i32());
+    std::string cls = _readAsString(caller, args[1].i32());
     int32_t enabled = args[2].i32();
     results[0] = Val(int32_t(::Rml_SetClass(el, cls.c_str(), enabled)));
     return std::monostate{};`;
@@ -257,7 +257,7 @@ const rmluiPlugin: WasmPlugin = {
     ctx.hostFunctions.register('env', 'Rml_LoadFontFromBuffer', (_params, _results) => {
       if (_params.length >= 3) {
         return `
-    std::string name = _readAsStringNT(caller, args[0].i32());
+    std::string name = _readAsString(caller, args[0].i32());
     int32_t dataPtr = args[1].i32();
     int32_t dataLen = args[2].i32();
     // Read binary data from WASM memory directly
@@ -278,7 +278,7 @@ const rmluiPlugin: WasmPlugin = {
     ctx.hostFunctions.register('env', 'Rml_LoadTextureFromBuffer', (_params, _results) => {
       if (_params.length >= 3) {
         return `
-    std::string name = _readAsStringNT(caller, args[0].i32());
+    std::string name = _readAsString(caller, args[0].i32());
     int32_t dataPtr = args[1].i32();
     int32_t dataLen = args[2].i32();
     auto _mem2 = caller.get_export("memory");
@@ -334,11 +334,26 @@ const rmluiPlugin: WasmPlugin = {
       }
       return `results[0] = Val(int32_t(RMLUI_ERR_NULL_PARAM)); return std::monostate{};`;
     });
-    ctx.hostFunctions.register('env', 'Rml_QuerySelectorAll', (_params, _results) => handleStringI32('Rml_QuerySelectorAll', 0, 1));
-    ctx.hostFunctions.register('env', 'Rml_FreeNodeList', (_params, _results) => scalarVoid('Rml_FreeNodeList', [0]));
+    ctx.hostFunctions.register(
+      'env',
+      'Rml_QuerySelectorAll',
+      (_params, _results) => `
+    std::string s = _readAsString(caller, args[1].i32());
+    auto ids = _rmluiQuerySelectorAllIds(args[0].i32(), s.c_str());
+    results[0] = Val(int32_t(_writeI32List(caller, ids)));
+    return std::monostate{};`,
+    );
+    ctx.hostFunctions.register(
+      'env',
+      'Rml_FreeNodeList',
+      (_params, _results) => `
+    // List lives in WASM memory; the AssemblyScript GC owns it.
+    (void)args[0].i32();
+    return std::monostate{};`,
+    );
     ctx.hostFunctions.register('env', 'Rml_GetTextureDimensions', (_params, _results) => {
       return `
-    std::string name = _readAsStringNT(caller, args[0].i32());
+    std::string name = _readAsString(caller, args[0].i32());
     int32_t w = 0, h = 0;
     int32_t rc = ::Rml_GetTextureDimensions(name.c_str(), &w, &h);
     // Write back w, h to WASM memory if output pointers provided
@@ -412,6 +427,7 @@ export function getRmluiConfig(): { isActive: boolean; config: RmluiPluginConfig
 export function getRmluiExtraLibs(): ExtraLib[] {
   if (!isActive) return [];
   const cacheDir = getRmluiCacheDir();
+  const backendsDir = path.join(getRmluiIncludeDir(cacheDir, RMLUI_VERSION), 'RmlUi', 'Backends');
   const extraLibs: ExtraLib[] = [
     {
       name: 'sdl3',
@@ -424,12 +440,26 @@ export function getRmluiExtraLibs(): ExtraLib[] {
       name: 'rmlui',
       includeDir: getRmluiIncludeDir(cacheDir, RMLUI_VERSION),
       libDir: getRmluiLibDir(cacheDir, RMLUI_VERSION),
-      libs: ['rmlui_core', 'rmlui_debugger'],
+      // Los backends SDL/GL3 son header+cpp: compilarlos junto a main.cpp.
+      // Orden: rmlui_debugger antes que rmlui (el debugger referencia el vtable
+      // de Rml::Plugin de la core lib).
+      sources: [path.join(backendsDir, 'RmlUi_Platform_SDL.cpp'), path.join(backendsDir, 'RmlUi_Renderer_GL3.cpp')],
+      // RmlUi 6.2 backends comprueban RMLUI_SDL_VERSION_* antes de incluir
+      // SDL (los .cpp de backend se compilan como TUs separados).
+      defines: [
+        `RMLUI_SDL_VERSION_MAJOR=${SDL3_VERSION.split('.')[0]}`,
+        `RMLUI_SDL_VERSION_MINOR=${SDL3_VERSION.split('.')[1]}`,
+        `RMLUI_SDL_VERSION_PATCH=${SDL3_VERSION.split('.')[2]}`,
+      ],
+      libs: ['rmlui_debugger', 'rmlui'],
       frameworks: process.platform === 'darwin' ? ['Cocoa', 'IOKit', 'CoreVideo', 'CoreFoundation'] : undefined,
     },
   ];
   if (process.platform === 'linux') {
     extraLibs[0].libs.push('dl');
+    // RmlUi 6.2 usa FreeType para el font engine; la lib viene después de
+    // rmlui en el orden de enlazado para resolver las FT_* referencias.
+    extraLibs[1].libs.push('freetype');
   }
   return extraLibs;
 }

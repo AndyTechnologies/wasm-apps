@@ -116,6 +116,10 @@ export interface ExtraLib {
   libDir: string;
   libs: string[];
   frameworks?: string[];
+  /** Fuentes .cpp adicionales (rutas absolutas) que se compilan junto a main.cpp. */
+  sources?: string[];
+  /** Definiciones de compilación (defines) aplicadas a todos los TUs del target. */
+  defines?: string[];
 }
 
 /** Variante del runtime de AssemblyScript. */

@@ -322,3 +322,130 @@ describe('renderTemplate — RmlUI', () => {
     expect(output).toContain('_rmluiEventDispatch');
   });
 });
+
+describe('Spec2 S-001..S-008 — scenario tests DOM (T-028)', () => {
+  const ctx = minimalContext({
+    rmlui: {
+      enabled: true,
+      window: { title: 'Test', width: 1024, height: 768, resizable: false },
+      debugger: false,
+      resources: { searchPaths: [] },
+    },
+  });
+  const output = renderTemplate(ctx, RMLUI_TEMPLATE_DIR);
+
+  it('S-001: body/head con doctype — traversal por TAG, no primer hijo', () => {
+    // GetBody/GetHead DEBEN recorrer hijos directos comparando tag names.
+    // El helper _rmluiFindByTag aparece ANTES de Rml_GetBody/Rml_GetHead.
+    expect(output).toMatch(/_rmluiFindByTag\(Rml::ElementDocument\* doc, const char\* tag\) \{[\s\S]{0,400}?Rml_GetBody[\s\S]{0,400}?"body"/);
+    expect(output).toMatch(/_rmluiFindByTag\([\s\S]{0,80}?,\s*"head"\)/);
+    // El helper itera GetFirstChild→GetNextSibling comparando GetTagName().
+    expect(output).toMatch(/for \(Rml::Element\* child = doc->GetFirstChild\(\); child; child = child->GetNextSibling\(\)\)/);
+    expect(output).toMatch(/child->GetTagName\(\) == tag/);
+    // GetBody/GetHead NO toman el primer hijo a ciegas: delegan en el helper.
+    expect(output).not.toMatch(/GetDocuments\(\)\[0\]->GetFirstChild\(\)/);
+  });
+
+  it('S-002: sin body/head → 0 (ensureId con nullptr)', () => {
+    // _rmluiEnsureId(nullptr) → 0; GetBody devuelve 0 si no encuentra.
+    expect(output).toMatch(/static Rml_ElementId _rmluiEnsureId\(Rml::Element\* el\) \{[\s\S]*?if \(!el\) return 0;/);
+    expect(output).toMatch(/return _rmluiEnsureId\(body\); \/\/ no body → 0/);
+    expect(output).toMatch(/return _rmluiEnsureId\(head\); \/\/ no head → 0/);
+    // RmlUi 6.2: enumeración index-based (GetNumDocuments/GetDocument), sin GetDocuments().
+    expect(output).toMatch(/if \(cit->second->GetNumDocuments\(\) < 1\) return 0;/);
+    expect(output).toMatch(/GetDocument\(0\)/);
+  });
+
+  it('S-003: append tras remove — RemoveChild devuelve ownership (release)', () => {
+    // RemoveChild usa .release() → el elemento sobrevive y puede re-appendearse.
+    expect(output).toMatch(/RemoveChild\(cit->second\)\.release\(\);/);
+    expect(output).toMatch(/\/\/ \.release\(\): element stays alive \(caller-owned\), re-append stays valid/);
+  });
+
+  it('S-004: failed append mantiene child (parent inválido / ya attached)', () => {
+    // Pre-check GetParentNode ANTES de mover ownership → -1 y child intacto.
+    expect(output).toMatch(/if \(cit->second->GetParentNode\(\)\)\s*return RMLUI_ERR_INVALID_HANDLE;/);
+    // El Rml::ElementPtr owned() se crea DESPUÉS del pre-check.
+    const append = output.slice(output.indexOf('Rml_AppendChild'));
+    const preCheck = append.indexOf('GetParentNode()');
+    const ownedCtor = append.indexOf('Rml::ElementPtr owned');
+    expect(preCheck).toBeGreaterThan(-1);
+    expect(ownedCtor).toBeGreaterThan(preCheck);
+  });
+
+  it('S-005: missing vs empty attr — NULL vs buffer no-null con ""', () => {
+    // Missing → nullptr; presente (incl. "") → copiado a _rmluiAttrBuf, nunca null.
+    expect(output).toMatch(/const Rml::Variant\* val = it->second->GetAttribute\(name\);/);
+    expect(output).toMatch(/if \(!val\) return nullptr;/);
+    expect(output).toMatch(/strncpy\(_rmluiAttrBuf, attr\.c_str\(\), sizeof\(_rmluiAttrBuf\) - 1\);/);
+    expect(output).toMatch(/return _rmluiAttrBuf;/);
+  });
+
+  it('S-006: toggle — SetClass(el, cls, !IsClassSet) sin API class-list', () => {
+    expect(output).toMatch(/SetClass\(cls, enabled != 0\);/);
+    expect(output).toContain('Toggle = SetClass(el, cls, !IsClassSet(el, cls)).');
+    expect(output).not.toContain('Rml_ToggleClass');
+  });
+
+  it('S-007: QuerySelectorAll — lista null-terminada copiada a WASM, FreeNodeList no-op', () => {
+    // El helper devuelve un vector<int32_t> (nunca un puntero nativo al WASM).
+    expect(output).toMatch(/std::vector<int32_t> _rmluiQuerySelectorAllIds\(Rml_ElementId el, const char\* selector\)/);
+    expect(output).toMatch(/ids\.push_back\(0\); \/\/ null-terminated/);
+    // _writeI32List copia la lista a memoria WASM vía __new.
+    expect(output).toMatch(/int32_t _writeI32List\(Caller& caller, const std::vector<int32_t>& ids\)/);
+    expect(output).toMatch(/memcpy\(_data \+ _ptr, ids\.data\(\), allocSz\);/);
+    expect(output).toMatch(/Rml_FreeNodeList\(const int32_t\* elements\)[\s\S]{0,200}?Nothing to free natively/);
+    expect(output).toContain('(void)elements;');
+  });
+
+  it('S-008: "Héllo 世界" round-trip — CreateTextNode/SetTextContent sin transformar bytes', () => {
+    // RmlUi 6.2: #text vía Factory::InstanceElement + ElementText::SetText;
+    // SetTextContent reemplaza hijos con Factory::InstanceElementText.
+    expect(output).toMatch(/InstanceElement\(nullptr, "#text", "text", attrs\)/);
+    expect(output).toMatch(/textEl->SetText\(text\);/);
+    expect(output).toMatch(/InstanceElementText\(it->second, text\);/);
+    expect(output).not.toMatch(/wchar_t|std::wstring|utf8_/);
+  });
+});
+
+describe('Spec4/5 — debugger init order + document enumeration (T-029)', () => {
+  const ctx = minimalContext({
+    rmlui: {
+      enabled: true,
+      window: { title: 'Test', width: 1024, height: 768, resizable: false },
+      debugger: true,
+      resources: { searchPaths: [] },
+    },
+  });
+  const output = renderTemplate(ctx, RMLUI_TEMPLATE_DIR);
+
+  it('S-001: Debugger::Initialise(debugCtx) tras CreateContext (paso 9), nunca sin contexto', () => {
+    // Orden: CreateContext (paso 8) → Debugger::Initialise(debugCtx) dentro del if.
+    const ctxIdx = output.indexOf('Rml::CreateContext("main"');
+    const initIdx = output.indexOf('Rml::Debugger::Initialise(debugCtx)');
+    expect(ctxIdx).toBeGreaterThan(-1);
+    expect(initIdx).toBeGreaterThan(ctxIdx);
+    // El Initialise sin argumento no debe existir en el código generado.
+    expect(output).not.toMatch(/Debugger::Initialise\s*\(\s*\)\s*;/);
+  });
+
+  it('S-002: CreateContext failure → debugger nunca se inicializa (null-guard)', () => {
+    expect(output).toMatch(/if \(Rml::Context\* debugCtx = Rml::CreateContext\(/);
+    expect(output).toMatch(/} else \{[\s\S]{0,200}?CreateContext falló: debugger nunca se inicializa/);
+  });
+
+  it('S-003: toggle funciona — Rml_DebuggerToggle usa SetVisible(!IsVisible())', () => {
+    expect(output).toMatch(/Rml::Debugger::SetVisible\(!Rml::Debugger::IsVisible\(\)\)/);
+  });
+
+  it('Spec5 S-001: load-from-memory usa URL por defecto "[document from memory]"', () => {
+    expect(output).toMatch(/source_url \? source_url : "\[document from memory\]"/);
+  });
+
+  it('Spec5 S-002: enumerate 2 docs por índice + out-of-range → 0', () => {
+    expect(output).toContain('it->second->GetNumDocuments()');
+    expect(output).toMatch(/if \(index < 0 \|\| index >= \(int32_t\)it->second->GetNumDocuments\(\)\) return 0;/);
+    expect(output).toMatch(/it->second->GetDocument\(index\)/);
+    expect(output).not.toContain('GetDocument(name');
+  });
+});

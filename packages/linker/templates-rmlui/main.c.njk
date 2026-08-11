@@ -2,6 +2,12 @@
 
 {% if rmlui.enabled %}
 #include "vendor/RmlUi_Include_GL3.h"
+#include <SDL3/SDL.h>
+// RmlUi 6.2 backends require the SDL major (and minor/patch) version to be
+// defined before RmlUi_Platform_SDL.h is included.
+#define RMLUI_SDL_VERSION_MAJOR 3
+#define RMLUI_SDL_VERSION_MINOR 2
+#define RMLUI_SDL_VERSION_PATCH 4
 #include <RmlUi/Core.h>
 #include <RmlUi/Debugger.h>
 #include <RmlUi/Backends/RmlUi_Renderer_GL3.h>
@@ -65,23 +71,36 @@ int main(int argc, char *argv[]) {
     gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
     SDL_GL_MakeCurrent(_rmluiWindow, _rmluiGlContext);
 
-    _rmluiSystemInterface = new SystemInterface_SDL(_rmluiWindow);
+    _rmluiSystemInterface = new SystemInterface_SDL();
+    _rmluiSystemInterface->SetWindow(_rmluiWindow);
     Rml::SetSystemInterface(_rmluiSystemInterface);
 
     _rmluiRenderInterface = new RenderInterface_GL3();
+    _rmluiRenderInterface->SetViewport({{ rmlui.window.width }}, {{ rmlui.window.height }});
     Rml::SetRenderInterface(_rmluiRenderInterface);
 
     Rml::Initialise();
 
-    // Load default fonts
+    // Load default fonts (absolute paths from the linker cache)
 {% if rmlui.resources.defaultFont %}
-    Rml::LoadFontFace("{{ rmlui.resources.defaultFont }}", false);
+    Rml::LoadFontFace("{{ rmlui.resources.fontsDir }}/{{ rmlui.resources.defaultFont }}", false);
 {% else %}
-    Rml::LoadFontFace("LatoLatin-Regular.ttf", false);
-    Rml::LoadFontFace("LatoLatin-Bold.ttf", false);
-    Rml::LoadFontFace("LatoLatin-Italic.ttf", false);
-    Rml::LoadFontFace("NotoEmoji-Regular.ttf", false);
+    Rml::LoadFontFace("{{ rmlui.resources.fontsDir }}/LatoLatin-Regular.ttf", false);
+    Rml::LoadFontFace("{{ rmlui.resources.fontsDir }}/LatoLatin-Bold.ttf", false);
+    Rml::LoadFontFace("{{ rmlui.resources.fontsDir }}/LatoLatin-Italic.ttf", false);
+    Rml::LoadFontFace("{{ rmlui.resources.fontsDir }}/NotoEmoji-Regular.ttf", false);
 {% endif %}
+
+    // ── RmlUi 6.2 debugger init order ────────────────────────────────
+    // El contexto principal se crea C++-side con el debugger inicializado
+    // (paso 9 tras CreateContext). El Initialise del debugger sin argumento
+    // está PROHIBIDO en 6.2; el ABI solo expone Rml_DebuggerToggle. Si
+    // CreateContext falla, el debugger nunca se inicializa (null-guard).
+    if (Rml::Context* debugCtx = Rml::CreateContext("main", Rml::Vector2i(800, 600))) {
+      Rml::Debugger::Initialise(debugCtx);
+    } else {
+      // CreateContext falló: debugger nunca se inicializa (null-guard).
+    }
 {% endif %}
 
     {% for func in hostFunctions %}
@@ -113,16 +132,21 @@ int main(int argc, char *argv[]) {
   auto entry_func = std::get<Func>(*entry_exp);
 
 {% if rmlui.enabled %}
-  // ── Main interactive loop ─────────────────────────────────────────
-  while (_rmluiRunning) {
-    RmlUI_ProcessSdlEvents();
-    RmlUI_Update();
+  // ── Setup: el entry point se ejecuta UNA sola vez ─────────────────
+  // El código WASM configura la escena (contexto, documentos, elementos).
+  // El loop nativo de abajo solo procesa eventos y refresca el render.
+  {
     auto result = entry_func.call(ctx, {});
     if (!result) {
       std::cerr << "Error llamando a {{ escapedEntryFunctionName }}" << std::endl;
       _rmluiRunning = false;
-      break;
     }
+  }
+
+  // ── Main interactive loop ─────────────────────────────────────────
+  while (_rmluiRunning) {
+    RmlUI_ProcessSdlEvents();
+    RmlUI_Update();
     RmlUI_Render();
   }
   RmlUI_Shutdown();

@@ -7,6 +7,10 @@
 #![no_main]
 #![no_std]
 
+// Instala el allocator talc y el panic handler (requerido por no_std WASM).
+use wasm_apps_bindings::wasm_setup;
+wasm_setup!();
+
 use core::ffi::c_char;
 
 // ── Raw extern "C" declarations ─────────────────────────────────────────

@@ -11,23 +11,23 @@ import {
   Document,
   createContext,
   loadDocument,
-  loadDocumentFromString,
+  loadDocumentFromMemory,
   releaseContext,
   update,
   render,
   isRunning,
   RMLUI_OK,
-} from "../../packages/types/src/rmlui-bindings";
+} from '../../../packages/types/src/rmlui-bindings';
 
 // ── Entry point ─────────────────────────────────────────────────────────
 
 export function _start(): void {
   // 1. Create RmlUI context
-  let ctx: i32 = createContext("main", 1024, 768);
+  let ctx: i32 = createContext('main', 1024, 768);
   if (ctx <= 0) return;
 
   // 2. Load document
-  let docId: i32 = loadDocument(ctx, "ui/main.rml");
+  let docId: i32 = loadDocument(ctx, 'ui/main.rml');
   if (docId <= 0) return;
   let doc: Document = new Document(ctx, docId);
   doc.show();
@@ -36,43 +36,43 @@ export function _start(): void {
   let body = doc.body;
   if (body) {
     // 4. createElement + appendChild
-    let p: Element = doc.createElement("p");
-    p.textContent = "Hello from AssemblyScript DOM API!";
-    p.setAttribute("class", "wasm-greeting");
-    p.setStyleProperty("color", "cyan");
-    p.addClass("highlight");
+    let p: Element = doc.createElement('p');
+    p.textContent = 'Hello from AssemblyScript DOM API!';
+    p.setAttribute('class', 'wasm-greeting');
+    p.setStyleProperty('color', 'cyan');
+    p.addClass('highlight');
     body.appendChild(p);
 
     // 5. Test class list methods
-    let hasHighlight: bool = p.hasClass("highlight");
+    let hasHighlight: bool = p.hasClass('highlight');
     if (hasHighlight) {
-      p.toggleClass("highlight");
-      p.addClass("confirmed");
+      p.toggleClass('highlight');
+      p.addClass('confirmed');
     }
 
     // 6. createTextNode + insertBefore
-    let label: Element = doc.createElement("span");
-    label.textContent = "Label: ";
+    let label: Element = doc.createElement('span');
+    label.textContent = 'Label: ';
     body.insertBefore(label, p);
 
     // 7. Test innerHTML setter
-    let div: Element = doc.createElement("div");
-    div.innerHTML = "<em>Italic via innerHTML</em>";
+    let div: Element = doc.createElement('div');
+    div.innerHTML = '<em>Italic via innerHTML</em>';
     body.appendChild(div);
 
     // 8. Test querySelector from body
-    let found = body.querySelector("p");
+    let found = body.querySelector('p');
     if (found) {
-      let existingClass: string = found.getAttribute("class");
-      found.setStyleProperty("font-size", "18px");
+      let existingClass: string = found.getAttribute('class');
+      found.setStyleProperty('font-size', '18px');
     }
 
     // 9. Test querySelectorAll — index-based for loop
-    let all = body.querySelectorAll("p");
+    let all = body.querySelectorAll('p');
     if (all.length > 0) {
       for (let i: i32 = 0; i < all.length; i++) {
         let el: Element = all[i];
-        el.setStyleProperty("margin", "4px");
+        el.setStyleProperty('margin', '4px');
       }
     }
 
@@ -83,20 +83,20 @@ export function _start(): void {
     }
 
     // 11. Test getElementById
-    let byId = doc.getElementById("main-content");
+    let byId = doc.getElementById('main-content');
     if (byId) {
-      byId.setStyleProperty("background", "#1a1a2e");
+      byId.setStyleProperty('background', '#1a1a2e');
     }
 
     // 12. Test hasAttribute + removeAttribute
-    if (p.hasAttribute("class")) {
-      let className: string = p.getAttribute("class");
-      p.removeAttribute("class");
+    if (p.hasAttribute('class')) {
+      let className: string = p.getAttribute('class');
+      p.removeAttribute('class');
     }
 
     // 13. Test style methods
-    p.setStyle("color: orange\nfont-weight: bold");
-    let color: string = p.getStyleProperty("color");
+    p.setStyle('color: orange\nfont-weight: bold');
+    let color: string = p.getStyleProperty('color');
   }
 
   // 14. Test update + render loop detection

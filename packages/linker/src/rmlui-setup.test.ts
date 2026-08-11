@@ -135,7 +135,30 @@ describe('rmlui-setup: fallback source-build (T-022)', () => {
     await expect(setupRmlui()).rejects.toThrow(/refs\/tags\/6\.2\.tar\.gz/);
   });
 
-  it('SDL3 tar.gz 404 → intenta source build; si cmake falla → LinkerError con URL+target', async () => {
+  it('SDL3 source tarball → build desde fuente (cmake -S) + marker', async () => {
+    const { setupRmlui } = await import('./rmlui-setup.js');
+    mockDownloadFile.mockImplementation(async (url: string) => {
+      if (url.includes('mikke89')) return undefined; // RmlUi OK
+      if (url.includes('libsdl-org')) return undefined; // SDL3 OK
+    });
+    // extractFonts necesita las 4 fonts pre-creadas (execFileSync mocked no extrae)
+    const fontsDir = join(homeDir, '.wasm-linker', 'rmlui', 'fonts');
+    mkdirSync(fontsDir, { recursive: true });
+    for (const name of FONTS) writeFileSync(join(fontsDir, name), 'x');
+    mockExecFile.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: (e: Error | null) => void) => cb(null));
+
+    await setupRmlui();
+
+    const cmakeCalls = mockExecFile.mock.calls.filter(([cmd]) => cmd === 'cmake');
+    expect(cmakeCalls.length).toBeGreaterThanOrEqual(4); // RmlUi(2) + SDL3 configure/build/install(3) → ≥5; al menos configure+install
+    const configure = cmakeCalls.find(([, args]) => args.includes('-S'));
+    expect(configure).toBeDefined();
+    const install = cmakeCalls.find(([, args]) => args.includes('--install'));
+    expect(install).toBeDefined();
+    expect(existsSync(join(homeDir, '.wasm-linker', 'rmlui', 'sdl', 'sdl.3.2.4.ok'))).toBe(true);
+  });
+
+  it('descarga SDL3 falla → LinkerError con URL+target (sin fallback)', async () => {
     const { setupRmlui } = await import('./rmlui-setup.js');
     mockDownloadFile.mockImplementation(async (url: string) => {
       if (url.includes('mikke89')) return undefined; // RmlUi OK
@@ -145,13 +168,12 @@ describe('rmlui-setup: fallback source-build (T-022)', () => {
     const fontsDir = join(homeDir, '.wasm-linker', 'rmlui', 'fonts');
     mkdirSync(fontsDir, { recursive: true });
     for (const name of FONTS) writeFileSync(join(fontsDir, name), 'x');
-    // RmlUi build OK (corre antes); SDL3 build falla
     mockExecFile.mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: (e: Error | null) => void) => {
       if (args.some((a) => a.includes('RmlUi'))) return cb(null);
-      cb(new Error('cmake: command not found'));
+      cb(new Error('should not be reached'));
     });
 
-    await expect(setupRmlui()).rejects.toThrow(/SDL3 3\.2\.4 download and source build failed/);
+    await expect(setupRmlui()).rejects.toThrow(/SDL3 3\.2\.4 download failed/);
     await expect(setupRmlui()).rejects.toThrow(/release-3\.2\.4/);
   });
 });

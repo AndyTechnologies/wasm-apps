@@ -8,7 +8,7 @@ import { generateCCode } from './codegen.js';
 import { compileCpp } from './compiler.js';
 import type { NativeAppOptions, WasmModuleInfo, WasmImport, WasmExport, WasmImportFuncType, ModuleMatchingStrategy, MountSpec } from '@wasm-apps/types';
 import { LinkerError, ConfigError, logger } from '@wasm-apps/types';
-import { getRmluiExtraLibs } from './rmlui-plugin.js';
+import { getRmluiExtraLibs, getRmluiConfig } from './rmlui-plugin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,8 +120,14 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
     throw new LinkerError('Wasmtime C-API no encontrado. Ejecuta "wapp setup" primero.', { cacheDir: path.join(os.homedir(), '.wasm-linker') });
   }
 
+  // Template activo: el plugin RmlUI inyecta templates-rmlui (state + SDL +
+  // loop). Si el plugin está activo pero nadie pasó linker.templatePath,
+  // resolverlo desde el plugin; en otro caso el genérico templates/.
   const defaultTemplateDir = path.resolve(__dirname, '../templates');
-  const templateHash = computeTemplateHash(defaultTemplateDir);
+  const rmluiState = getRmluiConfig();
+  const templateDir =
+    options.linker?.templatePath ?? (rmluiState.isActive && rmluiState.templatePath ? rmluiState.templatePath : undefined) ?? defaultTemplateDir;
+  const templateHash = computeTemplateHash(templateDir);
 
   if (!quiet) {
     const cacheOk = await isBuildUpToDate(inputPaths, outputPath, {
@@ -164,12 +170,18 @@ export async function createNativeApp(options: NativeAppOptions, quiet = false):
 
   if (!quiet) logger.step('Generating C++ source...');
 
-  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined, mounts, options.linker?.templatePath);
+  const cpp = generateCCode(resolved, entry, wasi, allImportFuncTypes.length > 0 ? allImportFuncTypes : undefined, mounts, templateDir);
 
   if (!quiet) logger.step('Compiling native binary...');
 
   const extraLibs = getRmluiExtraLibs();
-  await compileCpp(cpp, outputPath, { ...options, wasmtimePath: resolvedWasmtimePath }, !quiet, extraLibs.length > 0 ? extraLibs : undefined);
+  await compileCpp(
+    cpp,
+    outputPath,
+    { ...options, linker: { ...options.linker, templatePath: templateDir }, wasmtimePath: resolvedWasmtimePath },
+    !quiet,
+    extraLibs.length > 0 ? extraLibs : undefined,
+  );
 
   saveBuildManifest(inputPaths, outputPath, {
     entry,

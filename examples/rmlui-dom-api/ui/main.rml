@@ -1,7 +1,7 @@
 <rml>
 <head>
   <title>RmlUI DOM API Demo</title>
-  <link type="text/rcss" href="ui/style.rcss"/>
+  <link type="text/rcss" href="style.rcss"/>
 </head>
 <body id="main-content">
   <h1>RmlUI DOM API Demo</h1>

@@ -1,7 +1,7 @@
 <rml>
 <head>
   <title>RmlUI Rust Example</title>
-  <link type="text/rcss" href="ui/style.rcss"/>
+  <link type="text/rcss" href="style.rcss"/>
 </head>
 <body id="main">
   <h1>Hello from Rust WASM!</h1>

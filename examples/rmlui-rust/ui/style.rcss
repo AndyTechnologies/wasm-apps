@@ -17,7 +17,8 @@ p {
 
 div#output {
   background: #16213e;
-  border: 1px solid #0f3460;
+  border-width: 1px;
+  border-color: #0f3460;
   padding: 12px;
   margin-top: 15px;
   border-radius: 4px;

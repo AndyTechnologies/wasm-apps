@@ -12,6 +12,7 @@ import type {
   TemplateMountEntry,
 } from './template-context.js';
 import { getRmluiConfig } from './rmlui-plugin.js';
+import { getFontsCacheDir, getRmluiCacheDir } from './rmlui-dl.js';
 
 /**
  * Permisos WASI para preopens.
@@ -248,6 +249,7 @@ function buildTemplateContext(
         resources: {
           searchPaths: rmluiState.config.resources?.searchPaths ?? [],
           defaultFont: rmluiState.config.resources?.defaultFont,
+          fontsDir: getFontsCacheDir(getRmluiCacheDir()),
         },
       }
     : undefined;

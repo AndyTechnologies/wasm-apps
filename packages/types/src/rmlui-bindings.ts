@@ -3,160 +3,160 @@
 
 // ── Raw @external Imports ──────────────────────────────────────────
 
-// @external("env", "Rml_CreateContext")
+@external("env", "Rml_CreateContext")
 export declare function rawRml_CreateContext(name: string, w: i32, h: i32): i32;
 
-// @external("env", "Rml_ReleaseContext")
+@external("env", "Rml_ReleaseContext")
 export declare function rawRml_ReleaseContext(ctx: i32): void;
 
-// @external("env", "Rml_LoadDocument")
+@external("env", "Rml_LoadDocument")
 export declare function rawRml_LoadDocument(ctx: i32, path: string): i32;
 
-// @external("env", "Rml_LoadDocumentFromMemory")
+@external("env", "Rml_LoadDocumentFromMemory")
 export declare function rawRml_LoadDocumentFromMemory(ctx: i32, rml: string, source_url: string): i32;
 
-// @external("env", "Rml_LoadDocumentFromBuffer")
+@external("env", "Rml_LoadDocumentFromBuffer")
 export declare function rawRml_LoadDocumentFromBuffer(ctx: i32, data: i32, len: i32): i32;
 
-// @external("env", "Rml_ShowDocument")
+@external("env", "Rml_ShowDocument")
 export declare function rawRml_ShowDocument(doc: i32): void;
 
-// @external("env", "Rml_HideDocument")
+@external("env", "Rml_HideDocument")
 export declare function rawRml_HideDocument(doc: i32): void;
 
-// @external("env", "Rml_CloseDocument")
+@external("env", "Rml_CloseDocument")
 export declare function rawRml_CloseDocument(doc: i32): void;
 
-// @external("env", "Rml_GetNumDocuments")
+@external("env", "Rml_GetNumDocuments")
 export declare function rawRml_GetNumDocuments(ctx: i32): i32;
 
-// @external("env", "Rml_GetDocument")
+@external("env", "Rml_GetDocument")
 export declare function rawRml_GetDocument(ctx: i32, index: i32): i32;
 
-// @external("env", "Rml_CreateElement")
+@external("env", "Rml_CreateElement")
 export declare function rawRml_CreateElement(tag: string): i32;
 
-// @external("env", "Rml_CreateTextNode")
+@external("env", "Rml_CreateTextNode")
 export declare function rawRml_CreateTextNode(text: string): i32;
 
-// @external("env", "Rml_AppendChild")
+@external("env", "Rml_AppendChild")
 export declare function rawRml_AppendChild(parent: i32, child: i32): i32;
 
-// @external("env", "Rml_RemoveChild")
+@external("env", "Rml_RemoveChild")
 export declare function rawRml_RemoveChild(parent: i32, child: i32): i32;
 
-// @external("env", "Rml_InsertBefore")
+@external("env", "Rml_InsertBefore")
 export declare function rawRml_InsertBefore(parent: i32, child: i32, ref: i32): i32;
 
-// @external("env", "Rml_ReplaceChild")
+@external("env", "Rml_ReplaceChild")
 export declare function rawRml_ReplaceChild(parent: i32, newChild: i32, oldChild: i32): i32;
 
-// @external("env", "Rml_SetAttribute")
+@external("env", "Rml_SetAttribute")
 export declare function rawRml_SetAttribute(el: i32, name: string, value: string): i32;
 
-// @external("env", "Rml_GetAttribute")
+@external("env", "Rml_GetAttribute")
 export declare function rawRml_GetAttribute(el: i32, name: string): string;
 
-// @external("env", "Rml_RemoveAttribute")
+@external("env", "Rml_RemoveAttribute")
 export declare function rawRml_RemoveAttribute(el: i32, name: string): i32;
 
-// @external("env", "Rml_HasAttribute")
+@external("env", "Rml_HasAttribute")
 export declare function rawRml_HasAttribute(el: i32, name: string): i32;
 
-// @external("env", "Rml_SetTextContent")
+@external("env", "Rml_SetTextContent")
 export declare function rawRml_SetTextContent(el: i32, text: string): i32;
 
-// @external("env", "Rml_GetTextContent")
+@external("env", "Rml_GetTextContent")
 export declare function rawRml_GetTextContent(el: i32): string;
 
-// @external("env", "Rml_SetInnerHTML")
+@external("env", "Rml_SetInnerHTML")
 export declare function rawRml_SetInnerHTML(el: i32, html: string): i32;
 
-// @external("env", "Rml_GetInnerHTML")
+@external("env", "Rml_GetInnerHTML")
 export declare function rawRml_GetInnerHTML(el: i32): string;
 
-// @external("env", "Rml_SetStyleProperty")
+@external("env", "Rml_SetStyleProperty")
 export declare function rawRml_SetStyleProperty(el: i32, prop: string, value: string): i32;
 
-// @external("env", "Rml_GetStyleProperty")
+@external("env", "Rml_GetStyleProperty")
 export declare function rawRml_GetStyleProperty(el: i32, prop: string): string;
 
-// @external("env", "Rml_SetStyle")
+@external("env", "Rml_SetStyle")
 export declare function rawRml_SetStyle(el: i32, css_text: string): i32;
 
-// @external("env", "Rml_AddEventListener")
+@external("env", "Rml_AddEventListener")
 export declare function rawRml_AddEventListener(el: i32, event: string, cb_id: i32): i32;
 
-// @external("env", "Rml_RemoveEventListener")
+@external("env", "Rml_RemoveEventListener")
 export declare function rawRml_RemoveEventListener(el: i32, event: string): i32;
 
-// @external("env", "Rml_GetCurrentEvent")
+@external("env", "Rml_GetCurrentEvent")
 export declare function rawRml_GetCurrentEvent(): i32;
 
-// @external("env", "Rml_SetClass")
+@external("env", "Rml_SetClass")
 export declare function rawRml_SetClass(el: i32, cls: string, enabled: i32): i32;
 
-// @external("env", "Rml_IsClassSet")
+@external("env", "Rml_IsClassSet")
 export declare function rawRml_IsClassSet(el: i32, cls: string): i32;
 
-// @external("env", "Rml_SetClassNames")
+@external("env", "Rml_SetClassNames")
 export declare function rawRml_SetClassNames(el: i32, names: string): i32;
 
-// @external("env", "Rml_LoadFont")
+@external("env", "Rml_LoadFont")
 export declare function rawRml_LoadFont(path: string): i32;
 
-// @external("env", "Rml_LoadFontFromBuffer")
+@external("env", "Rml_LoadFontFromBuffer")
 export declare function rawRml_LoadFontFromBuffer(name: string, data: i32, len: i32): i32;
 
-// @external("env", "Rml_LoadTexture")
+@external("env", "Rml_LoadTexture")
 export declare function rawRml_LoadTexture(path: string): i32;
 
-// @external("env", "Rml_LoadTextureFromBuffer")
+@external("env", "Rml_LoadTextureFromBuffer")
 export declare function rawRml_LoadTextureFromBuffer(name: string, data: i32, len: i32): i32;
 
-// @external("env", "Rml_GetTextureDimensions")
+@external("env", "Rml_GetTextureDimensions")
 export declare function rawRml_GetTextureDimensions(name: string, w: i32, h: i32): i32;
 
-// @external("env", "RmlUI_ProcessSdlEvents")
+@external("env", "RmlUI_ProcessSdlEvents")
 export declare function rawRmlUI_ProcessSdlEvents(): void;
 
-// @external("env", "RmlUI_Update")
+@external("env", "RmlUI_Update")
 export declare function rawRmlUI_Update(): void;
 
-// @external("env", "RmlUI_Render")
+@external("env", "RmlUI_Render")
 export declare function rawRmlUI_Render(): void;
 
-// @external("env", "RmlUI_Shutdown")
+@external("env", "RmlUI_Shutdown")
 export declare function rawRmlUI_Shutdown(): void;
 
-// @external("env", "RmlUI_IsRunning")
+@external("env", "RmlUI_IsRunning")
 export declare function rawRmlUI_IsRunning(): i32;
 
-// @external("env", "Rml_GetElementById")
+@external("env", "Rml_GetElementById")
 export declare function rawRml_GetElementById(ctx: i32, id: string): i32;
 
-// @external("env", "Rml_QuerySelector")
+@external("env", "Rml_QuerySelector")
 export declare function rawRml_QuerySelector(el: i32, selector: string): i32;
 
-// @external("env", "Rml_QuerySelectorAll")
+@external("env", "Rml_QuerySelectorAll")
 export declare function rawRml_QuerySelectorAll(el: i32, selector: string): i32;
 
-// @external("env", "Rml_FreeNodeList")
+@external("env", "Rml_FreeNodeList")
 export declare function rawRml_FreeNodeList(elements: i32): void;
 
-// @external("env", "Rml_GetBody")
+@external("env", "Rml_GetBody")
 export declare function rawRml_GetBody(ctx: i32): i32;
 
-// @external("env", "Rml_GetHead")
+@external("env", "Rml_GetHead")
 export declare function rawRml_GetHead(ctx: i32): i32;
 
-// @external("env", "Rml_SetResourcePath")
+@external("env", "Rml_SetResourcePath")
 export declare function rawRml_SetResourcePath(ctx: i32, path_list: string): i32;
 
-// @external("env", "Rml_RegisterResourceProvider")
+@external("env", "Rml_RegisterResourceProvider")
 export declare function rawRml_RegisterResourceProvider(ctx: i32, provider: i32): i32;
 
-// @external("env", "Rml_DebuggerToggle")
+@external("env", "Rml_DebuggerToggle")
 export declare function rawRml_DebuggerToggle(): void;
 
 // ── TypeScript/AssemblyScript Wrappers ─────────────────────────────

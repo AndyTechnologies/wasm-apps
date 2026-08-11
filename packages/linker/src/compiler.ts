@@ -37,6 +37,20 @@ export async function compileCpp(cppSource: string, outputPath: string, options:
     const cppFile = path.join(srcDir, 'main.cpp');
     await fs.promises.writeFile(cppFile, cppSource);
 
+    // Copiar assets vendor/ del template (p. ej. vendor/RmlUi_Include_GL3.h)
+    // para que los #include relativos de main.cpp resuelvan en el build.
+    if (options.linker?.templatePath) {
+      const vendorSrc = path.join(options.linker.templatePath, 'vendor');
+      if (fs.existsSync(vendorSrc)) {
+        await fs.promises.cp(vendorSrc, path.join(srcDir, 'vendor'), { recursive: true });
+      }
+      // rmlui-abi.h (definición canónica del ABI) junto al main.cpp.
+      const abiHeader = path.resolve(__dirname, '../../types/src/rmlui-abi.h');
+      if (fs.existsSync(abiHeader)) {
+        await fs.promises.copyFile(abiHeader, path.join(srcDir, 'rmlui-abi.h'));
+      }
+    }
+
     const cmakeContent = extraLibs ? generateCMakeListsWithExtras(options.wasmtimePath, extraLibs) : generateCMakeLists(options.wasmtimePath);
     await fs.promises.writeFile(path.join(buildDir, 'CMakeLists.txt'), cmakeContent);
 
@@ -141,7 +155,23 @@ link_directories("${wasmtimePath ? '${WASMTIME_DIR}/lib' : ''}")
     }
   }
 
-  cmake += `\nadd_executable(wasm-linker src/main.cpp)\n\n`;
+  let sourcesList = 'src/main.cpp';
+  if (extraLibs && extraLibs.length > 0) {
+    for (const lib of extraLibs) {
+      for (const src of lib.sources ?? []) {
+        sourcesList += ` ${escapeCMakeString(src)}`;
+      }
+    }
+  }
+  if (extraLibs && extraLibs.length > 0) {
+    for (const lib of extraLibs) {
+      for (const d of lib.defines ?? []) {
+        cmake += `add_compile_definitions(${d})\n`;
+      }
+    }
+  }
+
+  cmake += `\nadd_executable(wasm-linker ${sourcesList})\n\n`;
 
   let linkLibs = wasmtimePath ? 'wasmtime' : 'wasmtime::wasmtime';
   if (extraLibs && extraLibs.length > 0) {

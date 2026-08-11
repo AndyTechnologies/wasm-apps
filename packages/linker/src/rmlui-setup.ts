@@ -28,9 +28,9 @@ import { getSdl3Pin, RMLUI_PIN, RMLUI_FONT_PINS } from './rmlui-pins.js';
  * 3. Extrae (VC.zip win32 / tarball linux-macos / fonts desde tarball RmlUi)
  * 4. Escribe marker al completar
  *
- * Fallback (T-022): si la descarga de SDL3 falla con 404 y no es win32-x64
- * prebuilt, se intenta build desde fuente; RmlUi no tiene alternativa
- * (error directo).
+ * (T-022): linux/macos usan el source tarball de SDL3 y se compilan desde
+ * fuente SIEMPRE (con `cmake --install` al layout esperado); win32-x64 usa
+ * el VC.zip prebuilt. Cualquier fallo de descarga → LinkerError directo.
  */
 
 export function sdlMarkerName(): string {
@@ -69,14 +69,17 @@ async function downloadPinned(url: string, destPath: string, sha256: string): Pr
 }
 
 /** Extrae las fonts del tarball RmlUi a la caché fonts/. */
-function extractFonts(rmluiArchive: string, fontsDir: string): void {
+export function extractFonts(rmluiArchive: string, fontsDir: string): void {
   fs.mkdirSync(fontsDir, { recursive: true });
   for (const [fileName, pin] of Object.entries(RMLUI_FONT_PINS)) {
     const dest = path.join(fontsDir, fileName);
     if (fs.existsSync(dest)) continue;
     const insidePath = `RmlUi-${RMLUI_VERSION}/Samples/assets/${fileName}`;
     // Extracción selectiva vía tar --extract --file con ruta exacta.
-    execFileSync('tar', ['-xzf', rmluiArchive, '-C', fontsDir, '--strip-components=4', insidePath]);
+    // El member tiene 4 componentes (RmlUi-6.2/Samples/assets/NAME): strip=3
+    // deja solo el filename. strip=4 colapsa a path vacío y GNU tar sale 0
+    // sin escribir nada (bug real detectado en T-031).
+    execFileSync('tar', ['-xzf', rmluiArchive, '-C', fontsDir, '--strip-components=3', insidePath]);
     const actual = sha256Of(dest);
     if (actual !== pin.sha256) {
       fs.rmSync(dest, { force: true });
@@ -90,7 +93,9 @@ function sha256Of(filePath: string): string {
   return crypto.createHash('sha256').update(data).digest('hex');
 }
 
-/** Build de SDL3 desde fuente (fallback 404 en linux/macos). */
+/** Build de SDL3 desde fuente (T-022): extrae el tarball a src/, compila y
+ * instala headers + libs estáticas al layout esperado (SDL3-<v>/include y
+ * SDL3-<v>/lib) vía `cmake --install --prefix`. */
 async function buildSdl3FromSource(archivePath: string, sdlCacheDir: string): Promise<void> {
   const srcDir = path.join(sdlCacheDir, 'src');
   fs.mkdirSync(srcDir, { recursive: true });
@@ -111,6 +116,7 @@ async function buildSdl3FromSource(archivePath: string, sdlCacheDir: string): Pr
     '-DSDL_EXAMPLES=OFF',
   ]);
   await execFileAsync('cmake', ['--build', buildDir, '--config', 'Release']);
+  await execFileAsync('cmake', ['--install', buildDir, '--prefix', path.join(sdlCacheDir, `SDL3-${SDL3_VERSION}`)]);
 }
 
 /**
@@ -180,8 +186,24 @@ export async function setupRmlui(ignoreCache?: boolean): Promise<void> {
     writeMarker(rmluiCacheDir, rmluiMarkerName());
   }
 
+  // Backends headers (RmlUi_Renderer_GL3.h, RmlUi_Platform_SDL.h) → layout
+  // instalado (Include/RmlUi/Backends/). Idempotente: repara cachés viejas
+  // que ya tienen el marker pero no copiaron los backends.
+  const rmluiRoot = path.join(rmluiCacheDir, `RmlUi-${RMLUI_VERSION}`);
+  const backendsSrc = path.join(rmluiRoot, 'Backends');
+  const backendsDest = path.join(rmluiRoot, 'Include', 'RmlUi', 'Backends');
+  if (fs.existsSync(backendsSrc) && !fs.existsSync(backendsDest)) {
+    fs.cpSync(backendsSrc, backendsDest, { recursive: true });
+    logger.detail('RmlUi backends headers copied to Include/RmlUi/Backends');
+  }
+
   // ── Fonts desde el tarball RmlUi ──────────────────────────────────
   if (!fs.existsSync(path.join(fontsDir, 'LatoLatin-Regular.ttf'))) {
+    // El tarball puede faltar (limpieza manual / ignoreCache parcial) aunque
+    // el marker de RmlUi exista — re-descargar antes de extraer fonts.
+    if (!fs.existsSync(rmluiArchive)) {
+      await downloadPinned(RMLUI_PIN.url, rmluiArchive, RMLUI_PIN.sha256);
+    }
     extractFonts(rmluiArchive, fontsDir);
   }
 
@@ -192,34 +214,21 @@ export async function setupRmlui(ignoreCache?: boolean): Promise<void> {
     try {
       await downloadPinned(sdlPin.url, sdlArchive, sdlPin.sha256);
     } catch (err: unknown) {
-      // 404 o cualquier fallo de descarga → fallback source-build (T-022).
-      if (sdlPin.fileName.endsWith('.tar.gz')) {
-        logger.warn(`SDL3 download failed (${(err as Error).message}); attempting source build...`);
-        try {
-          await buildSdl3FromSource(sdlArchive, sdlCacheDir);
-          writeMarker(sdlCacheDir, sdlMarkerName());
-        } catch (buildErr: unknown) {
-          throw new LinkerError(
-            `SDL3 ${SDL3_VERSION} download and source build failed. URL: ${sdlPin.url} target ${plat}-${arch} — ${(buildErr as Error).message}`,
-          );
-        }
-      } else {
-        // VC.zip prebuilt (win32-x64): sin fallback → error con URL+target.
-        throw new LinkerError(`SDL3 ${SDL3_VERSION} prebuilt download failed (${plat}-${arch}). URL: ${sdlPin.url} — ${(err as Error).message}`);
-      }
+      // win32-x64 VC.zip prebuilt: sin fallback → error directo.
+      // linux/macos source tarball: sin tarball no hay nada que compilar → error.
+      throw new LinkerError(`SDL3 ${SDL3_VERSION} download failed (${plat}-${arch}). URL: ${sdlPin.url} — ${(err as Error).message}`);
     }
 
-    if (!isInstalled(sdlCacheDir, sdlMarkerName())) {
-      // Descarga OK → extraer según formato.
-      const sdlDest = path.join(sdlCacheDir, `SDL3-${SDL3_VERSION}`);
-      fs.rmSync(sdlDest, { recursive: true, force: true });
-      if (sdlPin.fileName.endsWith('.zip')) {
-        await extractZip(sdlArchive, sdlCacheDir);
-      } else {
-        await extractTarGz(sdlArchive, sdlCacheDir);
-      }
-      writeMarker(sdlCacheDir, sdlMarkerName());
+    const sdlDest = path.join(sdlCacheDir, `SDL3-${SDL3_VERSION}`);
+    fs.rmSync(sdlDest, { recursive: true, force: true });
+    if (sdlPin.fileName.endsWith('.zip')) {
+      // Prebuilt VC (win32-x64): extraer directo (lib/x64 + include).
+      await extractZip(sdlArchive, sdlCacheDir);
+    } else {
+      // Source tarball (linux/macos): extraer + compilar + instalar.
+      await buildSdl3FromSource(sdlArchive, sdlCacheDir);
     }
+    writeMarker(sdlCacheDir, sdlMarkerName());
   }
 
   logger.detail(`RmlUI deps ready in ${cacheDir}`);
