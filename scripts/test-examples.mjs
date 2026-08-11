@@ -20,6 +20,9 @@ const exampleDirs = [
   'mounts-demo',
   'rust-fs',
   'as-fs',
+  'rmlui-basic',
+  'rmlui-dom-api',
+  'rmlui-rust',
 ];
 
 /**
@@ -67,9 +70,18 @@ const requiresToolchain = {
   'mounts-demo': ['cpp'],
   'rust-fs': ['rust'],
   'as-fs': [],
+  'rmlui-rust': ['rust'],
   // precompiled depends on basico's build output (AssemblyScript WASM)
   precompiled: [],
 };
+
+/**
+ * Examples whose runtime requires a display (SDL window). Build + link are
+ * verified; the executable is NOT launched here (headless CI / no DISPLAY).
+ * Runtime smoke is done locally via test-examples with DISPLAY (T-032).
+ * @type {Set<string>}
+ */
+const skipRuntime = new Set(['rmlui-basic', 'rmlui-dom-api', 'rmlui-rust']);
 
 /**
  * Examples to always skip.
@@ -170,6 +182,13 @@ for (const dir of exampleDirs) {
   if (!existsSync(binPath)) {
     console.error(`  RESULT: ${dir} — binary not found at ${binPath}`);
     failed++;
+    continue;
+  }
+
+  // GUI examples (SDL window): verify the binary was produced, skip launch.
+  if (skipRuntime.has(dir)) {
+    console.log(`  RESULT: ${dir} — PASSED (build + link; runtime skipped: requires display)`);
+    passed++;
     continue;
   }
 
