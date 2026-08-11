@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PipelinePhase, type PluginContext, type WasmPlugin, type ExtraLib } from '@wasm-apps/types';
 import type { PipelineContext, RmluiPluginConfig } from '@wasm-apps/types';
@@ -428,13 +429,34 @@ export function getRmluiExtraLibs(): ExtraLib[] {
   if (!isActive) return [];
   const cacheDir = getRmluiCacheDir();
   const backendsDir = path.join(getRmluiIncludeDir(cacheDir, RMLUI_VERSION), 'RmlUi', 'Backends');
+  // SDL3 estático en macOS exige todos los frameworks que enlaza su CMake
+  // (sdl3-config.cmake → SDL3::SDL3-static): audio/video/input de la plataforma.
+  const sdl3Frameworks = [
+    'Cocoa',
+    'IOKit',
+    'CoreVideo',
+    'CoreFoundation',
+    'CoreGraphics',
+    'CoreText',
+    'AudioToolbox',
+    'CoreAudio',
+    'AVFoundation',
+    'CoreMedia',
+    'CoreHaptics',
+    'GameController',
+    'ForceFeedback',
+    'Metal',
+    'UniformTypeIdentifiers',
+    'QuartzCore',
+    'Carbon',
+  ];
   const extraLibs: ExtraLib[] = [
     {
       name: 'sdl3',
       includeDir: getSdlIncludeDir(cacheDir, SDL3_VERSION),
       libDir: getSdlLibDir(cacheDir, SDL3_VERSION),
       libs: ['SDL3'],
-      frameworks: process.platform === 'darwin' ? ['Cocoa', 'IOKit', 'CoreVideo', 'CoreFoundation'] : undefined,
+      frameworks: process.platform === 'darwin' ? sdl3Frameworks : undefined,
     },
     {
       name: 'rmlui',
@@ -452,7 +474,7 @@ export function getRmluiExtraLibs(): ExtraLib[] {
         `RMLUI_SDL_VERSION_PATCH=${SDL3_VERSION.split('.')[2]}`,
       ],
       libs: ['rmlui_debugger', 'rmlui'],
-      frameworks: process.platform === 'darwin' ? ['Cocoa', 'IOKit', 'CoreVideo', 'CoreFoundation'] : undefined,
+      frameworks: process.platform === 'darwin' ? sdl3Frameworks : undefined,
     },
   ];
   if (process.platform === 'linux') {
@@ -460,6 +482,22 @@ export function getRmluiExtraLibs(): ExtraLib[] {
     // RmlUi 6.2 usa FreeType para el font engine; la lib viene después de
     // rmlui en el orden de enlazado para resolver las FT_* referencias.
     extraLibs[1].libs.push('freetype');
+  } else if (process.platform === 'darwin') {
+    // FreeType desde Homebrew (libfreetype.dylib). brew --prefix falla si no
+    // hay brew: cae a /opt/homebrew (Apple Silicon) o /usr/local (Intel).
+    const brewPrefix = (() => {
+      try {
+        return execFileSync('brew', ['--prefix', 'freetype'], { encoding: 'utf8' }).trim();
+      } catch {
+        return process.arch === 'arm64' ? '/opt/homebrew' : '/usr/local';
+      }
+    })();
+    extraLibs.push({
+      name: 'freetype',
+      includeDir: path.join(brewPrefix, 'include'),
+      libDir: path.join(brewPrefix, 'lib'),
+      libs: ['freetype'],
+    });
   }
   return extraLibs;
 }
