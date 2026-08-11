@@ -93,6 +93,13 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a node scripts/rmlui-smoke.mjs
         shell: bash
+      - name: 'Debug SIGSEGV smoke (gdb backtrace)'
+        if: runner.os == 'Linux' && failure()
+        run: |
+          sudo apt-get install -y gdb
+          cd examples/rmlui-basic
+          xvfb-run -a gdb -batch -ex run -ex 'bt 25' --args ./wasm-out/rmlui-basic 2>&1 | tail -50
+        shell: bash
       - name: 'RmlUI runtime smoke (macOS: ventana cocoa + GL3)'
         if: runner.os == 'macOS'
         run: node scripts/rmlui-smoke.mjs

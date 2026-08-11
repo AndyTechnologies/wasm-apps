@@ -56,7 +56,16 @@ async function runSmoke(example) {
       if (finished) return;
       finished = true;
       const errLines = errBuf.split('\n').filter((l) => l.trim() && isErrorLine(l));
-      resolvePromise({ status, extra, errLines });
+      // Crash mudo (p.ej. SIGSEGV en GL init): sin líneas de error filtradas,
+      // el stderr crudo es la única pista — se vuelca al reporte.
+      const rawLines =
+        status === 'failed' && errLines.length === 0
+          ? errBuf
+              .split('\n')
+              .filter((l) => l.trim())
+              .slice(-15)
+          : [];
+      resolvePromise({ status, extra, errLines, rawLines });
     };
 
     child.on('error', (err) => finish('failed', `spawn error: ${err.message}`));
@@ -95,6 +104,9 @@ for (const example of examples) {
     console.error(`  FAIL: ${example} — ${result.extra}`);
     for (const line of (result.errLines || []).slice(0, 8)) {
       console.error(`         ${line}`);
+    }
+    for (const line of result.rawLines || []) {
+      console.error(`  [stderr] ${line}`);
     }
   }
 }
