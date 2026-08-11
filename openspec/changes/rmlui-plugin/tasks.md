@@ -2,15 +2,15 @@
 
 ## Review Workload Forecast
 
-| Field | Value |
-|-------|-------|
-| Estimated changed lines | ~1150–1300 |
-| 400-line budget risk | High |
-| 800-line budget risk | High |
-| Chained PRs recommended | Yes |
-| Suggested split | PR 1 → PR 2 → PR 3 → PR 4 |
-| Delivery strategy | auto-forecast |
-| Chain strategy | pending |
+| Field                   | Value                     |
+| ----------------------- | ------------------------- |
+| Estimated changed lines | ~1150–1300                |
+| 400-line budget risk    | High                      |
+| 800-line budget risk    | High                      |
+| Chained PRs recommended | Yes                       |
+| Suggested split         | PR 1 → PR 2 → PR 3 → PR 4 |
+| Delivery strategy       | auto-forecast             |
+| Chain strategy          | pending                   |
 
 Decision needed before apply: Yes
 Chained PRs recommended: Yes
@@ -19,12 +19,12 @@ Chain strategy: pending
 
 ### Suggested Work Units
 
-| Unit | Goal | Likely PR | Focused test command | Runtime harness | Rollback boundary |
-|------|------|-----------|----------------------|-----------------|-------------------|
-| 1 | Templates + CMake + download system | PR 1 | `pnpm -F @wasm-apps/linker test -- --testPathPattern="compiler|setup"` | N/A — no runtime binary yet, pure linker infrastructure | Revert `templates-rmlui/`, `rmlui-dl.ts`, `rmlui-setup.ts`, and `compiler.ts`/`setup.ts` changes |
-| 2 | Plugin registration + wiring | PR 2 | `pnpm -F @wasm-apps/linker test -- --testPathPattern="plugin-loader|codegen"` | N/A — plugin loads but no binary produced (no RmlUI deps on CI) | Revert `rmlui-plugin.ts`, `plugin-loader.ts`, `codegen.ts`, `wasmtime-linker-strategy.ts`, `native-app-builder.ts`, `index.ts` |
-| 3 | C ABI + C++ wrappers + host function bridge | PR 3 | `pnpm -F @wasm-apps/linker test -- --testPathPattern="rmlui-plugin"` | Manual: build a minimal C++ example with RmlUI enabled, verify `main.c.njk` includes RmlUI lifecycle | Revert `rmlui-abi.h`, `rmlui.hh`, and DOM host function registrations in `rmlui-plugin.ts` |
-| 4 | Bindgen + language examples | PR 4 | `node scripts/rmlui-bindgen/index.mjs packages/types/src/rmlui-abi.h --check` | `pnpm -F @wasm-apps/examples build --example rmlui-basic` | Revert `scripts/rmlui-bindgen/` and any example app directories |
+| Unit | Goal                                        | Likely PR | Focused test command                                                          | Runtime harness                                                                                      | Rollback boundary                                                                          |
+| ---- | ------------------------------------------- | --------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1    | Templates + CMake + download system         | PR 1      | `pnpm -F @wasm-apps/linker test -- --testPathPattern="compiler                | setup"`                                                                                              | N/A — no runtime binary yet, pure linker infrastructure                                    | Revert `templates-rmlui/`, `rmlui-dl.ts`, `rmlui-setup.ts`, and `compiler.ts`/`setup.ts` changes                               |
+| 2    | Plugin registration + wiring                | PR 2      | `pnpm -F @wasm-apps/linker test -- --testPathPattern="plugin-loader           | codegen"`                                                                                            | N/A — plugin loads but no binary produced (no RmlUI deps on CI)                            | Revert `rmlui-plugin.ts`, `plugin-loader.ts`, `codegen.ts`, `wasmtime-linker-strategy.ts`, `native-app-builder.ts`, `index.ts` |
+| 3    | C ABI + C++ wrappers + host function bridge | PR 3      | `pnpm -F @wasm-apps/linker test -- --testPathPattern="rmlui-plugin"`          | Manual: build a minimal C++ example with RmlUI enabled, verify `main.c.njk` includes RmlUI lifecycle | Revert `rmlui-abi.h`, `rmlui.hh`, and DOM host function registrations in `rmlui-plugin.ts` |
+| 4    | Bindgen + language examples                 | PR 4      | `node scripts/rmlui-bindgen/index.mjs packages/types/src/rmlui-abi.h --check` | `pnpm -F @wasm-apps/examples build --example rmlui-basic`                                            | Revert `scripts/rmlui-bindgen/` and any example app directories                            |
 
 ## Phase 1: Infrastructure & Templates
 

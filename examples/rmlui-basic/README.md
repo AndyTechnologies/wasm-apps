@@ -38,10 +38,10 @@ Requires SDL3 and OpenGL 3.3-capable GPU. The RmlUI plugin must be installed
 
 ## Key takeaways
 
-| Concept | How it's done |
-|---------|--------------|
-| Context creation | `Rml_CreateContext("main", 1024, 768)` |
-| Document loading | `Rml_LoadDocument(ctx, "ui/main.rml")` |
-| DOM manipulation | `Rml_CreateElement`, `Rml_AppendChild`, `Rml_SetTextContent` |
-| Attribute setting | `Rml_SetAttribute(el, "class", "wasm-greeting")` |
-| Render loop | Handled by the host — `_start` only sets up the scene |
+| Concept           | How it's done                                                |
+| ----------------- | ------------------------------------------------------------ |
+| Context creation  | `Rml_CreateContext("main", 1024, 768)`                       |
+| Document loading  | `Rml_LoadDocument(ctx, "ui/main.rml")`                       |
+| DOM manipulation  | `Rml_CreateElement`, `Rml_AppendChild`, `Rml_SetTextContent` |
+| Attribute setting | `Rml_SetAttribute(el, "class", "wasm-greeting")`             |
+| Render loop       | Handled by the host — `_start` only sets up the scene        |

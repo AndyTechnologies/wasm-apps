@@ -10,6 +10,7 @@ enables native windows with UI elements coupled to WebAssembly logic.
 ## Scope
 
 ### In Scope
+
 - Built-in `rmlui-plugin` hardcoded by id in `plugin-loader.ts`
 - Nunjucks template dir `packages/linker/templates-rmlui/` with RmlUI lifecycle (init, update, render, cleanup)
 - Modified `generateCMakeLists()` to link SDL3, RmlUI, GLAD, glm as static libs
@@ -22,6 +23,7 @@ enables native windows with UI elements coupled to WebAssembly logic.
 - Config via `wapp.json` `plugins[].config` and dead-code elimination when disabled
 
 ### Out of Scope
+
 - Custom RmlUI themes/skins or default app styling
 - Multi-window or multi-monitor support
 - Mobile (iOS/Android) or Web platform
@@ -30,6 +32,7 @@ enables native windows with UI elements coupled to WebAssembly logic.
 ## Capabilities
 
 ### New Capabilities
+
 - `rmlui-dom-api`: DOM-style API — createElement, appendChild, setAttribute, addEventListener, textContent, innerHTML, style, getElementById, querySelector
 - `rmlui-render-loop`: SDL3 window/context creation, RmlUI render, Update()/Render() host-loop hooks
 - `rmlui-multi-language`: C ABI (stable FFI), C++ wrappers, Rust crate (extern "C"), AS type defs
@@ -37,11 +40,13 @@ enables native windows with UI elements coupled to WebAssembly logic.
 - `rmlui-resource-loader`: RML/font/image from files, strings, embedded data; extensible interface
 
 ### Modified Capabilities
+
 None — wholly new feature. No existing specs change.
 
 ## Approach
 
 Plugin + Custom Template (exploration Approach B):
+
 1. Add `rmlui-plugin` to `DEFAULT_PLUGINS` and route its registration in `plugin-loader.ts` (switch on id, configure template path)
 2. Create `packages/linker/templates-rmlui/` — full Nunjucks template set with RmlUI init, event pump, render, cleanup replacing vanilla main()
 3. Modify `generateCMakeLists()` to accept `extraLibs` — SDL3, RmlUI, GLAD, glm as STATIC imports
@@ -51,23 +56,23 @@ Plugin + Custom Template (exploration Approach B):
 
 ## Affected Areas
 
-| Area | Impact | Description |
-|------|--------|-------------|
-| `packages/linker/src/plugin-loader.ts` | Modified | Add rmlui-plugin as builtin |
-| `packages/linker/templates-rmlui/` | New | RmlUI lifecycle Nunjucks templates |
-| `packages/linker/src/generateCMakeLists.ts` | Modified | Accept extraLibs param |
-| `packages/linker/src/downloader.ts` | Modified | RmlUI/SDL3/GLAD download manifest |
-| `packages/linker/src/setup.ts` | Modified | Download RmlUI deps on setup |
-| `packages/types/src/index.ts` | Modified | PluginConfig types for rmlui |
-| `packages/types/src/rmlui-abi.h` | New | C ABI header for DOM API |
+| Area                                        | Impact   | Description                        |
+| ------------------------------------------- | -------- | ---------------------------------- |
+| `packages/linker/src/plugin-loader.ts`      | Modified | Add rmlui-plugin as builtin        |
+| `packages/linker/templates-rmlui/`          | New      | RmlUI lifecycle Nunjucks templates |
+| `packages/linker/src/generateCMakeLists.ts` | Modified | Accept extraLibs param             |
+| `packages/linker/src/downloader.ts`         | Modified | RmlUI/SDL3/GLAD download manifest  |
+| `packages/linker/src/setup.ts`              | Modified | Download RmlUI deps on setup       |
+| `packages/types/src/index.ts`               | Modified | PluginConfig types for rmlui       |
+| `packages/types/src/rmlui-abi.h`            | New      | C ABI header for DOM API           |
 
 ## Risks
 
-| Risk | Likelihood | Mitigation |
-|------|------------|------------|
-| Cross-platform SDL3/RmlUI static builds | Med | CI matrix + pre-built downloads |
-| Binary size increase (~15-20MB) | High | Dead-code elimination when disabled |
-| RmlUI API version drift | Low | Pin version in download manifest |
+| Risk                                    | Likelihood | Mitigation                          |
+| --------------------------------------- | ---------- | ----------------------------------- |
+| Cross-platform SDL3/RmlUI static builds | Med        | CI matrix + pre-built downloads     |
+| Binary size increase (~15-20MB)         | High       | Dead-code elimination when disabled |
+| RmlUI API version drift                 | Low        | Pin version in download manifest    |
 
 ## Rollback Plan
 

@@ -24,16 +24,16 @@ while (running) {
 
 `RmlUI_ProcessSdlEvent` MUST map SDL3 events to `Rml::InputEventHandler`:
 
-| SDL3 Event | RmlUI Input Handler |
-|------------|---------------------|
-| `SDL_EVENT_MOUSE_MOTION` | `Rml::Input::MouseMove(x, y)` |
-| `SDL_EVENT_MOUSE_BUTTON_DOWN` | `Rml::Input::MouseButtonDown(button)` |
-| `SDL_EVENT_MOUSE_BUTTON_UP` | `Rml::Input::MouseButtonUp(button)` |
-| `SDL_EVENT_MOUSE_WHEEL` | `Rml::Input::MouseWheel(delta, direction)` |
-| `SDL_EVENT_KEY_DOWN` | `Rml::Input::KeyDown(key_modifier)` |
-| `SDL_EVENT_KEY_UP` | `Rml::Input::KeyUp(key_modifier)` |
-| `SDL_EVENT_TEXT_INPUT` | `Rml::Input::TextInput(utf8_char)` |
-| `SDL_EVENT_WINDOW_RESIZED` | `context->SetDimensions(w, h)` |
+| SDL3 Event                    | RmlUI Input Handler                        |
+| ----------------------------- | ------------------------------------------ |
+| `SDL_EVENT_MOUSE_MOTION`      | `Rml::Input::MouseMove(x, y)`              |
+| `SDL_EVENT_MOUSE_BUTTON_DOWN` | `Rml::Input::MouseButtonDown(button)`      |
+| `SDL_EVENT_MOUSE_BUTTON_UP`   | `Rml::Input::MouseButtonUp(button)`        |
+| `SDL_EVENT_MOUSE_WHEEL`       | `Rml::Input::MouseWheel(delta, direction)` |
+| `SDL_EVENT_KEY_DOWN`          | `Rml::Input::KeyDown(key_modifier)`        |
+| `SDL_EVENT_KEY_UP`            | `Rml::Input::KeyUp(key_modifier)`          |
+| `SDL_EVENT_TEXT_INPUT`        | `Rml::Input::TextInput(utf8_char)`         |
+| `SDL_EVENT_WINDOW_RESIZED`    | `context->SetDimensions(w, h)`             |
 
 #### Scenario: Mouse click on button
 
@@ -51,10 +51,10 @@ while (running) {
 
 The system MUST store callbacks registered via `Rml_AddEventListener` and invoke them when RmlUI dispatches matching events.
 
-| Function | Signature |
-|----------|-----------|
-| `Rml_AddEventListener` | `(i32 elem, const char* event, i32 callback_id) → i32` |
-| `Rml_RemoveEventListener` | `(i32 elem, const char* event) → i32` |
+| Function                  | Signature                                              |
+| ------------------------- | ------------------------------------------------------ |
+| `Rml_AddEventListener`    | `(i32 elem, const char* event, i32 callback_id) → i32` |
+| `Rml_RemoveEventListener` | `(i32 elem, const char* event) → i32`                  |
 
 Supported event types: `click`, `dblclick`, `mousedown`, `mouseup`, `mousemove`, `mouseover`, `mouseout`, `focus`, `blur`, `keydown`, `keyup`, `keypress`, `load`, `resize`, `scroll`, `change`, `submit`.
 
@@ -69,6 +69,7 @@ The callback storage MUST map `(element_id, event_type) → callback_id`. The `c
 ### Requirement: Callback Invocation Contract
 
 All callbacks MUST execute:
+
 - **On the main thread only** — no thread safety concerns
 - **Non-reentrant** — if a callback modifies the DOM, re-entrant event dispatch MUST be deferred to the next frame
 - **Synchronous** — the WASM function is called via `wasmtime::Func::call` before `SDL_GL_SwapWindow`
@@ -98,6 +99,7 @@ typedef struct {
 ```
 
 The struct is read/write — WASM code can set `prevent_default` or `stop_propagation` fields. After the callback returns, the bridge checks these flags:
+
 - `prevent_default == 1`: calls `event->StopPropagation()` on the RmlUI event
 - `stop_propagation == 1`: does NOT call further listeners on parent elements
 

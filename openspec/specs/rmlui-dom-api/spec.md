@@ -10,15 +10,15 @@ Defines the C ABI DOM-style API that WebAssembly modules use to construct and ma
 
 The system MUST expose a DOM node factory via C ABI.
 
-| Function | Signature | Behavior |
-|----------|-----------|----------|
-| `Rml_CreateDocument` | `() → i32 (context_id)` | Create empty document with `<body>` root |
-| `Rml_CreateElement` | `(const char* tag) → i32 (element_id)` | Create element, returns 0 on failure |
-| `Rml_CreateTextNode` | `(const char* text) → i32 (element_id)` | Create text node |
-| `Rml_AppendChild` | `(i32 parent, i32 child) → i32 (error)` | Append child, returns 0 on success |
-| `Rml_RemoveChild` | `(i32 parent, i32 child) → i32 (error)` | Remove child, returns 0 on success |
-| `Rml_InsertBefore` | `(i32 parent, i32 child, i32 ref) → i32` | Insert child before reference sibling |
-| `Rml_ReplaceChild` | `(i32 parent, i32 new, i32 old) → i32` | Replace old child with new |
+| Function             | Signature                                | Behavior                                 |
+| -------------------- | ---------------------------------------- | ---------------------------------------- |
+| `Rml_CreateDocument` | `() → i32 (context_id)`                  | Create empty document with `<body>` root |
+| `Rml_CreateElement`  | `(const char* tag) → i32 (element_id)`   | Create element, returns 0 on failure     |
+| `Rml_CreateTextNode` | `(const char* text) → i32 (element_id)`  | Create text node                         |
+| `Rml_AppendChild`    | `(i32 parent, i32 child) → i32 (error)`  | Append child, returns 0 on success       |
+| `Rml_RemoveChild`    | `(i32 parent, i32 child) → i32 (error)`  | Remove child, returns 0 on success       |
+| `Rml_InsertBefore`   | `(i32 parent, i32 child, i32 ref) → i32` | Insert child before reference sibling    |
+| `Rml_ReplaceChild`   | `(i32 parent, i32 new, i32 old) → i32`   | Replace old child with new               |
 
 Error codes: `0` = success, `-1` = invalid parent/element ID, `-2` = wrong context, `-3` = out of memory.
 
@@ -38,16 +38,16 @@ Error codes: `0` = success, `-1` = invalid parent/element ID, `-2` = wrong conte
 
 The system MUST support reading/writing element attributes and content.
 
-| Function | Signature |
-|----------|-----------|
-| `Rml_SetAttribute` | `(i32 elem, const char* name, const char* value) → i32` |
-| `Rml_GetAttribute` | `(i32 elem, const char* name) → const char*` |
-| `Rml_RemoveAttribute` | `(i32 elem, const char* name) → i32` |
-| `Rml_HasAttribute` | `(i32 elem, const char* name) → i32` |
-| `Rml_SetTextContent` | `(i32 elem, const char* text) → i32` |
-| `Rml_GetTextContent` | `(i32 elem) → const char*` |
-| `Rml_SetInnerHTML` | `(i32 elem, const char* html) → i32` |
-| `Rml_GetInnerHTML` | `(i32 elem) → const char*` |
+| Function              | Signature                                               |
+| --------------------- | ------------------------------------------------------- |
+| `Rml_SetAttribute`    | `(i32 elem, const char* name, const char* value) → i32` |
+| `Rml_GetAttribute`    | `(i32 elem, const char* name) → const char*`            |
+| `Rml_RemoveAttribute` | `(i32 elem, const char* name) → i32`                    |
+| `Rml_HasAttribute`    | `(i32 elem, const char* name) → i32`                    |
+| `Rml_SetTextContent`  | `(i32 elem, const char* text) → i32`                    |
+| `Rml_GetTextContent`  | `(i32 elem) → const char*`                              |
+| `Rml_SetInnerHTML`    | `(i32 elem, const char* html) → i32`                    |
+| `Rml_GetInnerHTML`    | `(i32 elem) → const char*`                              |
 
 Returned strings MUST be valid until the next call to the same getter (single-slot buffer). `SetInnerHTML` MUST parse the HTML string into RmlUI child nodes.
 
@@ -67,11 +67,11 @@ Returned strings MUST be valid until the next call to the same getter (single-sl
 
 The system MUST expose individual RML property accessors and a bulk setter.
 
-| Function | Signature |
-|----------|-----------|
+| Function               | Signature                                               |
+| ---------------------- | ------------------------------------------------------- |
 | `Rml_SetStyleProperty` | `(i32 elem, const char* prop, const char* value) → i32` |
-| `Rml_GetStyleProperty` | `(i32 elem, const char* prop) → const char*` |
-| `Rml_SetStyle` | `(i32 elem, const char* css_text) → i32` |
+| `Rml_GetStyleProperty` | `(i32 elem, const char* prop) → const char*`            |
+| `Rml_SetStyle`         | `(i32 elem, const char* css_text) → i32`                |
 
 Supported properties: `color`, `width`, `height`, `display`, `position`, `left`, `top`, `font-size`, `background-color`, `border`, `margin`, `padding`, `text-align`, `opacity`, `z-index`, `visibility`.
 
@@ -85,13 +85,13 @@ Supported properties: `color`, `width`, `height`, `display`, `position`, `left`,
 
 The system MUST support element lookup.
 
-| Function | Signature |
-|----------|-----------|
-| `Rml_GetElementById` | `(i32 context, const char* id) → i32` |
-| `Rml_QuerySelector` | `(i32 context, const char* selector) → i32` |
+| Function               | Signature                                            |
+| ---------------------- | ---------------------------------------------------- |
+| `Rml_GetElementById`   | `(i32 context, const char* id) → i32`                |
+| `Rml_QuerySelector`    | `(i32 context, const char* selector) → i32`          |
 | `Rml_QuerySelectorAll` | `(i32 context, const char* selector) → i32* (array)` |
-| `Rml_GetBody` | `(i32 context) → i32` |
-| `Rml_GetHead` | `(i32 context) → i32` |
+| `Rml_GetBody`          | `(i32 context) → i32`                                |
+| `Rml_GetHead`          | `(i32 context) → i32`                                |
 
 `Rml_QuerySelectorAll` returns a null-terminated array of element IDs. Caller MUST call `Rml_FreeNodeList` to free.
 
@@ -103,11 +103,11 @@ The system MUST support element lookup.
 
 ### Requirement: Class List
 
-| Function | Signature |
-|----------|-----------|
-| `Rml_ClassListAdd` | `(i32 elem, const char* cls) → i32` |
-| `Rml_ClassListRemove` | `(i32 elem, const char* cls) → i32` |
-| `Rml_ClassListToggle` | `(i32 elem, const char* cls) → i32` |
+| Function                | Signature                           |
+| ----------------------- | ----------------------------------- |
+| `Rml_ClassListAdd`      | `(i32 elem, const char* cls) → i32` |
+| `Rml_ClassListRemove`   | `(i32 elem, const char* cls) → i32` |
+| `Rml_ClassListToggle`   | `(i32 elem, const char* cls) → i32` |
 | `Rml_ClassListContains` | `(i32 elem, const char* cls) → i32` |
 
 ### Requirement: Element Lifecycle

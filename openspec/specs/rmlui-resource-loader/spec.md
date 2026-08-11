@@ -10,11 +10,11 @@ Defines how Rml documents, fonts, and textures are loaded — from filesystem pa
 
 The system MUST expose three document loading functions:
 
-| Function | Signature | Behavior |
-|----------|-----------|----------|
-| `Rml_LoadDocument` | `(i32 ctx, const char* path) → i32 (doc_id)` | Load from filesystem path, return document handle, or 0 on failure |
-| `Rml_LoadDocumentFromString` | `(i32 ctx, const char* rml) → i32` | Parse RML string, return document handle |
-| `Rml_LoadDocumentFromBuffer` | `(i32 ctx, const void* data, i32 len) → i32` | Load from embedded byte buffer |
+| Function                     | Signature                                    | Behavior                                                           |
+| ---------------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
+| `Rml_LoadDocument`           | `(i32 ctx, const char* path) → i32 (doc_id)` | Load from filesystem path, return document handle, or 0 on failure |
+| `Rml_LoadDocumentFromString` | `(i32 ctx, const char* rml) → i32`           | Parse RML string, return document handle                           |
+| `Rml_LoadDocumentFromBuffer` | `(i32 ctx, const void* data, i32 len) → i32` | Load from embedded byte buffer                                     |
 
 All three MUST call `Rml::Context::LoadDocument()` or equivalent. The returned document handle is valid until the context is destroyed.
 
@@ -28,10 +28,10 @@ All three MUST call `Rml::Context::LoadDocument()` or equivalent. The returned d
 
 RmlUI requires at least one font face before it can render text. The system MUST provide:
 
-| Function | Signature | Behavior |
-|----------|-----------|----------|
-| `Rml_LoadFont` | `(const char* path) → i32` | Load TrueType from file, return 0 on success |
-| `Rml_LoadFontFromBuffer` | `(const char* name, const void* data, i32 len) → i32` | Load from embedded TTF/OTF buffer |
+| Function                 | Signature                                             | Behavior                                     |
+| ------------------------ | ----------------------------------------------------- | -------------------------------------------- |
+| `Rml_LoadFont`           | `(const char* path) → i32`                            | Load TrueType from file, return 0 on success |
+| `Rml_LoadFontFromBuffer` | `(const char* name, const void* data, i32 len) → i32` | Load from embedded TTF/OTF buffer            |
 
 The system MUST load a default font (e.g., `NotoSans-Regular.ttf`) automatically during initialization if available. The default font path SHALL be configurable via `wapp.json` `plugins[].config.defaultFont`.
 
@@ -51,11 +51,11 @@ The system MUST load a default font (e.g., `NotoSans-Regular.ttf`) automatically
 
 Images in RML (`<img src="...">`, `decorator: image(...)`) are loaded through the `Rml::Texture` interface. The system MUST wrap this with:
 
-| Function | Signature |
-|----------|-----------|
-| `Rml_LoadTexture` | `(const char* path) → i32` |
+| Function                    | Signature                                             |
+| --------------------------- | ----------------------------------------------------- |
+| `Rml_LoadTexture`           | `(const char* path) → i32`                            |
 | `Rml_LoadTextureFromBuffer` | `(const char* name, const void* data, i32 len) → i32` |
-| `Rml_GetTextureDimensions` | `(const char* name) → struct {i32 w, i32 h}` |
+| `Rml_GetTextureDimensions`  | `(const char* name) → struct {i32 w, i32 h}`          |
 
 The system SHALL provide a custom `Rml::FileInterface` implementation that resolves paths against configured search paths.
 

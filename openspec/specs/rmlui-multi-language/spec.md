@@ -10,15 +10,15 @@ Defines the three-layer binding architecture: a stable C ABI header (`RmlUI_ABI.
 
 The system MUST provide `RmlUI_ABI.h` with ALL exported functions marked `extern "C"`.
 
-| Convention | Rule |
-|------------|------|
-| Prefix | `Rml_` for all public functions |
-| Name mangling | Prevented via `extern "C"` |
-| Calling convention | Default C (`__cdecl` on x86) |
-| Opaque handles | `typedef int32_t Rml_ElementId`, `Rml_ContextId` |
-| Error reporting | Return `int32_t` — 0 success, negative error code |
-| String parameters | `const char*` null-terminated UTF-8 |
-| No exceptions | Functions MUST NOT throw — catch all C++ exceptions internally |
+| Convention         | Rule                                                           |
+| ------------------ | -------------------------------------------------------------- |
+| Prefix             | `Rml_` for all public functions                                |
+| Name mangling      | Prevented via `extern "C"`                                     |
+| Calling convention | Default C (`__cdecl` on x86)                                   |
+| Opaque handles     | `typedef int32_t Rml_ElementId`, `Rml_ContextId`               |
+| Error reporting    | Return `int32_t` — 0 success, negative error code              |
+| String parameters  | `const char*` null-terminated UTF-8                            |
+| No exceptions      | Functions MUST NOT throw — catch all C++ exceptions internally |
 
 #### Scenario: C++ caller links ABI
 
@@ -30,16 +30,17 @@ The system MUST provide `RmlUI_ABI.h` with ALL exported functions marked `extern
 
 The error code convention:
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
+| Code | Meaning                                            |
+| ---- | -------------------------------------------------- |
+| `0`  | Success                                            |
 | `-1` | Invalid handle (element/context ID does not exist) |
-| `-2` | Null or empty parameter |
-| `-3` | Out of memory |
-| `-4` | Operation not supported |
-| `-5` | Internal RmlUI error |
+| `-2` | Null or empty parameter                            |
+| `-3` | Out of memory                                      |
+| `-4` | Operation not supported                            |
+| `-5` | Internal RmlUI error                               |
 
 Each language binding MUST translate these into language-appropriate error handling:
+
 - **C++**: `RmlUI_Exception` (from `RmlUI.hh`) wrapping the error code
 - **Rust**: `Result<T, RmlError>` enum with `{ InvalidHandle, NullParam, OutOfMemory, Unsupported, Internal }`
 - **AssemblyScript**: Return codes exposed; AS wrapper returns `T | null` and sets `lastError` property
@@ -54,12 +55,12 @@ Each language binding MUST translate these into language-appropriate error handl
 
 `RmlUI.hh` MUST provide RAII wrappers:
 
-| Class | Wraps | Key Methods |
-|-------|-------|-------------|
-| `RmlContext` | `Rml_ContextId` | constructor(name, dims), `document()` |
-| `RmlElement` | `Rml_ElementId` | `appendChild()`, `setAttribute()`, `addEventListener()` |
-| `RmlDocument` | `Rml_ElementId` (root) | `getElementById()`, `querySelector()` |
-| `RmlStyle` | `Rml_ElementId` | `operator[]` for get/set, `apply(css_text)` |
+| Class         | Wraps                  | Key Methods                                             |
+| ------------- | ---------------------- | ------------------------------------------------------- |
+| `RmlContext`  | `Rml_ContextId`        | constructor(name, dims), `document()`                   |
+| `RmlElement`  | `Rml_ElementId`        | `appendChild()`, `setAttribute()`, `addEventListener()` |
+| `RmlDocument` | `Rml_ElementId` (root) | `getElementById()`, `querySelector()`                   |
+| `RmlStyle`    | `Rml_ElementId`        | `operator[]` for get/set, `apply(css_text)`             |
 
 Destructors SHALL NOT destroy elements — element lifetime is managed by RmlUI context. RAII here means safe handle wrapping, not ownership.
 
@@ -79,6 +80,7 @@ rmlui-sys/
 `lib.rs` MUST use `#[link(name = "RmlUI_ABI")]` and declare each `extern "C" fn` with `unsafe`.
 
 A safe wrapper crate `rmlui` SHOULD provide:
+
 - `RmlContext::new(title, width, height)`
 - `RmlElement::create(tag)`, `.append(child)`, `.attr(name, value)`
 - `RmlDocument::by_id(id)` returning `Option<RmlElement>`
@@ -100,9 +102,9 @@ The AS wrapper SHALL expose a `Document` class with methods that match browser D
 
 ```typescript
 class Document {
-  createElement(tag: string): Element
-  getElementById(id: string): Element | null
-  get body(): Element
+  createElement(tag: string): Element;
+  getElementById(id: string): Element | null;
+  get body(): Element;
 }
 ```
 

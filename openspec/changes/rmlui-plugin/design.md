@@ -19,13 +19,13 @@ wapp.json ──→ plugin-loader.ts ──→ rmlui-plugin.ts
 
 ## Architecture Decisions
 
-| Option | Tradeoff | Decision |
-|--------|----------|----------|
-| Built-in vs external plugin | External needs path resolution, built-in is simpler for core feature | Built-in — switch on id in `plugin-loader.ts` |
-| Custom template vs conditional in main.c.njk | Conditional inflates vanilla template, custom dir is clean isolation | Custom `templates-rmlui/` dir — `renderTemplate()` already supports `templatePath` |
-| Static vs dynamic linking of SDL3/RmlUI | Static = bigger binary, no runtime deps; dynamic = smaller but needs .dll/.so | Static — consistent with Wasmtime approach, one self-contained binary |
-| Option A (host controls loop) vs B (plugin owns loop) | A = composable, B = simpler | A — host calls `RmlUI_Update()`/`RmlUI_Render()` each frame |
-| Custom codegen vs reusing `generateCCode()` | Custom codegen would need new strategy class | Reuse `generateCCode()` → add `templatePath` parameter → `WasmtimeLinkerStrategy` already passes options |
+| Option                                                | Tradeoff                                                                      | Decision                                                                                                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Built-in vs external plugin                           | External needs path resolution, built-in is simpler for core feature          | Built-in — switch on id in `plugin-loader.ts`                                                            |
+| Custom template vs conditional in main.c.njk          | Conditional inflates vanilla template, custom dir is clean isolation          | Custom `templates-rmlui/` dir — `renderTemplate()` already supports `templatePath`                       |
+| Static vs dynamic linking of SDL3/RmlUI               | Static = bigger binary, no runtime deps; dynamic = smaller but needs .dll/.so | Static — consistent with Wasmtime approach, one self-contained binary                                    |
+| Option A (host controls loop) vs B (plugin owns loop) | A = composable, B = simpler                                                   | A — host calls `RmlUI_Update()`/`RmlUI_Render()` each frame                                              |
+| Custom codegen vs reusing `generateCCode()`           | Custom codegen would need new strategy class                                  | Reuse `generateCCode()` → add `templatePath` parameter → `WasmtimeLinkerStrategy` already passes options |
 
 ## Data Flow
 
@@ -51,34 +51,36 @@ WASM imports `env.Rml_*` → host function trampolines → C ABI stubs → RmlUI
 
 ## File Changes
 
-| File | Action | Description |
-|------|--------|-------------|
-| `packages/linker/src/rmlui-plugin.ts` | Create | Plugin class: registers host functions, hooks BeforeCodeGen for template path |
-| `packages/linker/src/plugin-loader.ts` | Modify | Add `rmlui-plugin` case to built-in switch |
-| `packages/linker/src/compiler.ts` | Modify | Add `generateCMakeLists(extraLibs)` overload + `ExtraLib` type |
-| `packages/linker/src/codegen.ts` | Modify | `generateCCode()` accepts optional `templatePath`, passes to `renderTemplate()` |
-| `packages/linker/src/wasmtime-linker-strategy.ts` | Modify | Pass `templatePath` from options to `generateCCode()` |
-| `packages/linker/src/native-app-builder.ts` | Modify | Wire `templateDir` through build pipeline when plugin sets it |
-| `packages/linker/templates-rmlui/` | New | 5 Nunjucks templates for RmlUI lifecycle |
-| `packages/linker/templates-rmlui/main.c.njk` | New | Entry template: includes all partials in correct order |
-| `packages/linker/templates-rmlui/_rmlui-setup.c.njk` | New | SDL_Init → window → context → RmlUI init |
-| `packages/linker/templates-rmlui/_rmlui-event-loop.c.njk` | New | SDL_PollEvent → RmlUI::InputEventHandler |
-| `packages/linker/templates-rmlui/_rmlui-render.c.njk` | New | GL clear → context->Render → swap |
-| `packages/linker/templates-rmlui/_rmlui-cleanup.c.njk` | New | Reverse-init shutdown sequence |
-| `packages/linker/src/rmlui-dl.ts` | Create | Platform-aware download manifest for SDL3/RmlUI/GLAD |
-| `packages/linker/src/rmlui-setup.ts` | Create | Download + extract orchestration for RmlUI deps |
-| `packages/types/src/rmlui-abi.h` | Create | C ABI: opaque handles, extern "C" functions, error enum |
-| `packages/types/src/rmlui.hh` | Create | C++ RAII wrappers over C ABI |
-| `packages/types/src/index.ts` | Modify | Add `RmluiPluginConfig` type, `ExtraLib` type |
-| `packages/linker/src/setup.ts` | Modify | Wire `setupRmlui()` into `runSetup()` |
-| `scripts/rmlui-bindgen/` | New | Auto-generate Rust extern "C" + AS imports from `rmlui-abi.h` |
+| File                                                      | Action | Description                                                                     |
+| --------------------------------------------------------- | ------ | ------------------------------------------------------------------------------- |
+| `packages/linker/src/rmlui-plugin.ts`                     | Create | Plugin class: registers host functions, hooks BeforeCodeGen for template path   |
+| `packages/linker/src/plugin-loader.ts`                    | Modify | Add `rmlui-plugin` case to built-in switch                                      |
+| `packages/linker/src/compiler.ts`                         | Modify | Add `generateCMakeLists(extraLibs)` overload + `ExtraLib` type                  |
+| `packages/linker/src/codegen.ts`                          | Modify | `generateCCode()` accepts optional `templatePath`, passes to `renderTemplate()` |
+| `packages/linker/src/wasmtime-linker-strategy.ts`         | Modify | Pass `templatePath` from options to `generateCCode()`                           |
+| `packages/linker/src/native-app-builder.ts`               | Modify | Wire `templateDir` through build pipeline when plugin sets it                   |
+| `packages/linker/templates-rmlui/`                        | New    | 5 Nunjucks templates for RmlUI lifecycle                                        |
+| `packages/linker/templates-rmlui/main.c.njk`              | New    | Entry template: includes all partials in correct order                          |
+| `packages/linker/templates-rmlui/_rmlui-setup.c.njk`      | New    | SDL_Init → window → context → RmlUI init                                        |
+| `packages/linker/templates-rmlui/_rmlui-event-loop.c.njk` | New    | SDL_PollEvent → RmlUI::InputEventHandler                                        |
+| `packages/linker/templates-rmlui/_rmlui-render.c.njk`     | New    | GL clear → context->Render → swap                                               |
+| `packages/linker/templates-rmlui/_rmlui-cleanup.c.njk`    | New    | Reverse-init shutdown sequence                                                  |
+| `packages/linker/src/rmlui-dl.ts`                         | Create | Platform-aware download manifest for SDL3/RmlUI/GLAD                            |
+| `packages/linker/src/rmlui-setup.ts`                      | Create | Download + extract orchestration for RmlUI deps                                 |
+| `packages/types/src/rmlui-abi.h`                          | Create | C ABI: opaque handles, extern "C" functions, error enum                         |
+| `packages/types/src/rmlui.hh`                             | Create | C++ RAII wrappers over C ABI                                                    |
+| `packages/types/src/index.ts`                             | Modify | Add `RmluiPluginConfig` type, `ExtraLib` type                                   |
+| `packages/linker/src/setup.ts`                            | Modify | Wire `setupRmlui()` into `runSetup()`                                           |
+| `scripts/rmlui-bindgen/`                                  | New    | Auto-generate Rust extern "C" + AS imports from `rmlui-abi.h`                   |
 
 ## Template Architecture
 
 ### templates-rmlui/main.c.njk
+
 Entry point. Includes preamble, sets up SDL + RmlUI, runs loop with event pump/update/render, cleans up. Context: `rmlui.enabled: true`, `rmlui.window_config`, host functions already defined.
 
 **Nunjucks context variables:**
+
 ```json
 {
   "rmlui": {
@@ -92,14 +94,15 @@ Entry point. Includes preamble, sets up SDL + RmlUI, runs loop with event pump/u
 
 ### Partial templates
 
-| Template | Context | What it generates |
-|----------|---------|-------------------|
-| `_rmlui-setup.c.njk` | `rmlui.window.*` | `SDL_Init` → `SDL_CreateWindow` → `SDL_GL_CreateContext` → `gladLoadGL` → `Rml::Initialise` → `Rml::CreateContext` |
-| `_rmlui-event-loop.c.njk` | `rmlui.enabled` | `while (SDL_PollEvent(&e))` with switch mapping SDL3 events → `Rml::Input::*` / `context->SetDimensions`. Sets `running = false` on `SDL_EVENT_QUIT` |
-| `_rmlui-render.c.njk` | `rmlui.window.*` | `SDL_GL_MakeCurrent` → `glDisable(DEPTH_TEST)` → `glClear` → `context->Render()` → `SDL_GL_SwapWindow` |
-| `_rmlui-cleanup.c.njk` | `rmlui.enabled` | Guarded null-safe cleanup: `context->RemoveReference` → `Rml::Shutdown` → `SDL_GL_DeleteContext` → `SDL_DestroyWindow` → `SDL_Quit` |
+| Template                  | Context          | What it generates                                                                                                                                    |
+| ------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_rmlui-setup.c.njk`      | `rmlui.window.*` | `SDL_Init` → `SDL_CreateWindow` → `SDL_GL_CreateContext` → `gladLoadGL` → `Rml::Initialise` → `Rml::CreateContext`                                   |
+| `_rmlui-event-loop.c.njk` | `rmlui.enabled`  | `while (SDL_PollEvent(&e))` with switch mapping SDL3 events → `Rml::Input::*` / `context->SetDimensions`. Sets `running = false` on `SDL_EVENT_QUIT` |
+| `_rmlui-render.c.njk`     | `rmlui.window.*` | `SDL_GL_MakeCurrent` → `glDisable(DEPTH_TEST)` → `glClear` → `context->Render()` → `SDL_GL_SwapWindow`                                               |
+| `_rmlui-cleanup.c.njk`    | `rmlui.enabled`  | Guarded null-safe cleanup: `context->RemoveReference` → `Rml::Shutdown` → `SDL_GL_DeleteContext` → `SDL_DestroyWindow` → `SDL_Quit`                  |
 
 **Sequence in main.c.njk:**
+
 ```
 {% if rmlui.enabled %}
   {% include "_rmlui-setup.c.njk" %}
@@ -126,17 +129,17 @@ export interface ExtraLib {
   name: string;
   includeDir: string;
   libDir: string;
-  libs: string[];         // e.g. ['SDL3', 'RmlUi', 'glad']
-  frameworks?: string[];  // macOS only: ['Cocoa', 'IOKit', 'CoreFoundation']
+  libs: string[]; // e.g. ['SDL3', 'RmlUi', 'glad']
+  frameworks?: string[]; // macOS only: ['Cocoa', 'IOKit', 'CoreFoundation']
 }
 
-export function generateCMakeLists(
-  wasmtimePath?: string,
-  extraLibs?: ExtraLib[]
-): string { /* ... */ }
+export function generateCMakeLists(wasmtimePath?: string, extraLibs?: ExtraLib[]): string {
+  /* ... */
+}
 ```
 
 Changes to generated CMakeLists.txt:
+
 - `include_directories(...)` appends each `extraLib.includeDir`
 - `link_directories(...)` appends each `extraLib.libDir`
 - `target_link_libraries(...)` appends each `extraLib.libs` as `-l<lib>` (Unix) or `<lib>.lib` (Windows/macOS)
@@ -248,30 +251,33 @@ The actual template path switch happens in `NativeAppBuilder` — when `rmlui-pl
 
 ## Binding Layers
 
-| Language | Layer | Mechanism |
-|----------|-------|-----------|
-| C++ | `rmlui.hh` | RAII wrappers calling `extern "C"` `Rml_*` functions |
-| Rust | `rmlui-sys` + `rmlui` | `#[link(name = "RmlUI_ABI")]` + safe `Result<T, RmlError>` wrappers |
-| AS | `rmlui.ts` | `@external("env", "Rml_*")` host function declarations + Document class |
+| Language | Layer                 | Mechanism                                                               |
+| -------- | --------------------- | ----------------------------------------------------------------------- |
+| C++      | `rmlui.hh`            | RAII wrappers calling `extern "C"` `Rml_*` functions                    |
+| Rust     | `rmlui-sys` + `rmlui` | `#[link(name = "RmlUI_ABI")]` + safe `Result<T, RmlError>` wrappers     |
+| AS       | `rmlui.ts`            | `@external("env", "Rml_*")` host function declarations + Document class |
 
 ## Config Schema
 
 ```json
 {
-  "plugins": [{
-    "id": "rmlui-plugin",
-    "enabled": true,
-    "config": {
-      "window": { "title": "My App", "width": 1024, "height": 768, "resizable": true },
-      "debugger": false,
-      "resources": { "searchPaths": ["./ui"], "defaultFont": "./assets/NotoSans-Regular.ttf" },
-      "embedResources": ["NotoSans-Regular.ttf"]
+  "plugins": [
+    {
+      "id": "rmlui-plugin",
+      "enabled": true,
+      "config": {
+        "window": { "title": "My App", "width": 1024, "height": 768, "resizable": true },
+        "debugger": false,
+        "resources": { "searchPaths": ["./ui"], "defaultFont": "./assets/NotoSans-Regular.ttf" },
+        "embedResources": ["NotoSans-Regular.ttf"]
+      }
     }
-  }]
+  ]
 }
 ```
 
 TypeScript type:
+
 ```ts
 interface RmluiPluginConfig {
   window: { title: string; width: number; height: number; resizable: boolean };

@@ -35,12 +35,12 @@ The system MUST initialize in this exact order:
 
 The template SHALL accept these parameters from `wapp.json`:
 
-| Parameter | Default | Type |
-|-----------|---------|------|
-| `title` | `"Wasm App"` | string |
-| `width` | `1024` | integer |
-| `height` | `768` | integer |
-| `resizable` | `true` | boolean |
+| Parameter   | Default      | Type    |
+| ----------- | ------------ | ------- |
+| `title`     | `"Wasm App"` | string  |
+| `width`     | `1024`       | integer |
+| `height`    | `768`        | integer |
+| `resizable` | `true`       | boolean |
 
 The host MUST NOT be required to provide an existing window — the plugin creates its own. If the host wants to supply an existing SDL_Window, that is out of scope for v1.
 
