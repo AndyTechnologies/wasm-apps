@@ -150,7 +150,10 @@ describe('rmlui-setup: fallback source-build (T-022)', () => {
     await setupRmlui();
 
     const cmakeCalls = mockExecFile.mock.calls.filter(([cmd]) => cmd === 'cmake');
-    expect(cmakeCalls.length).toBeGreaterThanOrEqual(4); // RmlUi(2) + SDL3 configure/build/install(3) → ≥5; al menos configure+install
+    // En win32 SDL3 usa el VC.zip precompilado (0 cmake) y RmlUi hace 2;
+    // en linux/macOS SDL3 se compila desde fuente: RmlUi(2) + configure/build/install(3).
+    const expectedMin = process.platform === 'win32' ? 2 : 4;
+    expect(cmakeCalls.length).toBeGreaterThanOrEqual(expectedMin);
     const configure = cmakeCalls.find(([, args]) => args.includes('-S'));
     expect(configure).toBeDefined();
     const install = cmakeCalls.find(([, args]) => args.includes('--install'));
