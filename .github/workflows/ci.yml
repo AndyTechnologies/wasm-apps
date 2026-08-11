@@ -74,7 +74,7 @@ jobs:
           key: wasm-linker-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('packages/linker/CMakeLists.txt') }}
       - name: Setup system deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils lld
+        run: sudo apt-get update && sudo apt-get install -y cmake xz-utils lld xvfb
         shell: bash
       - name: Setup system deps (macOS)
         if: runner.os == 'macOS'
@@ -88,4 +88,12 @@ jobs:
         shell: bash
       - name: Integration tests (requires wasmtime + cmake)
         run: pnpm run test:integration
+        shell: bash
+      - name: 'RmlUI runtime smoke (Linux: Xvfb + llvmpipe GL3)'
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node scripts/rmlui-smoke.mjs
+        shell: bash
+      - name: 'RmlUI runtime smoke (macOS: ventana cocoa + GL3)'
+        if: runner.os == 'macOS'
+        run: node scripts/rmlui-smoke.mjs
         shell: bash
